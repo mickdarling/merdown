@@ -1,0 +1,174 @@
+/*
+ * Clean Theme
+ * A minimal, modern theme with clean typography and ample whitespace
+ * License: MIT
+ */
+
+#wrapper {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 40px 20px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #333;
+    background: #fff;
+}
+
+#wrapper h1,
+#wrapper h2,
+#wrapper h3,
+#wrapper h4,
+#wrapper h5,
+#wrapper h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #1a1a1a;
+}
+
+#wrapper h1 {
+    font-size: 2em;
+    border-bottom: 2px solid #e1e4e8;
+    padding-bottom: 0.3em;
+}
+
+#wrapper h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid #e1e4e8;
+    padding-bottom: 0.3em;
+}
+
+#wrapper h3 {
+    font-size: 1.25em;
+}
+
+#wrapper h4 {
+    font-size: 1em;
+}
+
+#wrapper h5 {
+    font-size: 0.875em;
+}
+
+#wrapper h6 {
+    font-size: 0.85em;
+    color: #6a737d;
+}
+
+#wrapper p {
+    margin-bottom: 16px;
+}
+
+#wrapper a {
+    color: #0366d6;
+    text-decoration: none;
+}
+
+#wrapper a:hover {
+    text-decoration: underline;
+}
+
+#wrapper strong {
+    font-weight: 600;
+}
+
+#wrapper em {
+    font-style: italic;
+}
+
+#wrapper code {
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%;
+    background-color: rgba(27, 31, 35, 0.05);
+    border-radius: 3px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+}
+
+/* Code blocks - minimal structure, colors controlled by syntax theme */
+#wrapper pre {
+    margin: 16px 0;
+}
+
+#wrapper pre code {
+    /* All styling from syntax theme */
+}
+
+#wrapper blockquote {
+    padding: 0 1em;
+    color: #6a737d;
+    border-left: 0.25em solid #dfe2e5;
+    margin: 0 0 16px 0;
+}
+
+#wrapper blockquote > :first-child {
+    margin-top: 0;
+}
+
+#wrapper blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+#wrapper ul,
+#wrapper ol {
+    padding-left: 2em;
+    margin-bottom: 16px;
+}
+
+#wrapper ul ul,
+#wrapper ul ol,
+#wrapper ol ul,
+#wrapper ol ol {
+    margin-bottom: 0;
+}
+
+#wrapper li {
+    margin-bottom: 0.25em;
+}
+
+#wrapper li > p {
+    margin-bottom: 0.5em;
+}
+
+#wrapper table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+#wrapper table th {
+    font-weight: 600;
+    padding: 6px 13px;
+    border: 1px solid #dfe2e5;
+    background-color: #f6f8fa;
+}
+
+#wrapper table td {
+    padding: 6px 13px;
+    border: 1px solid #dfe2e5;
+}
+
+#wrapper table tr {
+    background-color: #fff;
+    border-top: 1px solid #c6cbd1;
+}
+
+#wrapper table tr:nth-child(2n) {
+    background-color: #f6f8fa;
+}
+
+#wrapper hr {
+    height: 0.25em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #e1e4e8;
+    border: 0;
+}
+
+#wrapper img {
+    max-width: 100%;
+    height: auto;
+    margin: 16px 0;
+}

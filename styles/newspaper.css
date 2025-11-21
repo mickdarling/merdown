@@ -1,0 +1,268 @@
+/*
+ * Newspaper Theme
+ * A classic newspaper/magazine layout for print-ready documents
+ * License: MIT
+ */
+
+#wrapper {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 40px 50px;
+    font-family: 'Times New Roman', Times, serif;
+    font-size: 14px;
+    line-height: 1.7;
+    color: #1a1a1a;
+    background: #fff;
+    column-gap: 40px;
+}
+
+/* Two-column layout for longer content */
+#wrapper.columns {
+    column-count: 2;
+    column-gap: 40px;
+}
+
+#wrapper h1,
+#wrapper h2,
+#wrapper h3,
+#wrapper h4,
+#wrapper h5,
+#wrapper h6 {
+    font-family: 'Georgia', 'Times New Roman', serif;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #000;
+    column-span: all;
+}
+
+#wrapper h1 {
+    font-size: 3em;
+    text-align: center;
+    border-top: 4px double #000;
+    border-bottom: 4px double #000;
+    padding: 16px 0;
+    margin: 0 0 24px 0;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+}
+
+#wrapper h2 {
+    font-size: 2em;
+    border-bottom: 2px solid #000;
+    margin-top: 32px;
+    margin-bottom: 16px;
+    padding-bottom: 4px;
+}
+
+#wrapper h3 {
+    font-size: 1.5em;
+    margin-top: 24px;
+    margin-bottom: 12px;
+    font-style: italic;
+}
+
+#wrapper h4 {
+    font-size: 1.2em;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+#wrapper h5 {
+    font-size: 1em;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: bold;
+}
+
+#wrapper h6 {
+    font-size: 0.9em;
+    margin-top: 16px;
+    margin-bottom: 8px;
+    font-weight: bold;
+    font-style: italic;
+}
+
+#wrapper p {
+    margin-bottom: 12px;
+    text-align: justify;
+    hyphens: auto;
+}
+
+/* Drop cap for first paragraph */
+#wrapper p:first-of-type::first-letter {
+    float: left;
+    font-size: 4.5em;
+    line-height: 0.85;
+    margin: 0.05em 0.1em 0 0;
+    font-weight: bold;
+    font-family: 'Georgia', serif;
+}
+
+#wrapper a {
+    color: #000;
+    text-decoration: underline;
+}
+
+#wrapper a:hover {
+    background-color: #f0f0f0;
+}
+
+#wrapper strong {
+    font-weight: 700;
+}
+
+#wrapper em {
+    font-style: italic;
+}
+
+#wrapper code {
+    padding: 2px 4px;
+    font-size: 90%;
+    background-color: #f5f5f5;
+    border: 1px solid #ccc;
+    font-family: 'Courier New', monospace;
+}
+
+/* Code blocks - minimal structure, colors controlled by syntax theme */
+#wrapper pre {
+    margin: 16px 0;
+    column-span: all;
+}
+
+#wrapper pre code {
+    /* All styling from syntax theme */
+}
+
+#wrapper blockquote {
+    padding: 12px 20px 12px 40px;
+    margin: 20px 0;
+    border-left: none;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    font-size: 1.1em;
+    font-style: italic;
+    text-align: center;
+    column-span: all;
+    position: relative;
+}
+
+#wrapper blockquote::before {
+    content: """;
+    font-size: 3em;
+    position: absolute;
+    left: 10px;
+    top: 0px;
+    color: #999;
+}
+
+#wrapper blockquote > :first-child {
+    margin-top: 0;
+}
+
+#wrapper blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+#wrapper ul,
+#wrapper ol {
+    padding-left: 2em;
+    margin-bottom: 16px;
+}
+
+#wrapper li {
+    margin-bottom: 4px;
+}
+
+#wrapper table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 20px 0;
+    font-size: 0.9em;
+    column-span: all;
+}
+
+#wrapper table th {
+    font-weight: 700;
+    padding: 8px 12px;
+    border-top: 2px solid #000;
+    border-bottom: 2px solid #000;
+    background-color: #f5f5f5;
+    text-align: left;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+#wrapper table td {
+    padding: 8px 12px;
+    border-bottom: 1px solid #ddd;
+}
+
+#wrapper table tr:last-child td {
+    border-bottom: 2px solid #000;
+}
+
+#wrapper hr {
+    height: 2px;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #000;
+    border: 0;
+    column-span: all;
+}
+
+#wrapper img {
+    max-width: 100%;
+    height: auto;
+    margin: 16px 0;
+    border: 1px solid #000;
+    padding: 4px;
+    background: #fff;
+}
+
+/* Byline style */
+#wrapper .byline {
+    text-align: center;
+    font-style: italic;
+    font-size: 0.9em;
+    margin-bottom: 20px;
+    column-span: all;
+}
+
+#wrapper .byline::before {
+    content: "By ";
+}
+
+/* Date style */
+#wrapper .date {
+    text-align: center;
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 20px;
+    column-span: all;
+}
+
+/* Print optimizations */
+@media print {
+    #wrapper {
+        column-count: 2;
+        column-gap: 30px;
+        padding: 20px;
+    }
+
+    #wrapper h1,
+    #wrapper h2,
+    #wrapper blockquote,
+    #wrapper table,
+    #wrapper pre {
+        page-break-inside: avoid;
+    }
+
+    #wrapper h1,
+    #wrapper h2,
+    #wrapper h3 {
+        page-break-after: avoid;
+    }
+}

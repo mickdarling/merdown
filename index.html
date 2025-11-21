@@ -1,0 +1,1839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy"
+          content="default-src 'self';
+                   script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+                   style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+                   font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+                   img-src 'self' data: https:;
+                   connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://api.github.com;
+                   frame-src 'none';
+                   object-src 'none';
+                   base-uri 'self';">
+    <title>Markdown + Mermaid Renderer</title>
+
+    <!-- Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"
+            integrity="sha384-zbcZAIxlvJtNE3Dp5nxLXdXtXyxwOdnILY1TDPVmKFhl4r4nSUG1r8bcFXGVa4Te"
+            crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10.6.1/dist/mermaid.min.js"
+            integrity="sha384-+NGfjU8KzpDLXRHduEqW+ZiJr2rIg+cidUVk7B51R5xK7cHwMKQfrdFwGdrq1Bcz"
+            crossorigin="anonymous"></script>
+    <!-- Syntax highlighting - using full bundle with all languages -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+          integrity="sha384-wH75j6z1lH97ZOpMOInqhgKzFkAInZPPSPlZpYKYTOqsaizPvhQZmAtLcPKXpLyH"
+          crossorigin="anonymous">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
+            integrity="sha384-F/bZzf7p3Joyp5psL90p/p89AZJsndkSoGwRpXcZhleCWhd8SnRuoYo4d0yirjJp"
+            crossorigin="anonymous"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            background: #f5f5f5;
+        }
+
+        .toolbar {
+            background: #2c3e50;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .toolbar h1 {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .toolbar-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .style-selector {
+            background: #34495e;
+            color: white;
+            border: 1px solid #4a6278;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            outline: none;
+        }
+
+        .style-selector:hover {
+            background: #415b76;
+        }
+
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #2980b9;
+        }
+
+        .btn-success {
+            background: #27ae60;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        .container {
+            display: flex;
+            height: calc(100vh - 48px);
+        }
+
+        .editor-panel, .preview-panel {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 200px;
+        }
+
+        .resize-handle {
+            width: 8px;
+            background: #34495e;
+            cursor: col-resize;
+            position: relative;
+            flex-shrink: 0;
+            transition: background 0.2s;
+        }
+
+        .resize-handle:hover {
+            background: #3498db;
+        }
+
+        .resize-handle::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 3px;
+            height: 40px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+        }
+
+        .panel-header {
+            background: #34495e;
+            color: white;
+            padding: 10px 20px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        #editor {
+            flex: 1;
+            border: none;
+            padding: 20px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            background: #2c3e50;
+            color: #ecf0f1;
+            transition: background 0.2s;
+        }
+
+        #editor.drag-over {
+            background: #34495e;
+            border: 2px dashed #3498db;
+        }
+
+        .preview-panel {
+            background: white;
+            border-left: 1px solid #ddd;
+        }
+
+        /* Preview container - maintain layout, prevent style leaking */
+        #preview {
+            flex: 1 !important;
+            overflow-y: auto !important;
+            background: white !important;
+            display: block !important;
+            /* Prevent styles from affecting the container */
+            width: auto !important;
+            max-width: none !important;
+            margin: 0 !important;
+            font-family: initial !important;
+            font-size: initial !important;
+            line-height: initial !important;
+            color: initial !important;
+        }
+
+        /* Wrapper for Marked2 styles - completely isolated */
+        #preview #wrapper {
+            /* Reset everything to prevent inheritance */
+            all: initial;
+            display: block;
+            padding: 20px;
+            background: white;
+        }
+
+        /* Mermaid diagram styling */
+        .mermaid {
+            margin: 20px 0;
+            text-align: center;
+        }
+
+
+        .status {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 4px;
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 14px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .status.show {
+            opacity: 1;
+        }
+
+        .lint-panel {
+            position: fixed;
+            bottom: -300px;
+            left: 0;
+            right: 0;
+            height: 300px;
+            background: #2c3e50;
+            border-top: 2px solid #3498db;
+            box-shadow: 0 -2px 10px rgba(0,0,0,0.3);
+            transition: bottom 0.3s ease;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .lint-panel.show {
+            bottom: 0;
+        }
+
+        .lint-header {
+            background: #34495e;
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .lint-close {
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            padding: 0 5px;
+            line-height: 1;
+        }
+
+        .lint-close:hover {
+            color: #e74c3c;
+        }
+
+        .lint-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px 20px;
+            color: #ecf0f1;
+        }
+
+        .lint-empty {
+            color: #95a5a6;
+            font-style: italic;
+        }
+
+        .lint-issue {
+            background: #34495e;
+            border-left: 4px solid #e74c3c;
+            padding: 10px 15px;
+            margin-bottom: 10px;
+            border-radius: 4px;
+        }
+
+        .lint-issue.warning {
+            border-left-color: #f39c12;
+        }
+
+        .lint-issue-header {
+            font-weight: 600;
+            margin-bottom: 5px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .lint-issue-type {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 3px;
+            background: #e74c3c;
+            color: white;
+        }
+
+        .lint-issue.warning .lint-issue-type {
+            background: #f39c12;
+        }
+
+        .lint-issue-message {
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .lint-issue-location {
+            font-size: 12px;
+            color: #95a5a6;
+            margin-top: 5px;
+        }
+
+        #lintToggle.active {
+            background: #3498db;
+            color: white;
+        }
+
+        @media print {
+            /* Force color printing FIRST - preserve ALL colors and backgrounds */
+            *, *::before, *::after {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+
+            /* Hide editor and toolbar - show only preview */
+            .toolbar, .editor-panel, .panel-header, .resize-handle, .status, .lint-panel {
+                display: none !important;
+            }
+
+            .container {
+                display: block !important;
+                height: auto !important;
+            }
+
+            .preview-panel {
+                border: none !important;
+                width: 100% !important;
+            }
+
+            #preview {
+                overflow: visible !important;
+                background: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                /* Remove all the constraints */
+                max-width: none !important;
+                font-family: inherit !important;
+                font-size: inherit !important;
+                line-height: inherit !important;
+                color: inherit !important;
+            }
+
+            /* Ensure wrapper displays and maintains all styling */
+            #wrapper {
+                display: block !important;
+                padding: 20px !important;
+            }
+
+            /* Force syntax highlighting colors to print */
+            #wrapper pre,
+            #wrapper code,
+            #wrapper pre code,
+            #wrapper .hljs,
+            #wrapper .hljs * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+
+            /* Preserve code block structure in print */
+            #wrapper pre code.hljs {
+                display: block !important;
+                padding: 1em !important;
+            }
+
+            /* Ensure diagrams and images print well */
+            .mermaid, img, svg, table, blockquote, pre {
+                page-break-inside: avoid;
+            }
+
+            img, svg {
+                max-width: 100%;
+                height: auto;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="toolbar">
+        <h1>📝 Markdown + Mermaid Renderer</h1>
+        <div class="toolbar-buttons">
+            <select class="style-selector" id="styleSelector" onchange="changeStyle(this.value)">
+                <option value="">Loading styles...</option>
+            </select>
+            <select class="style-selector" id="syntaxThemeSelector" onchange="changeSyntaxTheme(this.value)">
+                <option value="">Loading themes...</option>
+            </select>
+            <button class="btn" id="lintToggle" onclick="toggleLintPanel()">🔍 Code Validation</button>
+            <button class="btn btn-success" onclick="exportToPDF()">🖨️ Print/PDF</button>
+            <button class="btn btn-success" onclick="exportToPDFDirect()">📄 Print (New Tab)</button>
+            <button class="btn" onclick="loadSample()">📋 Load Sample</button>
+            <button class="btn btn-danger" onclick="clearEditor()">🗑️ Clear</button>
+        </div>
+    </div>
+
+    <div class="lint-panel" id="lintPanel">
+        <div class="lint-header">
+            <span>Code Validation Issues</span>
+            <button class="lint-close" onclick="toggleLintPanel()">✕</button>
+        </div>
+        <div class="lint-content" id="lintContent">
+            <p class="lint-empty">No issues found or validation disabled.</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="editor-panel">
+            <div class="panel-header">Editor</div>
+            <textarea id="editor" placeholder="Start typing your markdown here... or drag and drop a .md file"></textarea>
+        </div>
+
+        <div class="resize-handle" id="resizeHandle"></div>
+
+        <div class="preview-panel">
+            <div class="panel-header">Preview</div>
+            <div id="preview">
+                <div id="wrapper"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: false,
+            theme: 'default',
+            securityLevel: 'strict',  // Security: Prevents XSS attacks through malicious diagrams
+        });
+
+        const editor = document.getElementById('editor');
+        const preview = document.getElementById('preview');
+        const wrapper = document.getElementById('wrapper');
+        const statusDiv = document.getElementById('status');
+        const styleSelector = document.getElementById('styleSelector');
+        const resizeHandle = document.getElementById('resizeHandle');
+        const container = document.querySelector('.container');
+        const editorPanel = document.querySelector('.editor-panel');
+        const previewPanel = document.querySelector('.preview-panel');
+        const lintPanel = document.getElementById('lintPanel');
+        const lintContent = document.getElementById('lintContent');
+        const lintToggle = document.getElementById('lintToggle');
+        const syntaxThemeSelector = document.getElementById('syntaxThemeSelector');
+
+        let renderTimeout;
+        let mermaidCounter = 0;
+        let currentStyleLink = null;
+        let currentSyntaxThemeLink = null;
+        let lintEnabled = false;
+        let codeIssues = [];
+
+        // Available syntax highlighting themes
+        const syntaxThemes = [
+            { name: 'GitHub Dark', file: 'github-dark', default: true },
+            { name: 'GitHub Light', file: 'github' },
+            { name: 'VS Code Dark+', file: 'vs2015' },
+            { name: 'Monokai', file: 'monokai' },
+            { name: 'Dracula', file: 'dracula' },
+            { name: 'Atom One Dark', file: 'atom-one-dark' },
+            { name: 'Atom One Light', file: 'atom-one-light' },
+            { name: 'Nord', file: 'nord' },
+            { name: 'Tokyo Night Dark', file: 'tokyo-night-dark' },
+            { name: 'Tokyo Night Light', file: 'tokyo-night-light' },
+            { name: 'Solarized Dark', file: 'solarized-dark' },
+            { name: 'Solarized Light', file: 'solarized-light' },
+            { name: 'Gruvbox Dark', file: 'gruvbox-dark' },
+            { name: 'Gruvbox Light', file: 'gruvbox-light' },
+            { name: 'Night Owl', file: 'night-owl' },
+            { name: 'Zenburn', file: 'zenburn' },
+            { name: 'Railscasts', file: 'railscasts' },
+            { name: 'Tomorrow Night', file: 'tomorrow-night' },
+            { name: 'Obsidian', file: 'obsidian' },
+            { name: 'Agate', file: 'agate' }
+        ];
+
+        // Resize handle functionality
+        let isResizing = false;
+
+        resizeHandle.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+
+            const containerRect = container.getBoundingClientRect();
+            const newLeftWidth = e.clientX - containerRect.left;
+            const containerWidth = containerRect.width;
+            const handleWidth = 8;
+
+            // Calculate percentage, ensuring minimum widths
+            const minWidth = 200;
+            const maxLeftWidth = containerWidth - minWidth - handleWidth;
+
+            if (newLeftWidth >= minWidth && newLeftWidth <= maxLeftWidth) {
+                const leftPercent = (newLeftWidth / containerWidth) * 100;
+                const rightPercent = 100 - leftPercent - (handleWidth / containerWidth * 100);
+
+                editorPanel.style.flex = `0 0 ${leftPercent}%`;
+                previewPanel.style.flex = `0 0 ${rightPercent}%`;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // Built-in custom styles (MIT licensed - created by us)
+        const availableStyles = [
+            { name: 'None (No CSS)', file: '', source: 'none' },
+            { name: '---', file: '', source: 'separator' }, // Separator
+            { name: 'Clean', file: 'styles/clean.css', source: 'local', default: true },
+            { name: 'Academic', file: 'styles/academic.css', source: 'local' },
+            { name: 'GitHub', file: 'styles/github.css', source: 'local' },
+            { name: 'Dark Mode', file: 'styles/dark.css', source: 'local' },
+            { name: 'Monospace', file: 'styles/monospace.css', source: 'local' },
+            { name: 'Newspaper', file: 'styles/newspaper.css', source: 'local' },
+            { name: '---', file: '', source: 'separator' }, // Separator
+            { name: 'Load from file...', file: '', source: 'file' },
+            { name: 'Load from URL...', file: '', source: 'url' },
+            { name: '---', file: '', source: 'separator' }, // Separator
+            { name: 'MarkedCustomStyles (external)', file: '', source: 'repository',
+              url: 'https://cdn.jsdelivr.net/gh/ttscoff/MarkedCustomStyles@master/',
+              note: 'Third-party styles (license unclear)' }
+        ];
+
+        // Hidden file input for loading CSS files
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.css';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        // Load style from various sources
+        async function loadStyle(styleName) {
+            const style = availableStyles.find(s => s.name === styleName);
+            if (!style) return;
+
+            // Handle special actions
+            if (style.source === 'separator') return;
+            if (style.source === 'none') {
+                // Remove all custom styles
+                if (currentStyleLink) {
+                    currentStyleLink.remove();
+                    currentStyleLink = null;
+                }
+                showStatus('CSS removed');
+                await renderMarkdown();
+                return;
+            }
+            if (style.source === 'file') {
+                fileInput.click();
+                return;
+            }
+            if (style.source === 'url') {
+                promptForURL();
+                return;
+            }
+            if (style.source === 'repository') {
+                promptForRepositoryStyle(style);
+                return;
+            }
+
+            showStatus(`Loading style: ${style.name}...`);
+
+            try {
+                let cssText;
+
+                if (style.source === 'local') {
+                    // Load from local styles/ directory
+                    const response = await fetch(style.file);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    cssText = await response.text();
+                } else {
+                    // Load from external URL (for custom cases)
+                    const response = await fetch(style.file);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+                    cssText = await response.text();
+                }
+
+                // Remove @media print blocks that might override colors for printing
+                // We want the screen colors to be used in PDFs
+                cssText = stripPrintMediaQueries(cssText);
+
+                // Scope the CSS to only affect #wrapper (the content area)
+                // Our local styles are already scoped, so only scope external ones
+                if (style.source !== 'local' && !cssText.includes('#wrapper')) {
+                    cssText = scopeCSSToPreview(cssText);
+                }
+
+                // Debug: Log first 500 chars of scoped CSS
+                console.log('Scoped CSS preview:', cssText.substring(0, 500));
+
+                // Remove previous style if exists
+                if (currentStyleLink) {
+                    currentStyleLink.remove();
+                }
+
+                // Create style element with scoped CSS
+                const styleElement = document.createElement('style');
+                styleElement.id = 'marked-custom-style';
+                styleElement.textContent = cssText;
+                document.head.appendChild(styleElement);
+
+                currentStyleLink = styleElement;
+
+                // Ensure syntax highlighting styles take precedence over document styles
+                let syntaxOverride = document.getElementById('syntax-override');
+                if (!syntaxOverride) {
+                    syntaxOverride = document.createElement('style');
+                    syntaxOverride.id = 'syntax-override';
+                    document.head.appendChild(syntaxOverride);
+                }
+
+                // Add minimal override to prevent document styles from breaking syntax highlighting
+                syntaxOverride.textContent = `
+                    /* Ensure code blocks maintain their structure */
+                    #wrapper pre code.hljs {
+                        display: block;
+                        overflow-x: auto;
+                        padding: 1em;
+                    }
+                `;
+
+                // Save preference
+                localStorage.setItem('markdown-style', styleName);
+
+                // Re-render markdown to update Mermaid diagrams with new CSS
+                await renderMarkdown();
+
+                showStatus(`Style loaded: ${style.name}`);
+            } catch (error) {
+                showStatus(`Error loading style: ${style.name}`);
+                console.error(`Failed to load style:`, error);
+            }
+        }
+
+        // Strip @media print blocks from CSS to preserve screen colors in PDF
+        function stripPrintMediaQueries(css) {
+            // Remove @media print { ... } blocks (including nested braces)
+            // This regex handles nested braces properly
+            let depth = 0;
+            let inPrintMedia = false;
+            let result = '';
+            let i = 0;
+
+            while (i < css.length) {
+                // Check for @media print
+                if (css.substr(i, 12) === '@media print' ||
+                    css.substr(i, 13) === '@media screen' && css.indexOf('print', i) < css.indexOf('{', i)) {
+                    // Look ahead to see if this is a print media query
+                    const restOfLine = css.substring(i, css.indexOf('{', i) + 1);
+                    if (restOfLine.includes('print')) {
+                        inPrintMedia = true;
+                        depth = 0;
+                        // Skip to the opening brace
+                        while (i < css.length && css[i] !== '{') {
+                            i++;
+                        }
+                        continue;
+                    }
+                }
+
+                if (inPrintMedia) {
+                    if (css[i] === '{') {
+                        depth++;
+                    } else if (css[i] === '}') {
+                        depth--;
+                        if (depth === 0) {
+                            inPrintMedia = false;
+                            i++;
+                            continue;
+                        }
+                    }
+                    i++;
+                } else {
+                    result += css[i];
+                    i++;
+                }
+            }
+
+            return result;
+        }
+
+        // Scope CSS to only affect #wrapper using a more robust approach
+        function scopeCSSToPreview(css) {
+            // Much simpler approach: just scope every selector we find
+            // Use regex to find all CSS rules and scope their selectors
+
+            // First, replace body/html with #wrapper at the start of selectors
+            css = css.replace(/(^|[,\s\n])(body|html)(\s*[,{:])/gm, '$1#wrapper$3');
+
+            // Then scope all other selectors by adding #wrapper prefix
+            // This regex finds selectors (text before {) and prefixes them
+            css = css.replace(/([^\r\n,{}]+)(,(?=[^}]*{)|\s*{)/g, function(match, selector, separator) {
+                selector = selector.trim();
+
+                // Skip if it's a comment, @-rule, or already scoped
+                if (selector.startsWith('/*') ||
+                    selector.startsWith('@') ||
+                    selector.includes('#wrapper') ||
+                    selector.includes('#preview')) {
+                    return match;
+                }
+
+                // Handle multiple selectors separated by commas
+                const selectors = selector.split(',').map(s => {
+                    s = s.trim();
+                    if (!s || s.startsWith('@')) return s;
+
+                    // If it doesn't start with #wrapper, add it
+                    if (!s.startsWith('#wrapper')) {
+                        return '#wrapper ' + s;
+                    }
+                    return s;
+                }).join(', ');
+
+                return selectors + separator;
+            });
+
+            return css;
+        }
+
+        // Change style
+        async function changeStyle(styleName) {
+            if (!styleName) return;
+            await loadStyle(styleName);
+        }
+
+        // Load CSS from uploaded file
+        async function loadCSSFromFile(file) {
+            if (!file || !file.name.endsWith('.css')) {
+                showStatus('Please select a valid CSS file');
+                return;
+            }
+
+            try {
+                showStatus(`Loading: ${file.name}...`);
+                const cssText = await file.text();
+                await applyCSSDirectly(cssText, file.name);
+                showStatus(`Loaded: ${file.name}`);
+            } catch (error) {
+                showStatus(`Error loading file: ${error.message}`);
+                console.error('File load error:', error);
+            }
+        }
+
+        // Prompt user for URL
+        function promptForURL() {
+            const url = prompt('Enter CSS file URL:\n\n' +
+                'Examples:\n' +
+                '• https://example.com/style.css\n' +
+                '• https://raw.githubusercontent.com/user/repo/main/style.css');
+
+            if (url) {
+                loadCSSFromURL(url);
+            }
+        }
+
+        // Load CSS from URL
+        async function loadCSSFromURL(url) {
+            try {
+                showStatus(`Loading from URL...`);
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const cssText = await response.text();
+                await applyCSSDirectly(cssText, url);
+                showStatus(`Loaded from URL`);
+            } catch (error) {
+                showStatus(`Error loading URL: ${error.message}`);
+                console.error('URL load error:', error);
+            }
+        }
+
+        // Prompt for repository-based style (like MarkedCustomStyles)
+        async function promptForRepositoryStyle(repoConfig) {
+            const fileName = prompt(`Enter CSS filename from ${repoConfig.name}:\n\n` +
+                `Repository: ${repoConfig.url}\n\n` +
+                `${repoConfig.note || ''}\n\n` +
+                `Example: Academia.css`);
+
+            if (fileName) {
+                const fullURL = repoConfig.url + encodeURIComponent(fileName);
+                await loadCSSFromURL(fullURL);
+            }
+        }
+
+        // Apply CSS directly without scope processing (for already-scoped files)
+        async function applyCSSDirectly(cssText, sourceName) {
+            // Strip print media queries
+            cssText = stripPrintMediaQueries(cssText);
+
+            // Only scope if it doesn't appear to be pre-scoped
+            if (!cssText.includes('#wrapper')) {
+                cssText = scopeCSSToPreview(cssText);
+            }
+
+            // Remove previous style
+            if (currentStyleLink) {
+                currentStyleLink.remove();
+            }
+
+            // Create style element
+            const styleElement = document.createElement('style');
+            styleElement.id = 'marked-custom-style';
+            styleElement.textContent = cssText;
+            document.head.appendChild(styleElement);
+
+            currentStyleLink = styleElement;
+
+            // Ensure syntax highlighting theme controls code block backgrounds
+            let syntaxOverride = document.getElementById('syntax-override');
+            if (!syntaxOverride) {
+                syntaxOverride = document.createElement('style');
+                syntaxOverride.id = 'syntax-override';
+                document.head.appendChild(syntaxOverride);
+            }
+
+            // Make pre inherit background from .hljs code inside
+            syntaxOverride.textContent = `
+                /* Let syntax theme control everything about code blocks */
+                #wrapper pre {
+                    background: none !important;
+                    background-color: transparent !important;
+                }
+
+                #wrapper pre code.hljs {
+                    display: block !important;
+                    padding: 1em !important;
+                }
+
+                /* Remove any margins/padding that might show through */
+                #wrapper pre:has(code.hljs) {
+                    padding: 0 !important;
+                }
+            `;
+
+            // Save preference (if it's a named style)
+            if (sourceName && !sourceName.startsWith('http')) {
+                localStorage.setItem('markdown-style', sourceName);
+            }
+
+            // Re-render to apply styles
+            await renderMarkdown();
+        }
+
+        // File input handler
+        fileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                await loadCSSFromFile(file);
+            }
+            // Reset input so same file can be loaded again
+            fileInput.value = '';
+        });
+
+        // Drag and drop CSS files onto preview
+        preview.addEventListener('dragover', (e) => {
+            const items = e.dataTransfer.items;
+            for (let item of items) {
+                if (item.type === 'text/css' || item.kind === 'file') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    preview.style.outline = '3px dashed #3498db';
+                    return;
+                }
+            }
+        });
+
+        preview.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preview.style.outline = '';
+        });
+
+        preview.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            preview.style.outline = '';
+
+            const files = e.dataTransfer.files;
+            if (files.length === 0) return;
+
+            const file = files[0];
+
+            // Check if it's a CSS file
+            if (file.name.endsWith('.css') || file.type === 'text/css') {
+                await loadCSSFromFile(file);
+            } else {
+                showStatus('Please drop a CSS file to change styles');
+            }
+        });
+
+        // Load syntax highlighting theme
+        async function loadSyntaxTheme(themeName) {
+            const theme = syntaxThemes.find(t => t.name === themeName);
+            if (!theme) return;
+
+            try {
+                // Remove previous theme
+                if (currentSyntaxThemeLink) {
+                    currentSyntaxThemeLink.remove();
+                }
+
+                // Load new theme
+                const link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme.file}.min.css`;
+                link.id = 'syntax-theme';
+
+                // Wait for CSS to load before continuing
+                await new Promise((resolve, reject) => {
+                    link.onload = resolve;
+                    link.onerror = reject;
+                    document.head.appendChild(link);
+                });
+
+                currentSyntaxThemeLink = link;
+
+                // Save preference
+                localStorage.setItem('syntax-theme', themeName);
+
+                showStatus(`Syntax theme: ${theme.name}`);
+            } catch (error) {
+                console.error('Failed to load syntax theme:', error);
+                showStatus(`Error loading syntax theme: ${theme.name}`);
+            }
+        }
+
+        // Change syntax theme
+        async function changeSyntaxTheme(themeName) {
+            if (!themeName) return;
+            await loadSyntaxTheme(themeName);
+            // Re-render to apply new syntax theme
+            await renderMarkdown();
+        }
+
+        // Initialize syntax theme selector
+        async function initSyntaxThemeSelector() {
+            syntaxThemeSelector.innerHTML = '';
+
+            syntaxThemes.forEach(theme => {
+                const option = document.createElement('option');
+                option.value = theme.name;
+                option.textContent = theme.name;
+                syntaxThemeSelector.appendChild(option);
+            });
+
+            // Load saved theme or default
+            const savedTheme = localStorage.getItem('syntax-theme');
+            const defaultTheme = syntaxThemes.find(t => t.default)?.name || 'GitHub Dark';
+            const themeToLoad = savedTheme || defaultTheme;
+
+            syntaxThemeSelector.value = themeToLoad;
+            await loadSyntaxTheme(themeToLoad);
+        }
+
+        // Initialize style selector
+        async function initStyleSelector() {
+            styleSelector.innerHTML = '';
+
+            availableStyles.forEach(style => {
+                const option = document.createElement('option');
+                option.value = style.name;
+                option.textContent = style.name;
+
+                // Handle separators
+                if (style.source === 'separator') {
+                    option.disabled = true;
+                    option.textContent = '──────────────────';
+                }
+
+                styleSelector.appendChild(option);
+            });
+
+            // Load saved style or default
+            const savedStyle = localStorage.getItem('markdown-style');
+            const defaultStyle = availableStyles.find(s => s.default)?.name || 'Clean';
+            const styleToLoad = savedStyle || defaultStyle;
+
+            styleSelector.value = styleToLoad;
+            await loadStyle(styleToLoad);
+        }
+
+        // Check if highlight.js loaded successfully
+        console.log('highlight.js available:', typeof hljs !== 'undefined');
+        if (typeof hljs !== 'undefined') {
+            console.log('highlight.js version:', hljs.versionString || 'unknown');
+            console.log('Loaded languages:', hljs.listLanguages ? hljs.listLanguages().length : 'N/A');
+        }
+
+        // Initialize on page load
+        initStyleSelector();
+        initSyntaxThemeSelector();
+
+        // Configure marked to handle mermaid code blocks
+        marked.setOptions({
+            breaks: true,
+            gfm: true,
+            headerIds: true,
+            mangle: false
+        });
+
+        // Custom renderer to handle mermaid blocks and syntax highlighting
+        const renderer = new marked.Renderer();
+        const originalCodeRenderer = renderer.code;
+
+        renderer.code = function(code, language) {
+            if (language === 'mermaid') {
+                const id = `mermaid-${mermaidCounter++}`;
+                return `<div class="mermaid" id="${id}">${code}</div>`;
+            }
+
+            // Check if highlight.js is available
+            if (typeof hljs === 'undefined') {
+                console.error('highlight.js (hljs) is not loaded!');
+                const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
+            }
+
+            // Apply syntax highlighting for other code blocks
+            try {
+                if (language) {
+                    // Normalize language names (yaml/yml are the same)
+                    const normalizedLang = language.toLowerCase();
+                    const langMap = {
+                        'yml': 'yaml'
+                    };
+                    const mappedLang = langMap[normalizedLang] || normalizedLang;
+
+                    if (hljs.getLanguage(mappedLang)) {
+                        const highlighted = hljs.highlight(code, { language: mappedLang, ignoreIllegals: true });
+                        const html = `<pre><code class="hljs language-${mappedLang}" data-language="${mappedLang}">${highlighted.value}</code></pre>`;
+                        console.log('✓ Highlighted', mappedLang, 'code block');
+                        console.log('  Generated HTML preview:', html.substring(0, 200));
+                        return html;
+                    } else {
+                        console.warn('Language not supported by highlight.js:', language);
+                    }
+                }
+            } catch (err) {
+                console.error('Highlight error for language', language, ':', err);
+                // Fall through to auto-detection on error
+            }
+
+            // Fallback to auto-detection or plain rendering
+            try {
+                const highlighted = hljs.highlightAuto(code);
+                console.log('Auto-detected language:', highlighted.language || 'none');
+                return `<pre><code class="hljs" data-language="${highlighted.language || language || 'text'}">${highlighted.value}</code></pre>`;
+            } catch (err) {
+                console.error('Auto-highlight error:', err);
+                // Final fallback to plain code block
+                const escaped = code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
+            }
+        };
+
+        marked.setOptions({ renderer });
+
+        // Render markdown with mermaid
+        async function renderMarkdown() {
+            try {
+                console.log('Starting renderMarkdown...');
+                const markdown = editor.value;
+
+                // Reset mermaid counter
+                mermaidCounter = 0;
+
+                // Convert markdown to HTML
+                const html = marked.parse(markdown);
+                wrapper.innerHTML = html;
+                console.log('HTML rendered, mermaid elements:', wrapper.querySelectorAll('.mermaid').length);
+
+                // Render mermaid diagrams
+                const mermaidElements = wrapper.querySelectorAll('.mermaid');
+
+                for (const element of mermaidElements) {
+                    try {
+                        const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
+                        element.innerHTML = svg;
+                    } catch (error) {
+                        console.error('Mermaid render error:', error);
+                        element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
+                            <strong>Mermaid Error:</strong><br>${error.message}
+                        </div>`;
+                    }
+                }
+
+                // Save to localStorage
+                localStorage.setItem('markdown-content', markdown);
+
+                // Debug: Check what code blocks are in the DOM
+                const codeBlocks = wrapper.querySelectorAll('pre code');
+                console.log('=== DOM Inspection ===');
+                console.log('Total code blocks in DOM:', codeBlocks.length);
+                codeBlocks.forEach((block, i) => {
+                    const classList = Array.from(block.classList).join(', ');
+                    const lang = block.getAttribute('data-language');
+                    const hasHljsClass = block.classList.contains('hljs');
+                    console.log(`  Block ${i + 1}: classes=[${classList}] lang=${lang} hasHljs=${hasHljsClass}`);
+                });
+
+                // Run validation if enabled
+                if (lintEnabled) {
+                    validateCode();
+                }
+
+                console.log('renderMarkdown completed successfully');
+            } catch (error) {
+                console.error('Critical error in renderMarkdown:', error);
+                showStatus('Error rendering: ' + error.message);
+            }
+        }
+
+        // Debounced render
+        function scheduleRender() {
+            clearTimeout(renderTimeout);
+            renderTimeout = setTimeout(renderMarkdown, 300);
+        }
+
+        // Editor change handler
+        editor.addEventListener('input', scheduleRender);
+
+        // Export to PDF using browser's print dialog
+        function exportToPDF() {
+            // Validate content exists
+            if (!wrapper.innerHTML || wrapper.innerHTML.trim() === '') {
+                showStatus('Error: No content to export');
+                return;
+            }
+
+            // Use the browser's native print dialog
+            // This will use our @media print CSS rules
+            showStatus('Opening print dialog...');
+
+            // Small delay to allow status message to show
+            setTimeout(() => {
+                window.print();
+            }, 100);
+        }
+
+        // Alternative: Save as PDF programmatically (for browsers that support it)
+        async function exportToPDFDirect() {
+            // Validate content exists
+            if (!wrapper.innerHTML || wrapper.innerHTML.trim() === '') {
+                showStatus('Error: No content to export');
+                return;
+            }
+
+            console.log('Starting PDF export...');
+            showStatus('Generating PDF...');
+
+            try {
+                // Get the current custom style CSS if available
+                let customStyleCSS = currentStyleLink ? currentStyleLink.textContent : '';
+
+                // The CSS is already processed (print media queries stripped, scoped)
+                // Just need to remove #wrapper scoping for the print window
+                // since the entire document IS the wrapper content
+                if (customStyleCSS) {
+                    customStyleCSS = customStyleCSS.replace(/#wrapper\s+/g, '');
+                    customStyleCSS = customStyleCSS.replace(/#preview\s+/g, '');
+                }
+
+                // Create a printable version
+                const printWindow = window.open('', '_blank');
+
+                printWindow.document.write(`
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Document</title>
+    <link rel="stylesheet" href="${currentSyntaxThemeLink ? currentSyntaxThemeLink.href : 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css'}">
+    <style>
+        /* Force color printing FIRST - preserve ALL colors and backgrounds */
+        *, *::before, *::after {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+
+        /* Specifically force syntax highlighting colors */
+        pre, code, pre code, .hljs, .hljs * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            color-adjust: exact !important;
+        }
+
+        /* Custom Marked2 Style */
+        ${customStyleCSS}
+
+        /* Minimal fallback styles if no custom style loaded */
+        ${!customStyleCSS ? `
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #000;
+        }
+        h1 { font-size: 24pt; margin-top: 16px; margin-bottom: 12px; page-break-after: avoid; }
+        h2 { font-size: 18pt; margin-top: 14px; margin-bottom: 10px; page-break-after: avoid; }
+        h3 { font-size: 14pt; margin-top: 12px; margin-bottom: 8px; page-break-after: avoid; }
+        pre { background: #f5f5f5; padding: 12px; page-break-inside: avoid; }
+        code { background: #f5f5f5; padding: 2px 4px; }
+        ` : ''}
+
+        /* Ensure print compatibility */
+        .mermaid {
+            margin: 16px 0;
+            text-align: center;
+            page-break-inside: avoid;
+        }
+        .mermaid svg {
+            max-width: 100%;
+            height: auto;
+        }
+        img, svg {
+            max-width: 100%;
+            height: auto;
+            page-break-inside: avoid;
+        }
+
+        @media print {
+            *, *::before, *::after {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
+            }
+        }
+    </style>
+</head>
+<body>
+${wrapper.innerHTML}
+</body>
+</html>
+                `);
+
+                printWindow.document.close();
+
+                // Wait for content and styles to fully load then trigger print
+                printWindow.onload = function() {
+                    setTimeout(() => {
+                        printWindow.print();
+                        showStatus('Print dialog opened');
+                    }, 500);
+                };
+            } catch (error) {
+                console.error('PDF generation error:', error);
+                showStatus('Error: ' + error.message);
+            }
+        }
+
+        // Load sample content
+        function loadSample() {
+            const sample = `# Comprehensive Markdown + Mermaid Feature Demo
+
+Welcome to the **Markdown Mermaid Renderer** demonstration document! This file showcases all the features including syntax highlighting, Mermaid diagrams, tables, and various formatting options.
+
+## Table of Contents
+
+1. [Text Formatting](#text-formatting)
+2. [Lists](#lists)
+3. [Code Blocks](#code-blocks)
+4. [Tables](#tables)
+5. [Mermaid Diagrams](#mermaid-diagrams)
+6. [Blockquotes](#blockquotes)
+
+---
+
+## Text Formatting
+
+You can use **bold text**, *italic text*, ***bold and italic***, ~~strikethrough~~, and \`inline code\`.
+
+Here's a paragraph with some [links to external resources](https://github.com). Links are automatically styled according to your selected theme.
+
+### Subheadings Work Too
+
+And they render beautifully with the custom styles applied!
+
+---
+
+## Lists
+
+### Unordered Lists
+
+- First item
+- Second item
+  - Nested item 1
+  - Nested item 2
+- Third item
+- Fourth item with **bold** and *italic*
+
+### Ordered Lists
+
+1. Step one: Install the renderer
+2. Step two: Open the HTML file
+3. Step three: Start writing Markdown
+   1. Sub-step A
+   2. Sub-step B
+4. Step four: Export to PDF
+
+### Task Lists
+
+- [x] Completed task
+- [x] Another completed task
+- [ ] Pending task
+- [ ] Another pending task
+
+---
+
+## Code Blocks
+
+### JavaScript (labeled)
+
+\`\`\`javascript
+function fibonacci(n) {
+    if (n <= 1) return n;
+    return fibonacci(n - 1) + fibonacci(n - 2);
+}
+
+// Calculate the 10th Fibonacci number
+const result = fibonacci(10);
+console.log(\`Fibonacci(10) = \${result}\`);
+
+// Arrow function example
+const greet = (name) => \`Hello, \${name}!\`;
+\`\`\`
+
+### Python (labeled)
+
+\`\`\`python
+def quick_sort(arr):
+    """Quick sort algorithm implementation"""
+    if len(arr) <= 1:
+        return arr
+
+    pivot = arr[len(arr) // 2]
+    left = [x for x in arr if x < pivot]
+    middle = [x for x in arr if x == pivot]
+    right = [x for x in arr if x > pivot]
+
+    return quick_sort(left) + middle + quick_sort(right)
+
+# Example usage
+numbers = [3, 6, 8, 10, 1, 2, 1]
+sorted_numbers = quick_sort(numbers)
+print(f"Sorted: {sorted_numbers}")
+\`\`\`
+
+### YAML Configuration (labeled)
+
+\`\`\`yaml
+# Application Configuration
+application:
+  name: "Markdown Renderer"
+  version: "1.0.0"
+  author:
+    name: "Development Team"
+    email: "team@example.com"
+
+server:
+  host: "localhost"
+  port: 8080
+  ssl:
+    enabled: true
+    certificate: "/path/to/cert.pem"
+
+features:
+  - syntax-highlighting
+  - mermaid-diagrams
+  - pdf-export
+  - custom-themes
+
+themes:
+  default: "Academia"
+  available:
+    - name: "GitHub"
+      type: "technical"
+    - name: "Torpedo"
+      type: "creative"
+\`\`\`
+
+### JSON Data (labeled)
+
+\`\`\`json
+{
+  "project": {
+    "name": "Markdown Mermaid Renderer",
+    "version": "1.0.0",
+    "description": "A beautiful Markdown renderer with Mermaid support",
+    "features": [
+      "Real-time rendering",
+      "Syntax highlighting",
+      "37 professional themes",
+      "PDF export"
+    ],
+    "config": {
+      "autoSave": true,
+      "theme": "Academia",
+      "lintEnabled": false
+    },
+    "stats": {
+      "lines": 1247,
+      "size": "45KB",
+      "lastModified": "2025-01-21T11:55:00Z"
+    }
+  }
+}
+\`\`\`
+
+### Code Without Language Label (unlabeled)
+
+\`\`\`
+This is a code block without a language label.
+It will use auto-detection or render as plain text.
+
+function example() {
+    return "No syntax highlighting specified";
+}
+
+The renderer will still format it nicely!
+\`\`\`
+
+---
+
+## Tables
+
+### Basic Table
+
+| Feature | Status | Priority |
+|---------|--------|----------|
+| Markdown Rendering | ✅ Complete | High |
+| Mermaid Diagrams | ✅ Complete | High |
+| Syntax Highlighting | ✅ Complete | High |
+| PDF Export | ✅ Complete | Medium |
+| Code Validation | ✅ Complete | Low |
+
+### Complex Table with Formatting
+
+| Language | Extension | Highlighting | Validation | Notes |
+|----------|-----------|--------------|------------|-------|
+| **JavaScript** | \`.js\` | ✅ Yes | ✅ Syntax Check | Most popular |
+| **Python** | \`.py\` | ✅ Yes | ❌ No | Coming soon |
+| **YAML** | \`.yaml\`, \`.yml\` | ✅ Yes | ❌ No | Config files |
+| **JSON** | \`.json\` | ✅ Yes | ✅ Parse Check | Data format |
+
+---
+
+## Mermaid Diagrams
+
+### Flowchart
+
+\`\`\`mermaid
+graph TD
+    A[Start Application] --> B{User Action?}
+    B -->|Load File| C[Parse Markdown]
+    B -->|Type Text| D[Real-time Render]
+    B -->|Export PDF| E[Generate PDF]
+    C --> F[Apply Syntax Highlighting]
+    D --> F
+    F --> G[Render Mermaid]
+    G --> H[Apply Custom Style]
+    H --> I[Display Preview]
+    E --> J[Open Print Dialog]
+    J --> K[Save PDF]
+    K --> L[End]
+    I --> B
+\`\`\`
+
+### Sequence Diagram
+
+\`\`\`mermaid
+sequenceDiagram
+    participant User
+    participant Editor
+    participant Renderer
+    participant Mermaid
+    participant Preview
+
+    User->>Editor: Type Markdown
+    Editor->>Renderer: Request Render
+    Renderer->>Renderer: Parse Markdown
+    Renderer->>Mermaid: Render Diagrams
+    Mermaid-->>Renderer: SVG Output
+    Renderer->>Preview: Update HTML
+    Preview-->>User: Display Result
+
+    User->>Editor: Drop File
+    Editor->>Renderer: Load Content
+    Renderer->>Preview: Render Complete
+    Preview-->>User: Show Document
+\`\`\`
+
+### Class Diagram
+
+\`\`\`mermaid
+classDiagram
+    class MarkdownRenderer {
+        +String content
+        +Style currentStyle
+        +Boolean lintEnabled
+        +render()
+        +loadStyle(name)
+        +exportPDF()
+    }
+
+    class CodeHighlighter {
+        +highlight(code, language)
+        +autoDetect(code)
+        +getLanguage(name)
+    }
+
+    class MermaidEngine {
+        +render(element, content)
+        +initialize(config)
+    }
+
+    class StyleManager {
+        +loadFromGitHub(url)
+        +scopeCSS(css)
+        +stripPrintMedia(css)
+    }
+
+    MarkdownRenderer --> CodeHighlighter
+    MarkdownRenderer --> MermaidEngine
+    MarkdownRenderer --> StyleManager
+\`\`\`
+
+---
+
+## Blockquotes
+
+> **Note:** This is a blockquote. It's perfect for highlighting important information or quotes.
+
+> You can have multiple paragraphs in a blockquote.
+>
+> Like this one! The styling is applied based on your selected theme.
+
+---
+
+## Tips for Using This Renderer
+
+1. **Choose Your Style**: Select from 37 professional themes in the dropdown
+2. **Real-time Preview**: The preview updates as you type
+3. **Drag & Drop**: Drop any \`.md\` file to load it instantly
+4. **Resize Panels**: Drag the handle between editor and preview to adjust sizes
+5. **Export Options**:
+   - Use **Print/PDF** for in-place printing
+   - Use **Print (New Tab)** to open in a new window first
+6. **Code Validation**: Toggle the validation panel to check your code blocks
+
+---
+
+**Happy documenting!** 📝`;
+
+            editor.value = sample;
+            renderMarkdown();
+        }
+
+        // Clear editor
+        function clearEditor() {
+            if (confirm('Are you sure you want to clear the editor?')) {
+                editor.value = '';
+                renderMarkdown();
+            }
+        }
+
+        // Show status message
+        function showStatus(message) {
+            statusDiv.textContent = message;
+            statusDiv.classList.add('show');
+            setTimeout(() => {
+                statusDiv.classList.remove('show');
+            }, 3000);
+        }
+
+        // Toggle lint panel
+        function toggleLintPanel() {
+            lintEnabled = !lintEnabled;
+            lintPanel.classList.toggle('show');
+            lintToggle.classList.toggle('active');
+
+            if (lintEnabled) {
+                validateCode();
+            }
+        }
+
+        // Validate code blocks
+        function validateCode() {
+            codeIssues = [];
+            const codeBlocks = wrapper.querySelectorAll('pre code[data-language]');
+
+            codeBlocks.forEach((block, index) => {
+                const language = block.getAttribute('data-language');
+                const code = block.textContent;
+
+                // Validate based on language
+                switch (language) {
+                    case 'json':
+                        validateJSON(code, index);
+                        break;
+                    case 'javascript':
+                    case 'js':
+                        validateJavaScript(code, index);
+                        break;
+                    case 'html':
+                        validateHTML(code, index);
+                        break;
+                    case 'css':
+                        validateCSS(code, index);
+                        break;
+                }
+            });
+
+            updateLintPanel();
+        }
+
+        // JSON validation
+        function validateJSON(code, blockIndex) {
+            try {
+                JSON.parse(code);
+            } catch (error) {
+                codeIssues.push({
+                    type: 'error',
+                    language: 'JSON',
+                    block: blockIndex + 1,
+                    message: error.message
+                });
+            }
+        }
+
+        // Basic JavaScript validation
+        // NOTE: JavaScript validation has been removed for security reasons.
+        // Using Function constructor to validate JS code can execute arbitrary code.
+        // For proper JS validation, use a dedicated linting tool like ESLint.
+        function validateJavaScript(code, blockIndex) {
+            // Disabled for security - would require a proper parser library
+            // to validate without executing code
+            return;
+        }
+
+        // Basic HTML validation
+        function validateHTML(code, blockIndex) {
+            // Check for common issues
+            const issues = [];
+
+            // Unclosed tags
+            const openTags = code.match(/<(\w+)[^>]*>/g) || [];
+            const closeTags = code.match(/<\/(\w+)>/g) || [];
+
+            if (openTags.length !== closeTags.length) {
+                issues.push('Possible unclosed HTML tags');
+            }
+
+            // Missing DOCTYPE in full HTML documents
+            if (code.includes('<html') && !code.includes('<!DOCTYPE')) {
+                issues.push('Missing DOCTYPE declaration');
+            }
+
+            issues.forEach(issue => {
+                codeIssues.push({
+                    type: 'warning',
+                    language: 'HTML',
+                    block: blockIndex + 1,
+                    message: issue
+                });
+            });
+        }
+
+        // Basic CSS validation
+        function validateCSS(code, blockIndex) {
+            // Check for common issues
+            const braceOpen = (code.match(/{/g) || []).length;
+            const braceClose = (code.match(/}/g) || []).length;
+
+            if (braceOpen !== braceClose) {
+                codeIssues.push({
+                    type: 'error',
+                    language: 'CSS',
+                    block: blockIndex + 1,
+                    message: 'Mismatched braces'
+                });
+            }
+        }
+
+        // Update lint panel with issues
+        function updateLintPanel() {
+            if (codeIssues.length === 0) {
+                lintContent.innerHTML = '<p class="lint-empty">✅ No issues found in code blocks!</p>';
+                return;
+            }
+
+            let html = '';
+            codeIssues.forEach(issue => {
+                html += `
+                    <div class="lint-issue ${issue.type}">
+                        <div class="lint-issue-header">
+                            <span class="lint-issue-type">${issue.type.toUpperCase()}</span>
+                            <span>${issue.language} - Block #${issue.block}</span>
+                        </div>
+                        <div class="lint-issue-message">${issue.message}</div>
+                    </div>
+                `;
+            });
+
+            lintContent.innerHTML = html;
+        }
+
+        // Load saved content on startup
+        window.addEventListener('load', () => {
+            const saved = localStorage.getItem('markdown-content');
+            if (saved) {
+                editor.value = saved;
+                renderMarkdown();
+            } else {
+                loadSample();
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl/Cmd + S to show save status
+            if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                e.preventDefault();
+                showStatus('Auto-saved to browser storage');
+            }
+
+            // Ctrl/Cmd + P to print/export PDF
+            if ((e.ctrlKey || e.metaKey) && e.key === 'p') {
+                e.preventDefault();
+                exportToPDF();
+            }
+
+            // Ctrl/Cmd + Shift + P to print in new tab
+            if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'P') {
+                e.preventDefault();
+                exportToPDFDirect();
+            }
+        });
+
+        // Drag and drop file handling
+        editor.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            editor.classList.add('drag-over');
+        });
+
+        editor.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            editor.classList.remove('drag-over');
+        });
+
+        editor.addEventListener('drop', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            editor.classList.remove('drag-over');
+
+            const files = e.dataTransfer.files;
+
+            if (files.length === 0) {
+                showStatus('No file dropped');
+                return;
+            }
+
+            const file = files[0];
+
+            // Check if it's a text file (markdown, txt, or other text formats)
+            if (!file.type.match('text.*') && !file.name.match(/\.(md|markdown|txt|text)$/i)) {
+                showStatus('Please drop a text or markdown file');
+                return;
+            }
+
+            try {
+                console.log('Loading file:', file.name);
+                const content = await file.text();
+                console.log('File content loaded, length:', content.length);
+                editor.value = content;
+                console.log('Editor value set, calling renderMarkdown...');
+                await renderMarkdown();
+                console.log('renderMarkdown completed');
+                showStatus(`Loaded: ${file.name}`);
+            } catch (error) {
+                console.error('Error in drop handler:', error);
+                showStatus(`Error loading file: ${error.message}`);
+            }
+        });
+    </script>
+</body>
+</html>

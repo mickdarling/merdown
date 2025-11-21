@@ -1,0 +1,30 @@
+# Git
+.git
+.gitignore
+
+# Node modules (not needed for production)
+node_modules
+npm-debug.log
+
+# Docker files
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Documentation (except README which we include)
+*.md
+!README.md
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

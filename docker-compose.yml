@@ -1,0 +1,19 @@
+services:
+  markdown-renderer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: markdown-mermaid-renderer:latest
+    container_name: markdown-renderer
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.markdown-renderer.description=Markdown and Mermaid Diagram Renderer"
+      - "com.markdown-renderer.version=1.0.0"

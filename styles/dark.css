@@ -1,0 +1,236 @@
+/*
+ * Dark Mode Theme
+ * A modern dark theme with high contrast and readability
+ * License: MIT
+ */
+
+#wrapper {
+    max-width: 850px;
+    margin: 0 auto;
+    padding: 40px 30px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #e6e6e6;
+    background: #1e1e1e;
+}
+
+#wrapper h1,
+#wrapper h2,
+#wrapper h3,
+#wrapper h4,
+#wrapper h5,
+#wrapper h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+    color: #ffffff;
+}
+
+#wrapper h1 {
+    font-size: 2em;
+    border-bottom: 2px solid #404040;
+    padding-bottom: 0.3em;
+}
+
+#wrapper h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid #404040;
+    padding-bottom: 0.3em;
+}
+
+#wrapper h3 {
+    font-size: 1.25em;
+}
+
+#wrapper h4 {
+    font-size: 1em;
+}
+
+#wrapper h5 {
+    font-size: 0.875em;
+}
+
+#wrapper h6 {
+    font-size: 0.85em;
+    color: #999;
+}
+
+#wrapper p {
+    margin-bottom: 16px;
+}
+
+#wrapper a {
+    color: #58a6ff;
+    text-decoration: none;
+}
+
+#wrapper a:hover {
+    text-decoration: underline;
+    color: #79c0ff;
+}
+
+#wrapper strong {
+    font-weight: 600;
+    color: #fff;
+}
+
+#wrapper em {
+    font-style: italic;
+}
+
+#wrapper code {
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%;
+    background-color: rgba(110, 118, 129, 0.4);
+    border-radius: 6px;
+    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    color: #f0f0f0;
+}
+
+/* Code blocks - minimal structure, colors controlled by syntax theme */
+#wrapper pre {
+    margin: 16px 0;
+}
+
+#wrapper pre code {
+    /* All styling from syntax theme */
+}
+
+#wrapper blockquote {
+    padding: 0 1em;
+    color: #8b949e;
+    border-left: 0.25em solid #3b3b3b;
+    margin: 0 0 16px 0;
+    background-color: rgba(110, 118, 129, 0.1);
+}
+
+#wrapper blockquote > :first-child {
+    margin-top: 0;
+}
+
+#wrapper blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+#wrapper ul,
+#wrapper ol {
+    padding-left: 2em;
+    margin-bottom: 16px;
+}
+
+#wrapper ul ul,
+#wrapper ul ol,
+#wrapper ol ul,
+#wrapper ol ol {
+    margin-bottom: 0;
+}
+
+#wrapper li {
+    margin-bottom: 0.25em;
+}
+
+#wrapper li > p {
+    margin-bottom: 0.5em;
+}
+
+#wrapper table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 16px;
+}
+
+#wrapper table th {
+    font-weight: 600;
+    padding: 6px 13px;
+    border: 1px solid #3b3b3b;
+    background-color: #2d2d2d;
+    color: #fff;
+}
+
+#wrapper table td {
+    padding: 6px 13px;
+    border: 1px solid #3b3b3b;
+}
+
+#wrapper table tr {
+    background-color: #1e1e1e;
+    border-top: 1px solid #3b3b3b;
+}
+
+#wrapper table tr:nth-child(2n) {
+    background-color: #252525;
+}
+
+#wrapper hr {
+    height: 0.25em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #404040;
+    border: 0;
+}
+
+#wrapper img {
+    max-width: 100%;
+    height: auto;
+    margin: 16px 0;
+    border-radius: 4px;
+}
+
+/* Task lists */
+#wrapper input[type="checkbox"] {
+    margin: 0 0.5em 0.25em -1.6em;
+    vertical-align: middle;
+}
+
+/* Inline code in links */
+#wrapper a code {
+    color: #58a6ff;
+}
+
+/* Definition lists */
+#wrapper dt {
+    font-weight: 600;
+    color: #fff;
+    margin-top: 16px;
+}
+
+#wrapper dd {
+    margin-left: 0;
+    padding-left: 2em;
+    margin-bottom: 16px;
+}
+
+/* Print adjustments */
+@media print {
+    #wrapper {
+        background: #fff;
+        color: #000;
+    }
+
+    #wrapper h1,
+    #wrapper h2,
+    #wrapper h3,
+    #wrapper h4,
+    #wrapper h5,
+    #wrapper h6,
+    #wrapper strong {
+        color: #000;
+    }
+
+    #wrapper a {
+        color: #0366d6;
+    }
+
+    #wrapper code {
+        background-color: #f6f8fa;
+        color: #000;
+    }
+
+    #wrapper pre {
+        background-color: #f6f8fa;
+        border-color: #ddd;
+    }
+}

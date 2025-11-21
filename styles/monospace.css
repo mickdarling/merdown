@@ -1,0 +1,258 @@
+/*
+ * Monospace Theme
+ * A code-focused theme using monospace fonts throughout
+ * License: MIT
+ */
+
+#wrapper {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px 30px;
+    font-family: 'Courier New', 'Courier', monospace;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #2d2d2d;
+    background: #fafafa;
+}
+
+#wrapper h1,
+#wrapper h2,
+#wrapper h3,
+#wrapper h4,
+#wrapper h5,
+#wrapper h6 {
+    margin-top: 32px;
+    margin-bottom: 16px;
+    font-weight: bold;
+    line-height: 1.4;
+    color: #1a1a1a;
+}
+
+#wrapper h1 {
+    font-size: 2em;
+    border-bottom: 3px double #333;
+    padding-bottom: 8px;
+}
+
+#wrapper h1::before {
+    content: "# ";
+    color: #999;
+}
+
+#wrapper h2 {
+    font-size: 1.5em;
+    border-bottom: 1px solid #666;
+    padding-bottom: 6px;
+}
+
+#wrapper h2::before {
+    content: "## ";
+    color: #999;
+}
+
+#wrapper h3 {
+    font-size: 1.25em;
+}
+
+#wrapper h3::before {
+    content: "### ";
+    color: #999;
+}
+
+#wrapper h4 {
+    font-size: 1em;
+}
+
+#wrapper h4::before {
+    content: "#### ";
+    color: #999;
+}
+
+#wrapper h5 {
+    font-size: 0.9em;
+}
+
+#wrapper h5::before {
+    content: "##### ";
+    color: #999;
+}
+
+#wrapper h6 {
+    font-size: 0.85em;
+    color: #666;
+}
+
+#wrapper h6::before {
+    content: "###### ";
+    color: #999;
+}
+
+#wrapper p {
+    margin-bottom: 16px;
+}
+
+#wrapper a {
+    color: #0066cc;
+    text-decoration: underline;
+}
+
+#wrapper a::before {
+    content: "[";
+    color: #999;
+}
+
+#wrapper a::after {
+    content: "]";
+    color: #999;
+}
+
+#wrapper a:hover {
+    background-color: #e8f4fd;
+}
+
+#wrapper strong {
+    font-weight: bold;
+    color: #000;
+}
+
+#wrapper em {
+    font-style: italic;
+}
+
+#wrapper code {
+    padding: 2px 6px;
+    font-size: 100%;
+    background-color: #e8e8e8;
+    border: 1px solid #ccc;
+    border-radius: 2px;
+    font-family: 'Courier New', monospace;
+}
+
+/* Code blocks - minimal structure, colors controlled by syntax theme */
+#wrapper pre {
+    margin: 20px 0;
+}
+
+#wrapper pre code {
+    /* All styling from syntax theme */
+}
+
+#wrapper blockquote {
+    padding: 8px 16px;
+    margin: 16px 0;
+    color: #666;
+    border-left: 4px solid #999;
+    background-color: #f0f0f0;
+}
+
+#wrapper blockquote::before {
+    content: "> ";
+    color: #999;
+}
+
+#wrapper blockquote > :first-child {
+    margin-top: 0;
+}
+
+#wrapper blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+#wrapper ul,
+#wrapper ol {
+    padding-left: 3em;
+    margin-bottom: 16px;
+}
+
+#wrapper ul {
+    list-style-type: none;
+}
+
+#wrapper ul > li::before {
+    content: "* ";
+    color: #999;
+    font-weight: bold;
+    display: inline-block;
+    width: 1em;
+    margin-left: -1em;
+}
+
+#wrapper ol {
+    list-style-type: decimal;
+}
+
+#wrapper li {
+    margin-bottom: 4px;
+}
+
+#wrapper table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 20px;
+    border: 2px solid #666;
+}
+
+#wrapper table th {
+    font-weight: bold;
+    padding: 8px 12px;
+    border: 1px solid #666;
+    background-color: #e0e0e0;
+    text-align: left;
+}
+
+#wrapper table td {
+    padding: 8px 12px;
+    border: 1px solid #999;
+}
+
+#wrapper table tr {
+    background-color: #fff;
+}
+
+#wrapper table tr:nth-child(2n) {
+    background-color: #f5f5f5;
+}
+
+#wrapper hr {
+    height: 2px;
+    padding: 0;
+    margin: 32px 0;
+    background-color: #999;
+    border: 0;
+}
+
+#wrapper hr::before {
+    content: "---";
+    display: block;
+    text-align: center;
+    color: #999;
+    margin-bottom: -2px;
+}
+
+#wrapper img {
+    max-width: 100%;
+    height: auto;
+    margin: 20px 0;
+    border: 1px solid #ccc;
+}
+
+/* Task lists */
+#wrapper input[type="checkbox"] {
+    margin: 0 0.5em 0.25em -1.6em;
+    vertical-align: middle;
+}
+
+/* Keyboard keys */
+#wrapper kbd {
+    display: inline-block;
+    padding: 3px 5px;
+    font-size: 11px;
+    line-height: 10px;
+    color: #444;
+    vertical-align: middle;
+    background-color: #fafbfc;
+    border: solid 1px #c6cbd1;
+    border-bottom-color: #959da5;
+    border-radius: 3px;
+    box-shadow: inset 0 -1px 0 #959da5;
+}

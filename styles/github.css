@@ -1,0 +1,221 @@
+/*
+ * GitHub Theme
+ * Matches GitHub's markdown styling
+ * License: MIT
+ */
+
+#wrapper {
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 45px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #24292e;
+    background: #fff;
+}
+
+#wrapper h1,
+#wrapper h2,
+#wrapper h3,
+#wrapper h4,
+#wrapper h5,
+#wrapper h6 {
+    margin-top: 24px;
+    margin-bottom: 16px;
+    font-weight: 600;
+    line-height: 1.25;
+}
+
+#wrapper h1 {
+    padding-bottom: 0.3em;
+    font-size: 2em;
+    border-bottom: 1px solid #eaecef;
+}
+
+#wrapper h2 {
+    padding-bottom: 0.3em;
+    font-size: 1.5em;
+    border-bottom: 1px solid #eaecef;
+}
+
+#wrapper h3 {
+    font-size: 1.25em;
+}
+
+#wrapper h4 {
+    font-size: 1em;
+}
+
+#wrapper h5 {
+    font-size: 0.875em;
+}
+
+#wrapper h6 {
+    font-size: 0.85em;
+    color: #6a737d;
+}
+
+#wrapper p {
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+#wrapper a {
+    color: #0366d6;
+    text-decoration: none;
+    background-color: transparent;
+}
+
+#wrapper a:hover {
+    text-decoration: underline;
+}
+
+#wrapper strong {
+    font-weight: 600;
+}
+
+#wrapper em {
+    font-style: italic;
+}
+
+#wrapper del {
+    text-decoration: line-through;
+}
+
+#wrapper code {
+    padding: 0.2em 0.4em;
+    margin: 0;
+    font-size: 85%;
+    background-color: rgba(27, 31, 35, 0.05);
+    border-radius: 3px;
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+}
+
+/* Code blocks - minimal structure, colors controlled by syntax theme */
+#wrapper pre {
+    margin: 16px 0;
+}
+
+#wrapper pre code {
+    /* All styling from syntax theme */
+}
+
+#wrapper blockquote {
+    padding: 0 1em;
+    color: #6a737d;
+    border-left: 0.25em solid #dfe2e5;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+#wrapper blockquote > :first-child {
+    margin-top: 0;
+}
+
+#wrapper blockquote > :last-child {
+    margin-bottom: 0;
+}
+
+#wrapper ul,
+#wrapper ol {
+    padding-left: 2em;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+#wrapper ul ul,
+#wrapper ul ol,
+#wrapper ol ol,
+#wrapper ol ul {
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+#wrapper li {
+    word-wrap: break-all;
+}
+
+#wrapper li > p {
+    margin-top: 16px;
+}
+
+#wrapper li + li {
+    margin-top: 0.25em;
+}
+
+#wrapper ul {
+    list-style-type: disc;
+}
+
+#wrapper ol {
+    list-style-type: decimal;
+}
+
+/* Task lists */
+#wrapper input[type="checkbox"] {
+    margin: 0 0.5em 0.25em -1.6em;
+    vertical-align: middle;
+}
+
+#wrapper table {
+    border-spacing: 0;
+    border-collapse: collapse;
+    display: block;
+    width: 100%;
+    overflow: auto;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+#wrapper table th {
+    font-weight: 600;
+    padding: 6px 13px;
+    border: 1px solid #dfe2e5;
+    background-color: #f6f8fa;
+}
+
+#wrapper table td {
+    padding: 6px 13px;
+    border: 1px solid #dfe2e5;
+}
+
+#wrapper table tr {
+    background-color: #fff;
+    border-top: 1px solid #c6cbd1;
+}
+
+#wrapper table tr:nth-child(2n) {
+    background-color: #f6f8fa;
+}
+
+#wrapper hr {
+    height: 0.25em;
+    padding: 0;
+    margin: 24px 0;
+    background-color: #e1e4e8;
+    border: 0;
+}
+
+#wrapper img {
+    max-width: 100%;
+    box-sizing: content-box;
+    background-color: #fff;
+    margin-top: 0;
+    margin-bottom: 16px;
+}
+
+#wrapper img[align="right"] {
+    padding-left: 20px;
+}
+
+#wrapper img[align="left"] {
+    padding-right: 20px;
+}
+
+/* Code blocks with syntax highlighting */
+#wrapper .hljs {
+    display: block;
+    overflow-x: auto;
+    padding: 0.5em;
+}
