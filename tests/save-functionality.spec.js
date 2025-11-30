@@ -2,6 +2,7 @@
 const { test, expect } = require('@playwright/test');
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 
 test.describe('Save Functionality', () => {
   test.beforeEach(async ({ page }) => {
@@ -119,8 +120,8 @@ test.describe('Save Functionality', () => {
       await page.click('button[onclick="saveFileAs()"]');
       const download = await downloadPromise;
 
-      // Save to temp location and verify content
-      const downloadPath = path.join('/tmp', 'playwright-download-test.md');
+      // Save to temp location and verify content (platform-independent)
+      const downloadPath = path.join(os.tmpdir(), 'playwright-download-test.md');
       await download.saveAs(downloadPath);
 
       const savedContent = fs.readFileSync(downloadPath, 'utf-8');
