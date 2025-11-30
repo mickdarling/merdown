@@ -33,6 +33,11 @@ yarn-error.log*
 dist/
 build/
 
+# Test artifacts
+playwright-report/
+test-results/
+.playwright/
+
 # Temporary files
 *.tmp
 *.temp
