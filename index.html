@@ -10,10 +10,10 @@
     <meta http-equiv="Content-Security-Policy"
           content="default-src 'self';
                    script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
-                   style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
+                   style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://unpkg.com;
                    font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
                    img-src 'self' data: https:;
-                   connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://api.github.com;
+                   connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://unpkg.com https://api.github.com;
                    frame-src 'none';
                    object-src 'none';
                    base-uri 'self';">
@@ -1088,17 +1088,55 @@
         // Prompt user for URL
         function promptForURL() {
             const url = prompt('Enter CSS file URL:\n\n' +
-                'Examples:\n' +
-                '• https://example.com/style.css\n' +
-                '• https://raw.githubusercontent.com/user/repo/main/style.css');
+                'Allowed domains (for security):\n' +
+                '• raw.githubusercontent.com\n' +
+                '• cdn.jsdelivr.net\n' +
+                '• cdnjs.cloudflare.com\n' +
+                '• gist.githubusercontent.com\n' +
+                '• unpkg.com\n\n' +
+                'Example:\nhttps://raw.githubusercontent.com/user/repo/main/style.css');
 
             if (url) {
                 loadCSSFromURL(url);
             }
         }
 
-        // Load CSS from URL
+        // Allowed domains for loading external CSS (security allowlist)
+        const ALLOWED_CSS_DOMAINS = [
+            'cdn.jsdelivr.net',
+            'cdnjs.cloudflare.com',
+            'raw.githubusercontent.com',
+            'gist.githubusercontent.com',
+            'unpkg.com'
+        ];
+
+        // Validate URL against allowlist (HTTPS only, case-insensitive)
+        function isAllowedCSSURL(url) {
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol !== 'https:') {
+                    console.warn('CSS URL blocked: HTTPS required, got', parsed.protocol);
+                    return false;
+                }
+                const isAllowed = ALLOWED_CSS_DOMAINS.includes(parsed.hostname.toLowerCase());
+                if (!isAllowed) {
+                    console.warn('CSS URL blocked: domain not in allowlist:', parsed.hostname);
+                }
+                return isAllowed;
+            } catch (error) {
+                console.warn('CSS URL blocked: invalid URL format:', url, error.message);
+                return false;
+            }
+        }
+
+        // Load CSS from URL (with domain validation)
         async function loadCSSFromURL(url) {
+            // Validate URL against allowlist
+            if (!isAllowedCSSURL(url)) {
+                showStatus(`URL not allowed. Trusted: ${ALLOWED_CSS_DOMAINS.join(', ')}`);
+                return;
+            }
+
             try {
                 showStatus(`Loading from URL...`);
                 const response = await fetch(url);
