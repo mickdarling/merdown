@@ -1,0 +1,200 @@
+/* CodeMirror Editor Theme: GitHub Dark
+ * Based on GitHub's dark theme colors
+ * Customize colors here - changes apply only to the editor
+ */
+
+/* Base editor styling */
+.cm-s-custom.CodeMirror {
+    background: #0d1117;
+    color: #c9d1d9;
+}
+
+.cm-s-custom .CodeMirror-gutters {
+    background: #0d1117;
+    border-right: 1px solid #30363d;
+    color: #6e7681;
+}
+
+.cm-s-custom .CodeMirror-linenumber {
+    color: #6e7681;
+}
+
+.cm-s-custom .CodeMirror-cursor {
+    border-left: 2px solid #58a6ff;
+}
+
+.cm-s-custom .CodeMirror-selected {
+    background: #264f78;
+}
+
+.cm-s-custom .CodeMirror-activeline-background {
+    background: #161b22;
+}
+
+/* Markdown syntax highlighting */
+.cm-s-custom .cm-header {
+    color: #58a6ff;
+    font-weight: bold;
+}
+
+/* Note: Removed font-size changes for headers - causes selection misalignment in CodeMirror */
+
+.cm-s-custom .cm-strong {
+    color: #f0883e;
+    font-weight: bold;
+}
+
+.cm-s-custom .cm-em {
+    color: #d2a8ff;
+    font-style: italic;
+}
+
+.cm-s-custom .cm-link {
+    color: #58a6ff;
+    text-decoration: none;
+}
+
+.cm-s-custom .cm-url {
+    color: #a5d6ff;
+}
+
+.cm-s-custom .cm-comment {
+    color: #c9d1d9;
+    font-style: normal;
+}
+
+/* Code block content - make it readable, not grayed out */
+.cm-s-custom .cm-comment.cm-m-markdown {
+    color: #ffa657;
+    font-style: normal;
+}
+
+.cm-s-custom .cm-quote {
+    color: #7ee787;
+    font-style: italic;
+}
+
+.cm-s-custom .cm-hr {
+    color: #30363d;
+}
+
+.cm-s-custom .cm-strikethrough {
+    text-decoration: line-through;
+    color: #8b949e;
+}
+
+/* Code blocks in markdown */
+.cm-s-custom .cm-formatting-code-block,
+.cm-s-custom .cm-comment.cm-formatting-code-block {
+    color: #7ee787;
+}
+
+/* Inline code */
+.cm-s-custom .cm-formatting-code,
+.cm-s-custom .cm-inline-code {
+    color: #7ee787;
+    background: rgba(126, 231, 135, 0.1);
+}
+
+/* Lists */
+.cm-s-custom .cm-formatting-list,
+.cm-s-custom .cm-formatting-list-ul,
+.cm-s-custom .cm-formatting-list-ol {
+    color: #f0883e;
+}
+
+/* Task lists */
+.cm-s-custom .cm-formatting-task {
+    color: #58a6ff;
+}
+
+/* Image/link brackets */
+.cm-s-custom .cm-formatting-link,
+.cm-s-custom .cm-formatting-image {
+    color: #58a6ff;
+}
+
+/* Blockquote marker */
+.cm-s-custom .cm-formatting-quote {
+    color: #7ee787;
+}
+
+/* Keyword highlighting */
+.cm-s-custom .cm-keyword {
+    color: #ff7b72;
+}
+
+.cm-s-custom .cm-atom {
+    color: #79c0ff;
+}
+
+.cm-s-custom .cm-number {
+    color: #79c0ff;
+}
+
+.cm-s-custom .cm-def {
+    color: #d2a8ff;
+}
+
+.cm-s-custom .cm-variable {
+    color: #ffa657;
+}
+
+.cm-s-custom .cm-variable-2 {
+    color: #ffa657;
+}
+
+.cm-s-custom .cm-variable-3 {
+    color: #79c0ff;
+}
+
+.cm-s-custom .cm-property {
+    color: #79c0ff;
+}
+
+.cm-s-custom .cm-operator {
+    color: #ff7b72;
+}
+
+.cm-s-custom .cm-string {
+    color: #a5d6ff;
+}
+
+.cm-s-custom .cm-string-2 {
+    color: #a5d6ff;
+}
+
+.cm-s-custom .cm-meta {
+    color: #c9d1d9;
+}
+
+.cm-s-custom .cm-tag {
+    color: #7ee787;
+}
+
+.cm-s-custom .cm-attribute {
+    color: #79c0ff;
+}
+
+.cm-s-custom .cm-builtin {
+    color: #ffa657;
+}
+
+.cm-s-custom .cm-bracket {
+    color: #c9d1d9;
+}
+
+/* Search highlighting */
+.cm-s-custom .cm-searching {
+    background: rgba(210, 153, 34, 0.4);
+}
+
+/* Matching brackets */
+.cm-s-custom .CodeMirror-matchingbracket {
+    color: #7ee787 !important;
+    background: rgba(126, 231, 135, 0.2);
+}
+
+.cm-s-custom .CodeMirror-nonmatchingbracket {
+    color: #ff7b72 !important;
+}

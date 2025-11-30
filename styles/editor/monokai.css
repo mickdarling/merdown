@@ -1,0 +1,200 @@
+/* CodeMirror Editor Theme: Monokai
+ * Based on the classic Monokai color scheme
+ * Customize colors here - changes apply only to the editor
+ */
+
+/* Base editor styling */
+.cm-s-custom.CodeMirror {
+    background: #272822;
+    color: #f8f8f2;
+}
+
+.cm-s-custom .CodeMirror-gutters {
+    background: #272822;
+    border-right: 1px solid #49483e;
+    color: #75715e;
+}
+
+.cm-s-custom .CodeMirror-linenumber {
+    color: #75715e;
+}
+
+.cm-s-custom .CodeMirror-cursor {
+    border-left: 2px solid #f8f8f0;
+}
+
+.cm-s-custom .CodeMirror-selected {
+    background: #49483e;
+}
+
+.cm-s-custom .CodeMirror-activeline-background {
+    background: #3e3d32;
+}
+
+/* Markdown syntax highlighting */
+.cm-s-custom .cm-header {
+    color: #f92672;
+    font-weight: bold;
+}
+
+/* Note: Removed font-size changes for headers - causes selection misalignment in CodeMirror */
+
+.cm-s-custom .cm-strong {
+    color: #fd971f;
+    font-weight: bold;
+}
+
+.cm-s-custom .cm-em {
+    color: #ae81ff;
+    font-style: italic;
+}
+
+.cm-s-custom .cm-link {
+    color: #66d9ef;
+    text-decoration: none;
+}
+
+.cm-s-custom .cm-url {
+    color: #66d9ef;
+}
+
+.cm-s-custom .cm-comment {
+    color: #f8f8f2;
+    font-style: normal;
+}
+
+/* Code block content - make it readable, not grayed out */
+.cm-s-custom .cm-comment.cm-m-markdown {
+    color: #e6db74;
+    font-style: normal;
+}
+
+.cm-s-custom .cm-quote {
+    color: #a6e22e;
+    font-style: italic;
+}
+
+.cm-s-custom .cm-hr {
+    color: #75715e;
+}
+
+.cm-s-custom .cm-strikethrough {
+    text-decoration: line-through;
+    color: #75715e;
+}
+
+/* Code blocks in markdown */
+.cm-s-custom .cm-formatting-code-block,
+.cm-s-custom .cm-comment.cm-formatting-code-block {
+    color: #a6e22e;
+}
+
+/* Inline code */
+.cm-s-custom .cm-formatting-code,
+.cm-s-custom .cm-inline-code {
+    color: #a6e22e;
+    background: rgba(166, 226, 46, 0.1);
+}
+
+/* Lists */
+.cm-s-custom .cm-formatting-list,
+.cm-s-custom .cm-formatting-list-ul,
+.cm-s-custom .cm-formatting-list-ol {
+    color: #f92672;
+}
+
+/* Task lists */
+.cm-s-custom .cm-formatting-task {
+    color: #66d9ef;
+}
+
+/* Image/link brackets */
+.cm-s-custom .cm-formatting-link,
+.cm-s-custom .cm-formatting-image {
+    color: #66d9ef;
+}
+
+/* Blockquote marker */
+.cm-s-custom .cm-formatting-quote {
+    color: #a6e22e;
+}
+
+/* Keyword highlighting */
+.cm-s-custom .cm-keyword {
+    color: #f92672;
+}
+
+.cm-s-custom .cm-atom {
+    color: #ae81ff;
+}
+
+.cm-s-custom .cm-number {
+    color: #ae81ff;
+}
+
+.cm-s-custom .cm-def {
+    color: #a6e22e;
+}
+
+.cm-s-custom .cm-variable {
+    color: #f8f8f2;
+}
+
+.cm-s-custom .cm-variable-2 {
+    color: #f8f8f2;
+}
+
+.cm-s-custom .cm-variable-3 {
+    color: #66d9ef;
+}
+
+.cm-s-custom .cm-property {
+    color: #a6e22e;
+}
+
+.cm-s-custom .cm-operator {
+    color: #f92672;
+}
+
+.cm-s-custom .cm-string {
+    color: #e6db74;
+}
+
+.cm-s-custom .cm-string-2 {
+    color: #e6db74;
+}
+
+.cm-s-custom .cm-meta {
+    color: #f8f8f2;
+}
+
+.cm-s-custom .cm-tag {
+    color: #f92672;
+}
+
+.cm-s-custom .cm-attribute {
+    color: #a6e22e;
+}
+
+.cm-s-custom .cm-builtin {
+    color: #66d9ef;
+}
+
+.cm-s-custom .cm-bracket {
+    color: #f8f8f2;
+}
+
+/* Search highlighting */
+.cm-s-custom .cm-searching {
+    background: rgba(230, 219, 116, 0.4);
+}
+
+/* Matching brackets */
+.cm-s-custom .CodeMirror-matchingbracket {
+    color: #a6e22e !important;
+    background: rgba(166, 226, 46, 0.2);
+}
+
+.cm-s-custom .CodeMirror-nonmatchingbracket {
+    color: #f92672 !important;
+}
