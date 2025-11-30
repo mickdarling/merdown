@@ -24,16 +24,35 @@ This application is **relatively safe** to expose via Cloudflare Tunnel because:
 
 ### ⚠️ Security Considerations
 
-**1. No Authentication (Current)**
+**1. Content Security Policy (CSP) - `unsafe-inline` Required**
+
+The CSP includes `'unsafe-inline'` for both `script-src` and `style-src`. This is a known limitation, not a vulnerability:
+
+- **Why it's required:**
+  - CodeMirror dynamically generates inline styles for editor rendering
+  - Mermaid.js generates inline SVG styles for diagram elements
+  - Neither library supports nonce-based CSP
+
+- **Mitigations in place:**
+  - All CDN resources use Subresource Integrity (SRI) hashes
+  - `frame-src: 'none'` blocks iframe injection
+  - `object-src: 'none'` blocks plugin-based attacks
+  - Script sources restricted to specific CDN domains
+
+- **Future improvements:**
+  - CodeMirror 6 may offer better CSP support
+  - Could investigate `unsafe-hashes` with specific hash values
+
+**2. No Authentication (Current)**
 - Anyone with the URL can access it
 - Suitable for public tools, not for private documents
 
-**2. Public Access**
+**3. Public Access**
 - Once exposed, anyone on the internet can use it
 - They can render their own markdown
 - They CANNOT access your documents (everything is client-side)
 
-**3. Bandwidth Usage**
+**4. Bandwidth Usage**
 - People could use it heavily
 - Cloudflare provides DDoS protection
 - Rate limiting recommended
