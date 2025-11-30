@@ -1088,17 +1088,48 @@
         // Prompt user for URL
         function promptForURL() {
             const url = prompt('Enter CSS file URL:\n\n' +
-                'Examples:\n' +
-                '• https://example.com/style.css\n' +
-                '• https://raw.githubusercontent.com/user/repo/main/style.css');
+                'Allowed domains (for security):\n' +
+                '• raw.githubusercontent.com\n' +
+                '• cdn.jsdelivr.net\n' +
+                '• cdnjs.cloudflare.com\n' +
+                '• gist.githubusercontent.com\n' +
+                '• unpkg.com\n\n' +
+                'Example:\nhttps://raw.githubusercontent.com/user/repo/main/style.css');
 
             if (url) {
                 loadCSSFromURL(url);
             }
         }
 
-        // Load CSS from URL
+        // Allowed domains for loading external CSS (security allowlist)
+        const ALLOWED_CSS_DOMAINS = [
+            'cdn.jsdelivr.net',
+            'cdnjs.cloudflare.com',
+            'raw.githubusercontent.com',
+            'gist.githubusercontent.com',
+            'unpkg.com'
+        ];
+
+        // Validate URL against allowlist
+        function isAllowedCSSURL(url) {
+            try {
+                const parsed = new URL(url);
+                return ALLOWED_CSS_DOMAINS.includes(parsed.hostname);
+            } catch {
+                return false;
+            }
+        }
+
+        // Load CSS from URL (with domain validation)
         async function loadCSSFromURL(url) {
+            // Validate URL against allowlist
+            if (!isAllowedCSSURL(url)) {
+                const allowedList = ALLOWED_CSS_DOMAINS.join('\n• ');
+                showStatus('URL not allowed - security restriction');
+                alert(`For security, CSS can only be loaded from trusted domains:\n\n• ${allowedList}\n\nYou can still drag & drop local CSS files.`);
+                return;
+            }
+
             try {
                 showStatus(`Loading from URL...`);
                 const response = await fetch(url);
