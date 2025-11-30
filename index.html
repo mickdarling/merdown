@@ -606,6 +606,7 @@
     <div class="toolbar">
         <h1>📝 Markdown + Mermaid Renderer</h1>
         <div class="toolbar-buttons">
+            <button class="btn" onclick="openFile()">📂 Open</button>
             <button class="btn btn-success" onclick="saveFile()">💾 Save</button>
             <button class="btn btn-success" onclick="saveFileAs()">📥 Save As</button>
             <button class="btn" id="lintToggle" onclick="toggleLintPanel()">🔍 Code Validation</button>
@@ -2009,6 +2010,40 @@ classDiagram
 
         // Track current filename for "Save" functionality
         let currentFilename = null;
+
+        // Hidden file input for Open File button (markdown files)
+        const mdFileInput = document.createElement('input');
+        mdFileInput.type = 'file';
+        mdFileInput.accept = '.md,.markdown,.txt,.text';
+        mdFileInput.style.display = 'none';
+        document.body.appendChild(mdFileInput);
+
+        // Open file using native file picker
+        function openFile() {
+            mdFileInput.click();
+        }
+
+        // Handle file selection from file picker
+        mdFileInput.addEventListener('change', async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            try {
+                const content = await file.text();
+                if (cmEditor) {
+                    cmEditor.setValue(content);
+                }
+                currentFilename = file.name;
+                await renderMarkdown();
+                showStatus(`Loaded: ${file.name}`);
+            } catch (error) {
+                console.error('Error loading file:', error);
+                showStatus(`Error loading file: ${error.message}`);
+            }
+
+            // Reset input so the same file can be selected again
+            mdFileInput.value = '';
+        });
 
         // Save file (uses current filename or prompts for one)
         function saveFile() {
