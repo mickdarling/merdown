@@ -4,7 +4,7 @@ Thank you for your interest in contributing to MerDown! This document provides g
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it before contributing. (Code of Conduct will be added shortly.)
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it before contributing.
 
 ## Development Philosophy
 
