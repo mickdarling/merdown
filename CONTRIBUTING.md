@@ -4,7 +4,29 @@ Thank you for your interest in contributing to MerDown! This document provides g
 
 ## Code of Conduct
 
-By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it before contributing.
+By participating in this project, you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md). Please read it before contributing. (Code of Conduct will be added shortly.)
+
+## Development Philosophy
+
+MerDown is intentionally designed as a **single-file, client-side web application**. This means:
+
+- **No server required** - Everything runs in the browser
+- **No build step** - The `index.html` file is the application
+- **Privacy first** - Your documents never leave your device
+- **Simple deployment** - Just serve static files
+
+When contributing, keep this philosophy in mind. Avoid introducing:
+- Server-side dependencies
+- Complex build pipelines
+- External API calls that transmit user data
+
+## Project Maintenance
+
+This is an open source project maintained in spare time. Please be patient:
+
+- **No guaranteed response times** - Reviews happen when maintainers are available
+- **No regular release cadence** - Releases happen when features are ready
+- **Community contributions welcome** - But may take time to review
 
 ## License
 
@@ -112,6 +134,7 @@ npm run test:report
 - Use CSS custom properties (variables) for theming
 - Mobile-responsive where applicable
 - Prefer flexbox/grid for layouts
+- Indent with 4 spaces
 
 ### JavaScript
 
@@ -119,6 +142,7 @@ npm run test:report
 - Prefer `const` over `let`, avoid `var`
 - Use async/await for asynchronous code
 - Handle errors gracefully with try/catch
+- Indent with 4 spaces
 
 ### Example
 
