@@ -446,6 +446,23 @@
             opacity: 1;
         }
 
+        .source-link {
+            position: fixed;
+            bottom: 10px;
+            left: 10px;
+            color: #7f8c8d;
+            font-size: 11px;
+            text-decoration: none;
+            opacity: 0.6;
+            transition: opacity 0.2s;
+            z-index: 100;
+        }
+
+        .source-link:hover {
+            opacity: 1;
+            color: #3498db;
+        }
+
         .lint-panel {
             position: fixed;
             bottom: -300px;
@@ -680,6 +697,11 @@
     </div>
 
     <div class="status" id="status"></div>
+
+    <!-- AGPL-3.0 requires prominent source code access for network services -->
+    <a href="https://github.com/mickdarling/merdown" target="_blank" rel="noopener" class="source-link" title="View source code (AGPL-3.0)">
+        Source Code
+    </a>
 
     <script>
         // Initialize Mermaid
