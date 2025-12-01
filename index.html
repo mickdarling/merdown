@@ -1095,11 +1095,12 @@
             // Use regex to find all CSS rules and scope their selectors
 
             // First, replace body/html with #wrapper at the start of selectors
-            css = css.replaceAll(/(^|[,\s])(body|html)(\s*[,{:])/m, '$1#wrapper$3');
+            // Note: replaceAll() with regex requires the global (g) flag
+            css = css.replaceAll(/(^|[,\s])(body|html)(\s*[,{:])/gm, '$1#wrapper$3');
 
             // Then scope all other selectors by adding #wrapper prefix
             // This regex finds selectors (text before {) and prefixes them
-            css = css.replaceAll(/([^\r\n,{}]+)(,(?=[^}]*{)|\s*{)/, function(match, selector, separator) {
+            css = css.replaceAll(/([^\r\n,{}]+)(,(?=[^}]*{)|\s*{)/g, function(match, selector, separator) {
                 selector = selector.trim();
 
                 // Skip if it's a comment, @-rule, or already scoped
@@ -1692,8 +1693,8 @@
                 // Just need to remove #wrapper scoping for the print window
                 // since the entire document IS the wrapper content
                 if (customStyleCSS) {
-                    customStyleCSS = customStyleCSS.replaceAll(/#wrapper\s+/, '');
-                    customStyleCSS = customStyleCSS.replaceAll(/#preview\s+/, '');
+                    customStyleCSS = customStyleCSS.replaceAll(/#wrapper\s+/g, '');
+                    customStyleCSS = customStyleCSS.replaceAll(/#preview\s+/g, '');
                 }
 
                 // Create a printable version
