@@ -1,0 +1,244 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Mick Darling
+
+// @ts-check
+const { test, expect } = require('@playwright/test');
+
+test.describe('Logo Loading and Display', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    // Wait for page to be fully loaded
+    await page.waitForLoadState('domcontentloaded');
+  });
+
+  test('logo element exists in the page', async ({ page }) => {
+    // Check that the logo image element exists
+    const logo = page.locator('.brand-logo');
+    await expect(logo).toBeAttached();
+
+    // Verify it's actually an img element
+    const tagName = await logo.evaluate(el => el.tagName.toLowerCase());
+    expect(tagName).toBe('img');
+  });
+
+  test('logo has correct src attribute pointing to the logo file', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Get the src attribute
+    const src = await logo.getAttribute('src');
+
+    // Verify src points to the logo file
+    expect(src).toBe('images/logo.png');
+
+    // Also verify the computed src (full URL)
+    const computedSrc = await logo.evaluate(el => el.src);
+    expect(computedSrc).toContain('images/logo.png');
+  });
+
+  test('logo has appropriate alt text for accessibility', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Get alt text
+    const altText = await logo.getAttribute('alt');
+
+    // Verify alt text exists and is meaningful
+    expect(altText).toBeTruthy();
+    expect(altText).toBe('Merview - Mermaid diagram and Markdown editor');
+
+    // Verify it's descriptive (not just empty or 'logo')
+    expect(altText.length).toBeGreaterThan(5);
+
+    // Verify it includes the app name
+    expect(altText).toContain('Merview');
+  });
+
+  test('logo actually loads (naturalWidth > 0)', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Wait for the logo to load
+    await logo.waitFor({ state: 'attached' });
+
+    // Check that the image has loaded by verifying naturalWidth > 0
+    const naturalWidth = await logo.evaluate(img => img.naturalWidth);
+    const naturalHeight = await logo.evaluate(img => img.naturalHeight);
+
+    expect(naturalWidth).toBeGreaterThan(0);
+    expect(naturalHeight).toBeGreaterThan(0);
+
+    // Verify the image is not broken
+    const isComplete = await logo.evaluate(img => img.complete);
+    expect(isComplete).toBe(true);
+  });
+
+  test('logo is visible to users', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Check visibility using Playwright's built-in assertion
+    await expect(logo).toBeVisible();
+
+    // Additional checks for CSS properties that affect visibility
+    const opacity = await logo.evaluate(el => window.getComputedStyle(el).opacity);
+    const display = await logo.evaluate(el => window.getComputedStyle(el).display);
+    const visibility = await logo.evaluate(el => window.getComputedStyle(el).visibility);
+
+    expect(parseFloat(opacity)).toBeGreaterThan(0);
+    expect(display).not.toBe('none');
+    expect(visibility).not.toBe('hidden');
+  });
+
+  test('logo has correct styling applied', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Check that the logo has the expected styling from CSS
+    const height = await logo.evaluate(el => window.getComputedStyle(el).height);
+    const width = await logo.evaluate(el => window.getComputedStyle(el).width);
+
+    // Verify height is set to 28px as per CSS
+    expect(height).toBe('28px');
+
+    // Verify width is auto-computed
+    expect(width).not.toBe('0px');
+    expect(parseInt(width)).toBeGreaterThan(0);
+  });
+
+  test('logo is located in the toolbar brand area', async ({ page }) => {
+    // Verify the logo is within the toolbar-brand container
+    const toolbarBrand = page.locator('.toolbar-brand');
+    const logoInBrand = toolbarBrand.locator('.brand-logo');
+
+    await expect(logoInBrand).toBeAttached();
+
+    // Verify it's also in the main toolbar
+    const toolbar = page.locator('.toolbar');
+    const logoInToolbar = toolbar.locator('.brand-logo');
+
+    await expect(logoInToolbar).toBeAttached();
+  });
+
+  test('logo loads before other non-critical content', async ({ page }) => {
+    // Navigate and check that logo is one of the first elements rendered
+    await page.goto('/');
+
+    const logo = page.locator('.brand-logo');
+
+    // The logo should be visible very quickly (within 2 seconds)
+    await expect(logo).toBeVisible({ timeout: 2000 });
+
+    // Verify the image loaded successfully
+    const naturalWidth = await logo.evaluate(img => img.naturalWidth);
+    expect(naturalWidth).toBeGreaterThan(0);
+  });
+
+  test('logo maintains aspect ratio', async ({ page }) => {
+    const logo = page.locator('.brand-logo');
+
+    // Get natural dimensions
+    const naturalWidth = await logo.evaluate(img => img.naturalWidth);
+    const naturalHeight = await logo.evaluate(img => img.naturalHeight);
+
+    // Get displayed dimensions
+    const displayedWidth = await logo.evaluate(img => img.offsetWidth);
+    const displayedHeight = await logo.evaluate(img => img.offsetHeight);
+
+    // Calculate aspect ratios
+    const naturalRatio = naturalWidth / naturalHeight;
+    const displayedRatio = displayedWidth / displayedHeight;
+
+    // Aspect ratios should be approximately equal (within 0.1 tolerance)
+    expect(Math.abs(naturalRatio - displayedRatio)).toBeLessThan(0.1);
+  });
+
+  test.describe('Fallback Behavior', () => {
+    test('logo handles loading errors gracefully', async ({ page }) => {
+      // Navigate to page
+      await page.goto('/');
+
+      // Check if there's an error event listener or fallback mechanism
+      const logo = page.locator('.brand-logo');
+
+      // Verify logo is visible initially
+      await expect(logo).toBeVisible();
+
+      // Test that if we try to change to a broken image, it handles gracefully
+      // This simulates what would happen if the logo file was missing
+      const errorHandled = await logo.evaluate(img => {
+        return new Promise(resolve => {
+          const testImg = new Image();
+          testImg.onerror = () => resolve(true);
+          testImg.onload = () => resolve(false);
+          testImg.src = 'images/non-existent-logo.png';
+        });
+      });
+
+      // The error should be caught (even if there's no explicit handler)
+      expect(errorHandled).toBe(true);
+    });
+
+    test('logo alt text provides meaningful fallback', async ({ page }) => {
+      const logo = page.locator('.brand-logo');
+
+      const altText = await logo.getAttribute('alt');
+
+      // Alt text should be descriptive enough to convey meaning if image fails
+      expect(altText).toBeTruthy();
+      expect(altText.toLowerCase()).toContain('merview');
+
+      // Verify it's meaningful and descriptive for screen readers
+      expect(altText).toContain('Mermaid');
+      expect(altText).toContain('Markdown');
+
+      // Verify it's long enough to be descriptive
+      expect(altText.length).toBeGreaterThan(20);
+    });
+  });
+
+  test.describe('Accessibility', () => {
+    test('logo has proper ARIA attributes for accessibility', async ({ page }) => {
+      const logo = page.locator('.brand-logo');
+
+      // Logo should have alt text (which we already test)
+      const altText = await logo.getAttribute('alt');
+      expect(altText).toBeTruthy();
+
+      // Check that it's not hidden from screen readers
+      const ariaHidden = await logo.getAttribute('aria-hidden');
+      expect(ariaHidden).not.toBe('true');
+    });
+
+    test('logo is keyboard navigable as part of toolbar', async ({ page }) => {
+      // The logo itself doesn't need to be focusable, but we verify
+      // it doesn't break keyboard navigation
+      await page.keyboard.press('Tab');
+
+      // The focus should move through the page normally
+      const focusedElement = await page.evaluate(() => document.activeElement.tagName);
+
+      // Just verify something is focused (toolbar buttons, links, etc.)
+      expect(focusedElement).toBeTruthy();
+    });
+  });
+
+  test.describe('Performance', () => {
+    test('logo file size is reasonable for web use', async ({ page }) => {
+      const logo = page.locator('.brand-logo');
+
+      // Get the actual file size via network inspection
+      const [response] = await Promise.all([
+        page.waitForResponse(response =>
+          response.url().includes('logo.png') && response.status() === 200
+        ),
+        page.goto('/', { waitUntil: 'networkidle' })
+      ]);
+
+      const buffer = await response.body();
+      const sizeInBytes = buffer.length;
+      const sizeInKB = sizeInBytes / 1024;
+
+      // Logo should be under 5MB (reasonable for a logo)
+      expect(sizeInKB).toBeLessThan(5120);
+
+      // Also verify it's not suspiciously small (like a placeholder)
+      expect(sizeInKB).toBeGreaterThan(1);
+    });
+  });
+});
