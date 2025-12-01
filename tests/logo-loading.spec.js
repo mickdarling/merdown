@@ -4,16 +4,28 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
+// Constants for logo validation
+const MAX_LOGO_SIZE_KB = 5120; // 5MB - reasonable maximum size for a logo file
+const MIN_LOGO_SIZE_KB = 1;    // Minimum size sanity check - ensures it's not a placeholder/corrupted file
+const ASPECT_RATIO_TOLERANCE = 0.1; // Acceptable difference between natural and displayed aspect ratios
+const LOGO_LOAD_TIMEOUT_MS = 2000;  // Maximum time to wait for logo to be visible on initial load
+
+// Helper function to get logo locator
+const getLogo = (page) => page.locator('.brand-logo');
+
 test.describe('Logo Loading and Display', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
     // Wait for page to be fully loaded
+    // Using 'domcontentloaded' instead of 'networkidle' for CI stability:
+    // - CI environments may have background requests that prevent 'networkidle'
+    // - 'domcontentloaded' ensures the DOM is ready, which is sufficient for these tests
     await page.waitForLoadState('domcontentloaded');
   });
 
   test('logo element exists in the page', async ({ page }) => {
     // Check that the logo image element exists
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
     await expect(logo).toBeAttached();
 
     // Verify it's actually an img element
@@ -22,7 +34,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo has correct src attribute pointing to the logo file', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Get the src attribute
     const src = await logo.getAttribute('src');
@@ -36,7 +48,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo has appropriate alt text for accessibility', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Get alt text
     const altText = await logo.getAttribute('alt');
@@ -53,7 +65,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo actually loads (naturalWidth > 0)', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Wait for the logo to load
     await logo.waitFor({ state: 'attached' });
@@ -71,7 +83,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo is visible to users', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Playwright's toBeVisible() checks: attached to DOM, non-zero size,
     // not display:none, not visibility:hidden, and opacity > 0
@@ -79,7 +91,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo has correct styling applied', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Check that the logo has the expected styling from CSS
     const height = await logo.evaluate(el => window.getComputedStyle(el).height);
@@ -111,10 +123,10 @@ test.describe('Logo Loading and Display', () => {
     // Navigate and check that logo is one of the first elements rendered
     await page.goto('/');
 
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
-    // The logo should be visible very quickly (within 2 seconds)
-    await expect(logo).toBeVisible({ timeout: 2000 });
+    // The logo should be visible very quickly
+    await expect(logo).toBeVisible({ timeout: LOGO_LOAD_TIMEOUT_MS });
 
     // Verify the image loaded successfully
     const naturalWidth = await logo.evaluate(img => img.naturalWidth);
@@ -122,7 +134,7 @@ test.describe('Logo Loading and Display', () => {
   });
 
   test('logo maintains aspect ratio', async ({ page }) => {
-    const logo = page.locator('.brand-logo');
+    const logo = getLogo(page);
 
     // Get natural dimensions
     const naturalWidth = await logo.evaluate(img => img.naturalWidth);
@@ -136,8 +148,8 @@ test.describe('Logo Loading and Display', () => {
     const naturalRatio = naturalWidth / naturalHeight;
     const displayedRatio = displayedWidth / displayedHeight;
 
-    // Aspect ratios should be approximately equal (within 0.1 tolerance)
-    expect(Math.abs(naturalRatio - displayedRatio)).toBeLessThan(0.1);
+    // Aspect ratios should be approximately equal
+    expect(Math.abs(naturalRatio - displayedRatio)).toBeLessThan(ASPECT_RATIO_TOLERANCE);
   });
 
   test.describe('Fallback Behavior', () => {
@@ -146,7 +158,7 @@ test.describe('Logo Loading and Display', () => {
       await page.goto('/');
 
       // Check if there's an error event listener or fallback mechanism
-      const logo = page.locator('.brand-logo');
+      const logo = getLogo(page);
 
       // Verify logo is visible initially
       await expect(logo).toBeVisible();
@@ -167,7 +179,7 @@ test.describe('Logo Loading and Display', () => {
     });
 
     test('logo alt text provides meaningful fallback', async ({ page }) => {
-      const logo = page.locator('.brand-logo');
+      const logo = getLogo(page);
 
       const altText = await logo.getAttribute('alt');
 
@@ -186,7 +198,7 @@ test.describe('Logo Loading and Display', () => {
 
   test.describe('Accessibility', () => {
     test('logo has proper ARIA attributes for accessibility', async ({ page }) => {
-      const logo = page.locator('.brand-logo');
+      const logo = getLogo(page);
 
       // Logo should have alt text (which we already test)
       const altText = await logo.getAttribute('alt');
@@ -213,7 +225,9 @@ test.describe('Logo Loading and Display', () => {
   test.describe('Performance', () => {
     test('logo file size is reasonable for web use', async ({ page }) => {
       // Get the actual file size via network inspection
-      // Use domcontentloaded instead of networkidle for CI stability
+      // Using 'domcontentloaded' instead of 'networkidle' for CI stability:
+      // - CI environments may have background requests that prevent 'networkidle'
+      // - 'domcontentloaded' ensures the page is interactive and logo has loaded
       const [response] = await Promise.all([
         page.waitForResponse(response =>
           response.url().includes('logo.png') && response.status() === 200
@@ -225,11 +239,11 @@ test.describe('Logo Loading and Display', () => {
       const sizeInBytes = buffer.length;
       const sizeInKB = sizeInBytes / 1024;
 
-      // Logo should be under 5MB (reasonable for a logo)
-      expect(sizeInKB).toBeLessThan(5120);
+      // Logo should be within reasonable size limits
+      expect(sizeInKB).toBeLessThan(MAX_LOGO_SIZE_KB);
 
-      // Also verify it's not suspiciously small (like a placeholder)
-      expect(sizeInKB).toBeGreaterThan(1);
+      // Also verify it's not suspiciously small (like a placeholder or corrupted file)
+      expect(sizeInKB).toBeGreaterThan(MIN_LOGO_SIZE_KB);
     });
   });
 });

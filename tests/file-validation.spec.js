@@ -14,6 +14,20 @@ const { test, expect } = require('@playwright/test');
  * - Reject invalid MIME types like text/html, text/css, text/javascript
  */
 
+/**
+ * Helper function to test file validation - eliminates code duplication
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {Object} fileDescriptor - File descriptor with type and name
+ * @param {boolean} expectedResult - Expected validation result
+ */
+async function testFileValidation(page, fileDescriptor, expectedResult) {
+  const isValid = await page.evaluate((file) => {
+    // @ts-ignore - isValidMarkdownFile is defined in the app
+    return !!window.isValidMarkdownFile(file);
+  }, fileDescriptor);
+  expect(isValid).toBe(expectedResult);
+}
+
 test.describe('File Validation', () => {
   test.beforeEach(async ({ page }) => {
     await page.goto('/');
@@ -22,204 +36,94 @@ test.describe('File Validation', () => {
   });
 
   test.describe('MIME Type Validation', () => {
-    test('should accept text/plain MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore - isValidMarkdownFile is defined in the app
-        return window.isValidMarkdownFile({ type: 'text/plain', name: 'test.md' });
+    // Data-driven tests for valid MIME types
+    const validMimeTypes = [
+      { type: 'text/plain', name: 'test.md', description: 'text/plain MIME type' },
+      { type: 'text/markdown', name: 'test.md', description: 'text/markdown MIME type' },
+      { type: 'text/x-markdown', name: 'test.md', description: 'text/x-markdown MIME type' },
+      { type: '', name: 'test.md', description: 'empty MIME type (browser compatibility)' }
+    ];
+
+    validMimeTypes.forEach(({ type, name, description }) => {
+      test(`should accept ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, true);
       });
-      expect(isValid).toBe(true);
     });
 
-    test('should accept text/markdown MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: 'text/markdown', name: 'test.md' });
-      });
-      expect(isValid).toBe(true);
-    });
+    // Data-driven tests for invalid MIME types
+    const invalidMimeTypes = [
+      { type: 'text/html', name: 'test.html', description: 'text/html MIME type' },
+      { type: 'text/css', name: 'style.css', description: 'text/css MIME type' },
+      { type: 'text/javascript', name: 'script.js', description: 'text/javascript MIME type' },
+      { type: 'application/json', name: 'data.json', description: 'application/json MIME type' }
+    ];
 
-    test('should accept text/x-markdown MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: 'text/x-markdown', name: 'test.md' });
+    invalidMimeTypes.forEach(({ type, name, description }) => {
+      test(`should reject ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, false);
       });
-      expect(isValid).toBe(true);
-    });
-
-    test('should accept empty MIME type (browser compatibility)', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'test.md' });
-      });
-      expect(isValid).toBe(true);
-    });
-
-    test('should reject text/html MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'text/html', name: 'test.html' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject text/css MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'text/css', name: 'style.css' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject text/javascript MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'text/javascript', name: 'script.js' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject application/json MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'application/json', name: 'data.json' });
-      });
-      expect(isValid).toBe(false);
     });
   });
 
   test.describe('File Extension Validation', () => {
-    test('should accept .md extension regardless of MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore - Even with unknown MIME, .md should be accepted
-        return !!window.isValidMarkdownFile({ type: 'application/octet-stream', name: 'readme.md' });
+    // Data-driven tests for valid extensions
+    const validExtensions = [
+      { type: 'application/octet-stream', name: 'readme.md', description: '.md extension regardless of MIME type' },
+      { type: '', name: 'document.markdown', description: '.markdown extension' },
+      { type: '', name: 'notes.txt', description: '.txt extension' },
+      { type: '', name: 'document.text', description: '.text extension' },
+      { type: '', name: 'README.MD', description: 'uppercase extensions (.MD)' },
+      { type: '', name: 'Document.Markdown', description: 'mixed case extensions (.Markdown)' }
+    ];
+
+    validExtensions.forEach(({ type, name, description }) => {
+      test(`should accept ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, true);
       });
-      expect(isValid).toBe(true);
     });
 
-    test('should accept .markdown extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'document.markdown' });
-      });
-      expect(isValid).toBe(true);
-    });
+    // Data-driven tests for invalid extensions
+    const invalidExtensions = [
+      { type: '', name: 'page.html', description: '.html extension without valid MIME' },
+      { type: '', name: 'script.js', description: '.js extension' },
+      { type: '', name: 'style.css', description: '.css extension' }
+    ];
 
-    test('should accept .txt extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'notes.txt' });
+    invalidExtensions.forEach(({ type, name, description }) => {
+      test(`should reject ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, false);
       });
-      expect(isValid).toBe(true);
-    });
-
-    test('should accept .text extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'document.text' });
-      });
-      expect(isValid).toBe(true);
-    });
-
-    test('should accept uppercase extensions (.MD)', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'README.MD' });
-      });
-      expect(isValid).toBe(true);
-    });
-
-    test('should accept mixed case extensions (.Markdown)', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return window.isValidMarkdownFile({ type: '', name: 'Document.Markdown' });
-      });
-      expect(isValid).toBe(true);
-    });
-
-    test('should reject .html extension without valid MIME', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: '', name: 'page.html' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject .js extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: '', name: 'script.js' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject .css extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: '', name: 'style.css' });
-      });
-      expect(isValid).toBe(false);
     });
   });
 
   test.describe('Edge Cases', () => {
-    test('should handle files with no extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore - No extension, but valid MIME type
-        return !!window.isValidMarkdownFile({ type: 'text/plain', name: 'README' });
-      });
-      expect(isValid).toBe(true);
-    });
+    // Data-driven tests for edge cases
+    const edgeCases = [
+      { type: 'text/plain', name: 'README', expected: true, description: 'files with no extension' },
+      { type: '', name: 'my.document.notes.md', expected: true, description: 'files with multiple dots in name' },
+      { type: 'text/plain', name: 'my document.md', expected: true, description: 'filenames with spaces' },
+      { type: '', name: 'file.md.backup', expected: false, description: 'file with .md in middle of name but wrong extension' }
+    ];
 
-    test('should handle files with multiple dots in name', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: '', name: 'my.document.notes.md' });
+    edgeCases.forEach(({ type, name, expected, description }) => {
+      test(`should handle ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, expected);
       });
-      expect(isValid).toBe(true);
-    });
-
-    test('should handle filenames with spaces', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'text/plain', name: 'my document.md' });
-      });
-      expect(isValid).toBe(true);
-    });
-
-    test('should reject file with .md in middle of name but wrong extension', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: '', name: 'file.md.backup' });
-      });
-      expect(isValid).toBe(false);
     });
   });
 
   test.describe('Security - Blocked MIME Types', () => {
-    // These tests verify that potentially dangerous file types are blocked
+    // Data-driven tests for security-blocked MIME types
+    const blockedMimeTypes = [
+      { type: 'text/xml', name: 'data.xml', description: 'text/xml MIME type' },
+      { type: 'image/png', name: 'image.png', description: 'image MIME types' },
+      { type: 'application/x-httpd-php', name: 'script.php', description: 'application/x-httpd-php' }
+    ];
 
-    test('should reject text/xml MIME type', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'text/xml', name: 'data.xml' });
+    blockedMimeTypes.forEach(({ type, name, description }) => {
+      test(`should reject ${description}`, async ({ page }) => {
+        await testFileValidation(page, { type, name }, false);
       });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject image MIME types', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'image/png', name: 'image.png' });
-      });
-      expect(isValid).toBe(false);
-    });
-
-    test('should reject application/x-httpd-php', async ({ page }) => {
-      const isValid = await page.evaluate(() => {
-        // @ts-ignore
-        return !!window.isValidMarkdownFile({ type: 'application/x-httpd-php', name: 'script.php' });
-      });
-      expect(isValid).toBe(false);
     });
   });
 });
