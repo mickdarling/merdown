@@ -1,6 +1,9 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 
+// Tolerance for overflow checks - accounts for browser rounding differences in layout calculations
+const OVERFLOW_TOLERANCE_PX = 2;
+
 test.describe('Viewport Layout', () => {
   test.beforeEach(async ({ page }) => {
     // Set a consistent viewport size for all tests
@@ -15,11 +18,10 @@ test.describe('Viewport Layout', () => {
 
   test.describe('No Page Overflow', () => {
     test('body should not have significant vertical overflow', async ({ page }) => {
-      // Allow up to 2px tolerance for browser rendering differences
       const overflow = await page.evaluate(() => {
         return document.body.scrollHeight - document.body.clientHeight;
       });
-      expect(overflow).toBeLessThanOrEqual(2);
+      expect(overflow).toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
     });
 
     test('should prevent page scroll when editor scrolled to bottom', async ({ page }) => {
@@ -48,7 +50,7 @@ test.describe('Viewport Layout', () => {
       const overflow = await page.evaluate(() => {
         return document.body.scrollHeight - document.body.clientHeight;
       });
-      expect(overflow).toBeLessThanOrEqual(2);
+      expect(overflow).toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
     });
 
     test('should prevent page scroll when preview scrolled to bottom', async ({ page }) => {
@@ -87,7 +89,7 @@ test.describe('Viewport Layout', () => {
       const overflow = await page.evaluate(() => {
         return document.body.scrollHeight - document.body.clientHeight;
       });
-      expect(overflow).toBeLessThanOrEqual(2);
+      expect(overflow).toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
 
       // Container should fill remaining space
       const layoutCheck = await page.evaluate(() => {
@@ -124,7 +126,7 @@ test.describe('Viewport Layout', () => {
       const overflow = await page.evaluate(() => {
         return document.body.scrollHeight - document.body.clientHeight;
       });
-      expect(overflow).toBeLessThanOrEqual(2);
+      expect(overflow).toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
     });
 
     test('layout should work with wide viewport', async ({ page }) => {
@@ -135,7 +137,7 @@ test.describe('Viewport Layout', () => {
       const overflow = await page.evaluate(() => {
         return document.body.scrollHeight - document.body.clientHeight;
       });
-      expect(overflow).toBeLessThanOrEqual(2);
+      expect(overflow).toBeLessThanOrEqual(OVERFLOW_TOLERANCE_PX);
     });
   });
 
