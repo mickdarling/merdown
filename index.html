@@ -745,8 +745,8 @@
         </div>
     </div>
 
-    <footer class="site-footer">
-        <span>&copy; 2025 Merview. Open source under AGPL-3.0.</span>
+    <footer class="site-footer" role="contentinfo">
+        <span>&copy; <span id="copyright-year">2025</span> Merview. Open source under AGPL-3.0.</span>
     </footer>
 
     <div class="status" id="status"></div>
@@ -2518,6 +2518,9 @@ classDiagram
 
         // Initialize the application
         window.addEventListener('DOMContentLoaded', function() {
+            // Set dynamic copyright year
+            document.getElementById('copyright-year').textContent = new Date().getFullYear();
+
             // Initialize CodeMirror
             initCodeMirror();
 

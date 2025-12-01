@@ -4,16 +4,21 @@ const { test, expect } = require('@playwright/test');
 // Tolerance for overflow checks - accounts for browser rounding differences in layout calculations
 const OVERFLOW_TOLERANCE_PX = 2;
 
+// Timeouts for initialization - generous for CI environments
+const CODEMIRROR_INIT_TIMEOUT = 15000;
+const EDITOR_API_TIMEOUT = 5000;
+const LAYOUT_STABILIZE_DELAY = 200;
+
 test.describe('Viewport Layout', () => {
   test.beforeEach(async ({ page }) => {
     // Set a consistent viewport size for all tests
     await page.setViewportSize({ width: 1280, height: 720 });
     await page.goto('/');
     // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
-    await page.waitForFunction(() => typeof window.setEditorContent === 'function', { timeout: 5000 });
+    await page.waitForSelector('.CodeMirror', { timeout: CODEMIRROR_INIT_TIMEOUT });
+    await page.waitForFunction(() => typeof window.setEditorContent === 'function', { timeout: EDITOR_API_TIMEOUT });
     // Wait for layout to stabilize
-    await page.waitForTimeout(200);
+    await page.waitForTimeout(LAYOUT_STABILIZE_DELAY);
   });
 
   test.describe('No Page Overflow', () => {
@@ -147,9 +152,11 @@ test.describe('Viewport Layout', () => {
       await expect(footer).toBeVisible();
     });
 
-    test('footer should contain copyright text', async ({ page }) => {
+    test('footer should contain copyright text with current year', async ({ page }) => {
       const footer = page.locator('.site-footer');
-      await expect(footer).toContainText('2025 Merview');
+      const currentYear = new Date().getFullYear().toString();
+      await expect(footer).toContainText(currentYear);
+      await expect(footer).toContainText('Merview');
       await expect(footer).toContainText('AGPL-3.0');
     });
 
