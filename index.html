@@ -2138,10 +2138,21 @@ classDiagram
         }
 
         // Validate file type (text or markdown)
+        // Security: Only accept specific MIME types or valid markdown extensions
+        // Empty MIME type requires valid extension (some browsers don't set MIME for .md files)
         function isValidMarkdownFile(file) {
-            const validMimeTypes = ['text/plain', 'text/markdown', 'text/x-markdown', ''];
-            return validMimeTypes.includes(file.type) || file.name.match(/\.(md|markdown|txt|text)$/i);
+            const validMimeTypes = ['text/plain', 'text/markdown', 'text/x-markdown'];
+            const validExtensions = /\.(md|markdown|txt|text)$/i;
+
+            // If MIME type is set and valid, accept
+            if (file.type && validMimeTypes.includes(file.type)) {
+                return true;
+            }
+            // If MIME type is empty or not in whitelist, require valid extension
+            return validExtensions.test(file.name);
         }
+        // Expose for testing
+        window.isValidMarkdownFile = isValidMarkdownFile;
 
         // Open file using native file picker
         function openFile() {

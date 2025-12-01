@@ -127,14 +127,8 @@ test.describe('Source Link Functionality (AGPL-3.0 Compliance)', () => {
       // Focus the link directly (this tests that it's focusable)
       await sourceLink.focus();
 
-      // Verify the link can receive focus
-      const isFocused = await page.evaluate(() => {
-        const link = document.querySelector('.github-link');
-        return document.activeElement === link;
-      });
-
-      // The link should be focusable and receive focus
-      expect(isFocused).toBe(true);
+      // Use Playwright's built-in toBeFocused() assertion
+      await expect(sourceLink).toBeFocused();
     });
 
     test('should have visible focus indicator', async ({ page }) => {
