@@ -219,6 +219,15 @@
             min-height: 0;
         }
 
+        .site-footer {
+            background: #1a252f;
+            color: rgba(255, 255, 255, 0.5);
+            padding: 6px 20px;
+            font-size: 11px;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
         .editor-panel, .preview-panel {
             flex: 1;
             display: flex;
@@ -605,7 +614,7 @@
             }
 
             /* Hide editor and toolbar - show only preview */
-            .toolbar, .editor-panel, .panel-header, .resize-handle, .status, .lint-panel {
+            .toolbar, .editor-panel, .panel-header, .resize-handle, .status, .lint-panel, .site-footer {
                 display: none !important;
             }
 
@@ -734,6 +743,10 @@
             </div>
         </div>
     </div>
+
+    <footer class="site-footer">
+        <span>&copy; 2025 Merview. Open source under AGPL-3.0.</span>
+    </footer>
 
     <div class="status" id="status"></div>
 
