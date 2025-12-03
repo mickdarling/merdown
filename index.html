@@ -341,7 +341,7 @@
         #preview {
             flex: 1 !important;
             overflow-y: auto !important;
-            background: white !important;
+            background: white; /* No !important - allow JS to override for dark themes */
             display: block !important;
             position: relative !important;
             /* Prevent styles from affecting the container */
@@ -354,13 +354,11 @@
             color: initial !important;
         }
 
-        /* Wrapper for Marked2 styles - completely isolated */
-        #preview #wrapper {
-            /* Reset everything to prevent inheritance */
-            all: initial;
+        /* Wrapper for Marked2 styles - base structure only */
+        /* Note: Specific properties reset here, but background/color come from loaded styles */
+        #wrapper {
             display: block;
             padding: 20px;
-            background: white;
         }
 
         /* Mermaid diagram styling */
@@ -986,6 +984,27 @@
             return false;
         }
 
+        // Extract background color from CSS and apply to preview container
+        function applyPreviewBackground(cssText) {
+            // Look for #wrapper background in the CSS
+            // Match patterns like: #wrapper { ... background: #1e1e1e; ... }
+            // or: #wrapper { ... background-color: #1e1e1e; ... }
+            const wrapperMatch = cssText.match(/#wrapper\s*\{[^}]*\}/);
+            if (wrapperMatch) {
+                const wrapperRule = wrapperMatch[0];
+                // Extract background or background-color value
+                const bgMatch = wrapperRule.match(/background(?:-color)?\s*:\s*([^;}\s]+(?:\s+[^;}\s]+)*)/);
+                if (bgMatch) {
+                    const bgValue = bgMatch[1].trim();
+                    preview.style.background = bgValue;
+                    console.log('Applied preview background:', bgValue);
+                    return;
+                }
+            }
+            // Default to white if no background found
+            preview.style.background = 'white';
+        }
+
         // Apply loaded CSS to the page
         async function applyStyleToPage(cssText, styleName, style) {
             // Remove @media print blocks that might override colors for printing
@@ -1011,6 +1030,9 @@
             document.head.appendChild(styleElement);
 
             currentStyleLink = styleElement;
+
+            // Extract and apply background color from style to preview container
+            applyPreviewBackground(cssText);
 
             // Apply minimal structure override (no color changes)
             applySyntaxOverride();
