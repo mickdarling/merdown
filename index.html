@@ -334,11 +334,17 @@
             position: relative;
         }
 
-        /* Preview container - maintain layout, prevent style leaking */
+        /*
+         * Preview container - maintain layout, prevent style leaking.
+         * IMPORTANT PATTERN: Most properties use !important to override loaded styles and
+         * prevent layout/style leakage. However, 'background' deliberately does NOT use
+         * !important to allow JavaScript (applyPreviewBackground) to apply dark theme
+         * backgrounds dynamically when dark mode CSS is loaded.
+         */
         #preview {
             flex: 1 !important;
             overflow-y: auto !important;
-            background: white; /* No !important - allow JS to override for dark themes */
+            background: white; /* No !important - see comment above */
             display: block !important;
             position: relative !important;
             /* Prevent styles from affecting the container */
@@ -785,6 +791,7 @@
 
         let renderTimeout;
         let respectStyleLayout = localStorage.getItem('respect-style-layout') === 'true';
+        let layoutToggleOption = null; // Cached reference for performance
         let mermaidCounter = 0;
         let currentStyleLink = null;
         let currentSyntaxThemeLink = null;
@@ -986,13 +993,40 @@
         }
 
         /**
+         * Validate that a CSS value is a safe background color.
+         * Prevents potentially malicious values like javascript: URLs.
+         * @param {string} value - The CSS background value to validate
+         * @returns {boolean} True if the value is a safe color format
+         */
+        function isValidBackgroundColor(value) {
+            const trimmed = value.trim().toLowerCase();
+            // Block dangerous patterns first
+            if (trimmed.includes('javascript:') || trimmed.includes('url(')) {
+                return false;
+            }
+            // Allow safe color formats:
+            // - Hex: #fff, #ffffff, #ffffffff (with alpha)
+            // - RGB/RGBA: rgb(0,0,0), rgba(0,0,0,0.5)
+            // - HSL/HSLA: hsl(0,0%,0%), hsla(0,0%,0%,0.5)
+            // - Named colors: white, black, transparent, etc.
+            const safePatterns = [
+                /^#[0-9a-f]{3,8}$/,                    // hex colors
+                /^rgba?\s*\([^)]+\)$/,                 // rgb/rgba
+                /^hsla?\s*\([^)]+\)$/,                 // hsl/hsla
+                /^[a-z]+$/                             // named colors (no special chars)
+            ];
+            return safePatterns.some(pattern => pattern.test(trimmed));
+        }
+
+        /**
          * Extract background color from loaded CSS and apply to preview container.
          * Parses the #wrapper rule to find background or background-color values.
          *
          * SUPPORTED background types:
-         * - Hex colors: #1e1e1e, #fff
-         * - Named colors: white, black, darkgray
+         * - Hex colors: #1e1e1e, #fff, #ffffff
+         * - Named colors: white, black, darkgray, transparent
          * - RGB/RGBA values: rgb(30, 30, 30), rgba(0, 0, 0, 0.9)
+         * - HSL/HSLA values: hsl(0, 0%, 12%), hsla(0, 0%, 12%, 0.95)
          *
          * NOT SUPPORTED (will fall back to white):
          * - CSS variables: var(--bg-color), var(--theme-background)
@@ -1014,15 +1048,17 @@
             if (wrapperMatch) {
                 const wrapperRule = wrapperMatch[0];
                 // Extract background or background-color value
-                // The value is sanitized by the browser's CSS parser when assigned to .style
                 const bgMatch = wrapperRule.match(/background(?:-color)?\s*:\s*([^;}\s]+(?:\s+[^;}\s]+)*)/);
                 if (bgMatch) {
                     const bgValue = bgMatch[1].trim();
-                    preview.style.background = bgValue;
-                    return;
+                    // Validate the color value for security before applying
+                    if (isValidBackgroundColor(bgValue)) {
+                        preview.style.background = bgValue;
+                        return;
+                    }
                 }
             }
-            // Default to white if no background found
+            // Default to white if no valid background found
             preview.style.background = 'white';
         }
 
@@ -1056,9 +1092,6 @@
             if (style.source !== 'local' && !cssText.includes('#wrapper')) {
                 cssText = scopeCSSToPreview(cssText);
             }
-
-            // Debug: Log first 500 chars of scoped CSS
-            console.log('Scoped CSS preview:', cssText.substring(0, 500));
 
             // Remove previous style if exists
             if (currentStyleLink) {
@@ -1244,14 +1277,10 @@
             `;
         }
 
-        // Update just the checkbox state for the layout toggle option
+        // Update just the checkbox state for the layout toggle option (uses cached reference)
         function updateLayoutToggleCheckbox() {
-            const options = styleSelector.querySelectorAll('option');
-            for (const option of options) {
-                if (option.value === 'Respect Style Layout') {
-                    option.textContent = (respectStyleLayout ? '✓ ' : '☐ ') + 'Respect Style Layout';
-                    break;
-                }
+            if (layoutToggleOption) {
+                layoutToggleOption.textContent = (respectStyleLayout ? '✓ ' : '☐ ') + 'Respect Style Layout';
             }
         }
 
@@ -1611,9 +1640,10 @@
                     option.textContent = '──────────────────';
                 }
 
-                // Handle toggle with checkmark
+                // Handle toggle with checkmark and cache reference for performance
                 if (style.source === 'toggle') {
                     option.textContent = (respectStyleLayout ? '✓ ' : '☐ ') + style.name;
+                    layoutToggleOption = option;
                 }
 
                 styleSelector.appendChild(option);

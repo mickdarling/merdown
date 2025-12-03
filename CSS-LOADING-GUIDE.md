@@ -191,9 +191,10 @@ All themes should be scoped to `#wrapper` to avoid affecting the editor UI:
 **IMPORTANT:** Dark themes MUST define a background color on `#wrapper` using simple color values.
 
 **Supported background types:**
-- Hex colors: `background: #1e1e1e;`
-- Named colors: `background: black;` or `background-color: darkgray;`
+- Hex colors (3, 6, or 8 digits): `background: #1e1e1e;` or `#fff`
+- Named colors: `background: black;` or `background-color: darkgray;` or `transparent`
 - RGB/RGBA values: `background: rgb(30, 30, 30);` or `background-color: rgba(0, 0, 0, 0.95);`
+- HSL/HSLA values: `background: hsl(0, 0%, 12%);` or `background-color: hsla(0, 0%, 12%, 0.95);`
 
 **NOT supported (will fall back to white):**
 - CSS variables: `background: var(--bg-color);` ❌

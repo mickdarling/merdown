@@ -176,7 +176,7 @@ test.describe('Dark Mode Preview Background', () => {
         // Reset any existing background
         previewEl.style.background = '';
         // Call applyPreviewBackground with CSS that has no background
-        window.applyPreviewBackground(css);
+        globalThis.applyPreviewBackground(css);
       }
     }, cssWithoutBackground);
 
@@ -207,7 +207,7 @@ test.describe('Dark Mode Preview Background', () => {
       const previewEl = document.querySelector('#preview');
       if (previewEl) {
         previewEl.style.background = '';
-        window.applyPreviewBackground(css);
+        globalThis.applyPreviewBackground(css);
       }
     }, cssWithBackground);
 
@@ -231,7 +231,7 @@ test.describe('Dark Mode Preview Background', () => {
       const previewEl = document.querySelector('#preview');
       if (previewEl) {
         previewEl.style.background = '';
-        window.applyPreviewBackground(css);
+        globalThis.applyPreviewBackground(css);
       }
     }, cssWithBackgroundColor);
 
