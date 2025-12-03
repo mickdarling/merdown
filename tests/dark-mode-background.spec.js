@@ -9,7 +9,7 @@ async function waitForDarkBackground(page) {
     const el = document.querySelector('#preview');
     if (!el) return false;
     const bg = globalThis.getComputedStyle(el).backgroundColor;
-    const match = bg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    const match = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(bg);
     if (!match) return false;
     return Math.max(Number(match[1]), Number(match[2]), Number(match[3])) < 50;
   }, { timeout: 2000 });
@@ -23,7 +23,7 @@ async function waitForLightBackground(page) {
     const el = document.querySelector('#preview');
     if (!el) return false;
     const bg = globalThis.getComputedStyle(el).backgroundColor;
-    const match = bg.match(/rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/);
+    const match = /rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/.exec(bg);
     if (!match) return false;
     return Math.min(Number(match[1]), Number(match[2]), Number(match[3])) > 240;
   }, { timeout: 2000 });
