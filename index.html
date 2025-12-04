@@ -228,14 +228,14 @@
             align-items: center;
             justify-content: center;
             z-index: 2000;
-            opacity: 0;
-            visibility: hidden;
-            transition: opacity 0.3s, visibility 0.3s;
+            border: none;
+            padding: 0;
+            max-width: 100%;
+            max-height: 100%;
         }
 
-        .gist-modal-overlay.show {
-            opacity: 1;
-            visibility: visible;
+        .gist-modal-overlay::backdrop {
+            background: rgba(0, 0, 0, 0.7);
         }
 
         .gist-modal {
@@ -849,14 +849,14 @@
     </div>
 
     <!-- Share to Gist Modal -->
-    <div class="gist-modal-overlay" id="gistModal" role="dialog" aria-modal="true" aria-labelledby="gistModalTitle">
+    <dialog class="gist-modal-overlay" id="gistModal" aria-labelledby="gistModalTitle">
         <div class="gist-modal">
             <h2 id="gistModalTitle">Share to Gist</h2>
             <div id="gistModalContent">
                 <!-- Content dynamically updated by JavaScript -->
             </div>
         </div>
-    </div>
+    </dialog>
 
     <div class="container">
         <div class="editor-panel">
@@ -2578,8 +2578,24 @@ classDiagram
         // SHARE TO GIST FUNCTIONALITY
         // ==========================================
 
-        // Configuration - Cloudflare Worker OAuth proxy URL
-        const OAUTH_PROXY_URL = 'https://merview-github-oauth.mick-eba.workers.dev';
+        // Configuration - Cloudflare Worker OAuth proxy URL (origin-aware)
+        // Determine worker URL based on current origin to prevent unauthorized usage
+        function getOAuthProxyUrl() {
+            const origin = globalThis.location.origin;
+            const hostname = globalThis.location.hostname;
+
+            // Allow production domains and localhost
+            const allowedDomains = ['merview.com', 'www.merview.com', 'localhost', '127.0.0.1'];
+
+            if (allowedDomains.includes(hostname)) {
+                return 'https://merview-github-oauth.mick-eba.workers.dev';
+            }
+
+            // Unauthorized origin - disable feature
+            return null;
+        }
+
+        const OAUTH_PROXY_URL = getOAuthProxyUrl();
 
         // GitHub Device Flow constants
         const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
@@ -2640,14 +2656,16 @@ classDiagram
 
         // Show the gist modal with specific content
         function showGistModal(title, content) {
+            const modal = document.getElementById('gistModal');
             document.getElementById('gistModalTitle').textContent = title;
             document.getElementById('gistModalContent').innerHTML = content;
-            document.getElementById('gistModal').classList.add('show');
+            modal.showModal();
         }
 
         // Hide the gist modal
         function hideGistModal() {
-            document.getElementById('gistModal').classList.remove('show');
+            const modal = document.getElementById('gistModal');
+            modal.close();
             // Cancel any ongoing polling
             if (gistAuthState.pollTimeoutId) {
                 clearTimeout(gistAuthState.pollTimeoutId);
@@ -2655,21 +2673,22 @@ classDiagram
             }
         }
 
-        // Close modal when clicking overlay (outside modal content)
+        // Close modal when clicking backdrop (outside modal content)
         document.addEventListener('DOMContentLoaded', function() {
-            const overlay = document.getElementById('gistModal');
-            if (overlay) {
-                overlay.addEventListener('click', function(e) {
-                    if (e.target === overlay) {
+            const modal = document.getElementById('gistModal');
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    // Close if clicking on the dialog backdrop itself
+                    if (e.target === modal) {
                         hideGistModal();
                     }
                 });
 
                 // Handle data-copy-url buttons (prevents XSS via onclick)
-                overlay.addEventListener('click', function(e) {
+                modal.addEventListener('click', function(e) {
                     const copyBtn = e.target.closest('[data-copy-url]');
                     if (copyBtn) {
-                        const url = copyBtn.getAttribute('data-copy-url');
+                        const url = copyBtn.dataset.copyUrl;
                         if (url) {
                             copyGistUrl(url);
                         }
@@ -2677,10 +2696,10 @@ classDiagram
                 });
 
                 // Handle data-open-url buttons (prevents XSS via onclick)
-                overlay.addEventListener('click', function(e) {
+                modal.addEventListener('click', function(e) {
                     const openBtn = e.target.closest('[data-open-url]');
                     if (openBtn) {
-                        const url = openBtn.getAttribute('data-open-url');
+                        const url = openBtn.dataset.openUrl;
                         if (url) {
                             window.open(url, '_blank');
                         }
@@ -2688,19 +2707,31 @@ classDiagram
                 });
             }
 
-            // Close modal on ESC key press
-            document.addEventListener('keydown', function(e) {
-                if (e.key === 'Escape') {
-                    const modal = document.getElementById('gistModal');
-                    if (modal && modal.classList.contains('show')) {
-                        hideGistModal();
-                    }
-                }
-            });
+            // Note: ESC key is handled automatically by <dialog> element
+        });
+
+        // Cleanup polling on page unload
+        window.addEventListener('beforeunload', function() {
+            if (gistAuthState.pollTimeoutId) {
+                clearTimeout(gistAuthState.pollTimeoutId);
+                gistAuthState.pollTimeoutId = null;
+            }
         });
 
         // Main entry point for Share to Gist
         async function shareToGist() {
+            // Check if OAuth proxy is available
+            if (!OAUTH_PROXY_URL) {
+                showGistModal('Feature Unavailable', `
+                    <p class="status-text error">Share to Gist is not available for this origin.</p>
+                    <p>This feature is only available on authorized domains (merview.com) or localhost for development.</p>
+                    <div class="modal-buttons">
+                        <button class="btn" onclick="hideGistModal()">Close</button>
+                    </div>
+                `);
+                return;
+            }
+
             // Prevent concurrent executions
             if (gistShareInProgress) {
                 return;
@@ -2903,9 +2934,14 @@ classDiagram
                 ? firstLine.replace(/^#+\s*/, '').trim().substring(0, 100)
                 : 'Shared from Merview';
 
+            // Set up AbortController for timeout
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
             try {
                 const response = await fetch('https://api.github.com/gists', {
                     method: 'POST',
+                    signal: controller.signal,
                     headers: {
                         'Authorization': `Bearer ${token}`,
                         'Accept': 'application/vnd.github+json',
@@ -2922,6 +2958,8 @@ classDiagram
                         }
                     })
                 });
+
+                clearTimeout(timeoutId);
 
                 if (!response.ok) {
                     const errorData = await response.json().catch(() => ({}));
@@ -2968,7 +3006,21 @@ classDiagram
                 }
 
             } catch (error) {
+                clearTimeout(timeoutId);
                 console.error('Gist creation error:', error);
+
+                // Handle abort/timeout error
+                if (error.name === 'AbortError') {
+                    showGistModal('Request Timeout', `
+                        <p class="status-text error">The request to GitHub timed out after 30 seconds.</p>
+                        <p>Please check your connection and try again.</p>
+                        <div class="modal-buttons">
+                            <button class="btn" onclick="hideGistModal()">Close</button>
+                            <button class="btn btn-success" onclick="shareToGist()">Retry</button>
+                        </div>
+                    `);
+                    return;
+                }
 
                 // If auth expired, prompt to re-auth
                 if (error.message.includes('authorization expired')) {

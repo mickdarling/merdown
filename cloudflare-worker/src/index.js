@@ -17,6 +17,52 @@
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
+// Rate limiting configuration
+const RATE_LIMITS = {
+  '/device/code': { maxRequests: 10, windowMs: 60000 }, // 10 requests per minute
+  '/device/token': { maxRequests: 60, windowMs: 60000 }, // 60 requests per minute (polling)
+};
+
+// In-memory rate limit store (resets on Worker restart, acceptable for this use case)
+const rateLimitStore = new Map();
+
+/**
+ * Check rate limit for an IP and endpoint
+ * @param {string} ip - Client IP address
+ * @param {string} endpoint - API endpoint path
+ * @returns {{ allowed: boolean, remaining: number }} Rate limit status
+ */
+function checkRateLimit(ip, endpoint) {
+  const config = RATE_LIMITS[endpoint];
+  if (!config) return { allowed: true, remaining: -1 };
+
+  const key = `${ip}:${endpoint}`;
+  const now = Date.now();
+
+  let record = rateLimitStore.get(key);
+
+  // Clean up old records (simple memory management)
+  if (record && now - record.windowStart > config.windowMs) {
+    record = null;
+  }
+
+  // Initialize or reset record
+  if (!record) {
+    record = { count: 0, windowStart: now };
+    rateLimitStore.set(key, record);
+  }
+
+  // Check limit
+  if (record.count >= config.maxRequests) {
+    return { allowed: false, remaining: 0 };
+  }
+
+  // Increment counter
+  record.count++;
+
+  return { allowed: true, remaining: config.maxRequests - record.count };
+}
+
 /**
  * Main fetch handler for the Worker
  */
@@ -54,6 +100,9 @@ export default {
 
 /**
  * Check if an origin is allowed based on environment configuration
+ * @param {string} origin - The request Origin header value
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @returns {boolean} True if the origin is allowed
  */
 function isOriginAllowed(origin, env) {
   if (!origin) return false;
@@ -64,6 +113,9 @@ function isOriginAllowed(origin, env) {
 
 /**
  * Get CORS headers for a response
+ * @param {string} origin - The request Origin header value
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @returns {Object} CORS headers object
  */
 function getCORSHeaders(origin, env) {
   // Only set specific origin if it's in the allowed list
@@ -79,6 +131,10 @@ function getCORSHeaders(origin, env) {
 
 /**
  * Handle CORS preflight (OPTIONS) requests
+ * @param {Request} request - The incoming request
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @param {string} origin - The request Origin header value
+ * @returns {Response} CORS preflight response
  */
 function handleCORSPreflight(request, env, origin) {
   if (!isOriginAllowed(origin, env)) {
@@ -137,10 +193,14 @@ function handleHealthCheck(env, origin) {
 }
 
 /**
- * Handle device code request
+ * Handle device code request - initiates GitHub Device Flow OAuth
  * POST /device/code
  *
  * Proxies to GitHub's device code endpoint with the configured client_id
+ * @param {Request} request - The incoming request
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @param {string} origin - The request Origin header value
+ * @returns {Promise<Response>} Response with device code or error
  */
 async function handleDeviceCode(request, env, origin) {
   // Validate request method
@@ -151,6 +211,13 @@ async function handleDeviceCode(request, env, origin) {
   // Validate origin
   if (!isOriginAllowed(origin, env)) {
     return createErrorResponse(403, 'Origin not allowed', origin, env);
+  }
+
+  // Rate limiting
+  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const rateLimit = checkRateLimit(clientIp, '/device/code');
+  if (!rateLimit.allowed) {
+    return createErrorResponse(429, 'Too many requests. Please try again later.', origin, env);
   }
 
   // Validate configuration
@@ -187,11 +254,15 @@ async function handleDeviceCode(request, env, origin) {
 }
 
 /**
- * Handle token polling request
+ * Handle token polling request - exchanges device code for access token
  * POST /device/token
  * Body: { "device_code": "..." }
  *
  * Proxies to GitHub's token endpoint for polling
+ * @param {Request} request - The incoming request with device_code in body
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @param {string} origin - The request Origin header value
+ * @returns {Promise<Response>} Response with access token or polling status
  */
 async function handleTokenPoll(request, env, origin) {
   // Validate request method
@@ -202,6 +273,13 @@ async function handleTokenPoll(request, env, origin) {
   // Validate origin
   if (!isOriginAllowed(origin, env)) {
     return createErrorResponse(403, 'Origin not allowed', origin, env);
+  }
+
+  // Rate limiting
+  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const rateLimit = checkRateLimit(clientIp, '/device/token');
+  if (!rateLimit.allowed) {
+    return createErrorResponse(429, 'Too many requests. Please try again later.', origin, env);
   }
 
   // Validate configuration
@@ -218,9 +296,14 @@ async function handleTokenPoll(request, env, origin) {
     return createErrorResponse(400, 'Invalid JSON body', origin, env);
   }
 
-  // Validate device_code
-  if (!body.device_code || typeof body.device_code !== 'string') {
+  // Validate device_code exists
+  if (!body.device_code) {
     return createErrorResponse(400, 'device_code is required', origin, env);
+  }
+
+  // Validate device_code is a string
+  if (typeof body.device_code !== 'string') {
+    return createErrorResponse(400, 'device_code must be a string', origin, env);
   }
 
   // Basic validation of device_code format (should be a long string)

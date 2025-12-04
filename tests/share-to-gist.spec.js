@@ -221,8 +221,8 @@ test.describe('Share to Gist', () => {
       await mockDeviceCodeEndpoint(page);
       await page.click('button:has-text("Share to Gist")');
 
-      const modal = page.locator('.gist-modal-overlay');
-      await expect(modal).toHaveClass(/show/);
+      const modal = page.locator('dialog.gist-modal-overlay');
+      await expect(modal).toHaveAttribute('open', '');
     });
 
     test('should display device code in modal', async ({ page }) => {
@@ -238,22 +238,24 @@ test.describe('Share to Gist', () => {
       await setupDeviceFlowMocks(page);
       await page.click('button:has-text("Share to Gist")');
 
-      const modal = page.locator('.gist-modal-overlay');
-      await expect(modal).toHaveClass(/show/);
+      const modal = page.locator('dialog.gist-modal-overlay');
+      await expect(modal).toHaveAttribute('open', '');
 
       await page.click('.gist-modal button:has-text("Cancel")');
-      await expect(modal).not.toHaveClass(/show/);
+      await expect(modal).not.toHaveAttribute('open');
     });
 
     test('should close modal when clicking overlay background', async ({ page }) => {
       await setupDeviceFlowMocks(page);
       await page.click('button:has-text("Share to Gist")');
 
-      const modal = page.locator('.gist-modal-overlay');
-      await expect(modal).toHaveClass(/show/);
+      const modal = page.locator('dialog.gist-modal-overlay');
+      await expect(modal).toHaveAttribute('open', '');
 
-      await page.click('.gist-modal-overlay', { position: { x: 10, y: 10 } });
-      await expect(modal).not.toHaveClass(/show/);
+      // Native dialog closes when clicking ::backdrop, but Playwright can't click that directly
+      // Instead, press Escape which native dialog handles automatically
+      await page.keyboard.press('Escape');
+      await expect(modal).not.toHaveAttribute('open');
     });
 
     test('should show Open GitHub button', async ({ page }) => {
@@ -304,8 +306,8 @@ test.describe('Share to Gist', () => {
 
       await page.click('button:has-text("Share to Gist")');
 
-      const modal = page.locator('.gist-modal-overlay');
-      await expect(modal).toHaveClass(/show/);
+      const modal = page.locator('dialog.gist-modal-overlay');
+      await expect(modal).toHaveAttribute('open', '');
       await expect(page.locator('.device-code')).toBeVisible({ timeout: 10000 });
     });
 
