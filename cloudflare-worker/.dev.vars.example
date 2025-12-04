@@ -1,0 +1,5 @@
+# Local development secrets
+# Copy this file to .dev.vars and fill in your values
+# NEVER commit .dev.vars to git!
+
+GITHUB_CLIENT_ID=Ov23liXXXXXXXXXXXXXX

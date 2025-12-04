@@ -1,0 +1,22 @@
+{
+  "name": "merview-github-oauth",
+  "version": "1.0.0",
+  "description": "Cloudflare Worker proxy for GitHub OAuth Device Flow - enables Merview to create gists",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  },
+  "keywords": [
+    "cloudflare-worker",
+    "github-oauth",
+    "device-flow",
+    "merview"
+  ],
+  "author": "Merview",
+  "license": "AGPL-3.0",
+  "devDependencies": {
+    "wrangler": "^4.52.1"
+  }
+}
