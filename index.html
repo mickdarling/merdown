@@ -1348,6 +1348,12 @@
             'unpkg.com'
         ];
 
+        // Allowed domains for loading remote markdown (security allowlist)
+        const ALLOWED_MARKDOWN_DOMAINS = [
+            'raw.githubusercontent.com',
+            'gist.githubusercontent.com'
+        ];
+
         // Validate URL against allowlist (HTTPS only, case-insensitive)
         function isAllowedCSSURL(url) {
             try {
@@ -1364,6 +1370,60 @@
                 return false;
             } catch (error) {
                 console.warn('CSS URL blocked: invalid URL format:', url, error.message);
+                return false;
+            }
+        }
+
+        // Validate markdown URL against allowlist (HTTPS only, case-insensitive)
+        function isAllowedMarkdownURL(url) {
+            try {
+                const parsed = new URL(url);
+                if (parsed.protocol !== 'https:') {
+                    console.warn('Markdown URL blocked: HTTPS required, got', parsed.protocol);
+                    return false;
+                }
+                const isAllowed = ALLOWED_MARKDOWN_DOMAINS.includes(parsed.hostname.toLowerCase());
+                if (!isAllowed) {
+                    console.warn('Markdown URL blocked: domain not in allowlist:', parsed.hostname);
+                }
+                return isAllowed;
+            } catch (error) {
+                console.warn('Markdown URL blocked: invalid URL format:', url, error.message);
+                return false;
+            }
+        }
+        // Expose for testing
+        globalThis.isAllowedMarkdownURL = isAllowedMarkdownURL;
+
+        // Load markdown from URL (with domain validation)
+        async function loadMarkdownFromURL(url) {
+            if (!isAllowedMarkdownURL(url)) {
+                showStatus(`URL not allowed. Trusted: ${ALLOWED_MARKDOWN_DOMAINS.join(', ')}`);
+                return false;
+            }
+
+            try {
+                showStatus('Loading from URL...');
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+                const markdown = await response.text();
+
+                if (cmEditor) {
+                    cmEditor.setValue(markdown);
+                }
+
+                // Extract filename from URL for display
+                const urlPath = new URL(url).pathname;
+                currentFilename = urlPath.split('/').pop() || 'remote.md';
+
+                await renderMarkdown();
+                showStatus(`Loaded: ${currentFilename}`);
+                return true;
+            } catch (error) {
+                console.error('Error loading URL:', error);
+                showStatus(`Error loading URL: ${error.message}`);
                 return false;
             }
         }
@@ -2714,13 +2774,27 @@ classDiagram
             // Initialize editor <-> preview sync highlighting
             initSync();
 
-            // Load saved content or sample
-            const saved = localStorage.getItem('markdown-content');
-            if (saved) {
-                cmEditor.setValue(saved);
-                renderMarkdown();
+            // Check for URL parameter to load remote markdown
+            const urlParams = new URLSearchParams(globalThis.location.search);
+            const remoteURL = urlParams.get('url');
+
+            if (remoteURL) {
+                // Load from URL parameter
+                loadMarkdownFromURL(remoteURL).then(success => {
+                    if (success) {
+                        // Clear URL param so refresh uses localStorage (their edited version)
+                        globalThis.history.replaceState({}, '', globalThis.location.pathname);
+                    }
+                });
             } else {
-                loadSample();
+                // Load saved content or sample
+                const saved = localStorage.getItem('markdown-content');
+                if (saved) {
+                    cmEditor.setValue(saved);
+                    renderMarkdown();
+                } else {
+                    loadSample();
+                }
             }
         });
     </script>
