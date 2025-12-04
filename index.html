@@ -2773,7 +2773,7 @@ classDiagram
             initSync();
 
             // Check for URL parameter to load remote markdown
-            const urlParams = new URLSearchParams(window.location.search);
+            const urlParams = new URLSearchParams(globalThis.location.search);
             const remoteURL = urlParams.get('url');
 
             if (remoteURL) {
@@ -2781,7 +2781,7 @@ classDiagram
                 loadMarkdownFromURL(remoteURL).then(success => {
                     if (success) {
                         // Clear URL param so refresh uses localStorage (their edited version)
-                        window.history.replaceState({}, '', window.location.pathname);
+                        globalThis.history.replaceState({}, '', globalThis.location.pathname);
                     }
                 });
             } else {
