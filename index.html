@@ -35,7 +35,7 @@
                    style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://unpkg.com;
                    font-src 'self' data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com;
                    img-src 'self' data: https:;
-                   connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://unpkg.com https://api.github.com https://*.workers.dev;
+                   connect-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com https://raw.githubusercontent.com https://gist.githubusercontent.com https://unpkg.com https://api.github.com https://merview-github-oauth.mick-eba.workers.dev;
                    frame-src 'none';
                    object-src 'none';
                    base-uri 'self';">
@@ -849,7 +849,7 @@
     </div>
 
     <!-- Share to Gist Modal -->
-    <div class="gist-modal-overlay" id="gistModal">
+    <div class="gist-modal-overlay" id="gistModal" role="dialog" aria-modal="true" aria-labelledby="gistModalTitle">
         <div class="gist-modal">
             <h2 id="gistModalTitle">Share to Gist</h2>
             <div id="gistModalContent">
@@ -2581,6 +2581,11 @@ classDiagram
         // Configuration - Cloudflare Worker OAuth proxy URL
         const OAUTH_PROXY_URL = 'https://merview-github-oauth.mick-eba.workers.dev';
 
+        // GitHub Device Flow constants
+        const TOKEN_EXPIRY_BUFFER_MS = 5 * 60 * 1000; // 5 minutes
+        const MIN_POLL_INTERVAL_MS = 1000; // 1 second minimum
+        const POLL_INTERVAL_INCREMENT_MS = 5000; // 5 seconds added on slow_down
+
         // GitHub Device Flow state
         let gistAuthState = {
             deviceCode: null,
@@ -2591,6 +2596,9 @@ classDiagram
             pollTimeoutId: null
         };
 
+        // Race condition guard for Share to Gist
+        let gistShareInProgress = false;
+
         // Get stored GitHub access token
         function getGitHubToken() {
             try {
@@ -2599,8 +2607,8 @@ classDiagram
 
                 const data = JSON.parse(stored);
 
-                // Check if token is expired (with 5 min buffer)
-                if (data.expiresAt && Date.now() > data.expiresAt - 300000) {
+                // Check if token is expired (with buffer)
+                if (data.expiresAt && Date.now() > data.expiresAt - TOKEN_EXPIRY_BUFFER_MS) {
                     clearGitHubToken();
                     return null;
                 }
@@ -2656,26 +2664,68 @@ classDiagram
                         hideGistModal();
                     }
                 });
+
+                // Handle data-copy-url buttons (prevents XSS via onclick)
+                overlay.addEventListener('click', function(e) {
+                    const copyBtn = e.target.closest('[data-copy-url]');
+                    if (copyBtn) {
+                        const url = copyBtn.getAttribute('data-copy-url');
+                        if (url) {
+                            copyGistUrl(url);
+                        }
+                    }
+                });
+
+                // Handle data-open-url buttons (prevents XSS via onclick)
+                overlay.addEventListener('click', function(e) {
+                    const openBtn = e.target.closest('[data-open-url]');
+                    if (openBtn) {
+                        const url = openBtn.getAttribute('data-open-url');
+                        if (url) {
+                            window.open(url, '_blank');
+                        }
+                    }
+                });
             }
+
+            // Close modal on ESC key press
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    const modal = document.getElementById('gistModal');
+                    if (modal && modal.classList.contains('show')) {
+                        hideGistModal();
+                    }
+                }
+            });
         });
 
         // Main entry point for Share to Gist
         async function shareToGist() {
-            const content = cmEditor ? cmEditor.getValue() : '';
-
-            if (!content.trim()) {
-                showStatus('Nothing to share - editor is empty');
+            // Prevent concurrent executions
+            if (gistShareInProgress) {
                 return;
             }
 
-            const token = getGitHubToken();
+            gistShareInProgress = true;
+            try {
+                const content = cmEditor ? cmEditor.getValue() : '';
 
-            if (token) {
-                // Already authenticated, create gist directly
-                await createGist(token, content);
-            } else {
-                // Need to authenticate first
-                await startDeviceFlow();
+                if (!content.trim()) {
+                    showStatus('Nothing to share - editor is empty');
+                    return;
+                }
+
+                const token = getGitHubToken();
+
+                if (token) {
+                    // Already authenticated, create gist directly
+                    await createGist(token, content);
+                } else {
+                    // Need to authenticate first
+                    await startDeviceFlow();
+                }
+            } finally {
+                gistShareInProgress = false;
             }
         }
 
@@ -2785,12 +2835,14 @@ classDiagram
                 if (data.error) {
                     if (data.error === 'authorization_pending') {
                         // User hasn't authorized yet, keep polling
-                        gistAuthState.pollTimeoutId = setTimeout(pollForToken, gistAuthState.interval * 1000);
+                        const pollInterval = Math.max(gistAuthState.interval * 1000, MIN_POLL_INTERVAL_MS);
+                        gistAuthState.pollTimeoutId = setTimeout(pollForToken, pollInterval);
                         return;
                     } else if (data.error === 'slow_down') {
                         // Increase polling interval
-                        gistAuthState.interval += 5;
-                        gistAuthState.pollTimeoutId = setTimeout(pollForToken, gistAuthState.interval * 1000);
+                        gistAuthState.interval += (POLL_INTERVAL_INCREMENT_MS / 1000);
+                        const pollInterval = Math.max(gistAuthState.interval * 1000, MIN_POLL_INTERVAL_MS);
+                        gistAuthState.pollTimeoutId = setTimeout(pollForToken, pollInterval);
                         return;
                     } else if (data.error === 'expired_token') {
                         showGistModal('Authorization Expired', `
@@ -2896,10 +2948,10 @@ classDiagram
                     <div class="url-display">${escapeHtml(mviewUrl)}</div>
                     <div class="modal-buttons">
                         <button class="btn" onclick="hideGistModal()">Close</button>
-                        <button class="btn btn-success" onclick="copyGistUrl('${escapeHtml(mviewUrl)}')">
+                        <button class="btn btn-success" data-copy-url="${escapeHtml(mviewUrl)}">
                             Copy Link
                         </button>
-                        <button class="btn btn-github" onclick="window.open('${escapeHtml(gist.html_url)}', '_blank')">
+                        <button class="btn btn-github" data-open-url="${escapeHtml(gist.html_url)}">
                             View on GitHub
                         </button>
                     </div>
@@ -2909,8 +2961,10 @@ classDiagram
                 try {
                     await navigator.clipboard.writeText(mviewUrl);
                     showStatus('Link copied to clipboard!');
-                } catch {
-                    // Clipboard access denied, user can use the copy button
+                } catch (error) {
+                    // Intentionally silent - clipboard access may be denied by browser policy.
+                    // User can use the "Copy Link" button as an alternative.
+                    console.debug('Auto-copy to clipboard failed (expected if permissions denied):', error.message);
                 }
 
             } catch (error) {
