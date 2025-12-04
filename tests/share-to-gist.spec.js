@@ -254,6 +254,8 @@ test.describe('Share to Gist', () => {
 
       // Native dialog closes when clicking ::backdrop, but Playwright can't click that directly
       // Instead, press Escape which native dialog handles automatically
+      // Small wait to ensure modal is fully rendered before closing
+      await page.waitForTimeout(100);
       await page.keyboard.press('Escape');
       await expect(modal).not.toHaveAttribute('open');
     });

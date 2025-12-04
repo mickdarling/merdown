@@ -17,13 +17,19 @@
 const GITHUB_DEVICE_CODE_URL = 'https://github.com/login/device/code';
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
+// Device code validation constants
+const DEVICE_CODE_MIN_LENGTH = 10;
+const DEVICE_CODE_MAX_LENGTH = 500;
+
 // Rate limiting configuration
 const RATE_LIMITS = {
   '/device/code': { maxRequests: 10, windowMs: 60000 }, // 10 requests per minute
   '/device/token': { maxRequests: 60, windowMs: 60000 }, // 60 requests per minute (polling)
 };
 
-// In-memory rate limit store (resets on Worker restart, acceptable for this use case)
+// In-memory rate limit store (resets on Worker restart)
+// Note: Old entries are cleaned on next access, not proactively.
+// For high-traffic scenarios, consider Cloudflare Durable Objects or KV.
 const rateLimitStore = new Map();
 
 /**
@@ -180,6 +186,41 @@ function createJSONResponse(data, origin, env, status = 200) {
 }
 
 /**
+ * Validate common request requirements (method, origin, rate limit, config)
+ * @param {Request} request - The incoming request
+ * @param {Object} env - Cloudflare Worker environment bindings
+ * @param {string} origin - The request Origin header value
+ * @param {string} endpoint - API endpoint path for rate limiting
+ * @returns {Response|null} Error response if validation fails, null if valid
+ */
+function validateRequest(request, env, origin, endpoint) {
+  // Validate request method
+  if (request.method !== 'POST') {
+    return createErrorResponse(405, 'Method not allowed. Use POST.', origin, env);
+  }
+
+  // Validate origin
+  if (!isOriginAllowed(origin, env)) {
+    return createErrorResponse(403, 'Origin not allowed', origin, env);
+  }
+
+  // Rate limiting
+  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
+  const rateLimit = checkRateLimit(clientIp, endpoint);
+  if (!rateLimit.allowed) {
+    return createErrorResponse(429, 'Too many requests. Please try again later.', origin, env);
+  }
+
+  // Validate configuration
+  if (!env.GITHUB_CLIENT_ID) {
+    console.error('GITHUB_CLIENT_ID not configured');
+    return createErrorResponse(500, 'Server not configured', origin, env);
+  }
+
+  return null; // All validations passed
+}
+
+/**
  * Health check endpoint
  */
 function handleHealthCheck(env, origin) {
@@ -203,28 +244,9 @@ function handleHealthCheck(env, origin) {
  * @returns {Promise<Response>} Response with device code or error
  */
 async function handleDeviceCode(request, env, origin) {
-  // Validate request method
-  if (request.method !== 'POST') {
-    return createErrorResponse(405, 'Method not allowed. Use POST.', origin, env);
-  }
-
-  // Validate origin
-  if (!isOriginAllowed(origin, env)) {
-    return createErrorResponse(403, 'Origin not allowed', origin, env);
-  }
-
-  // Rate limiting
-  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-  const rateLimit = checkRateLimit(clientIp, '/device/code');
-  if (!rateLimit.allowed) {
-    return createErrorResponse(429, 'Too many requests. Please try again later.', origin, env);
-  }
-
-  // Validate configuration
-  if (!env.GITHUB_CLIENT_ID) {
-    console.error('GITHUB_CLIENT_ID not configured');
-    return createErrorResponse(500, 'Server not configured', origin, env);
-  }
+  // Common validation (method, origin, rate limit, config)
+  const validationError = validateRequest(request, env, origin, '/device/code');
+  if (validationError) return validationError;
 
   // Build request to GitHub
   const params = new URLSearchParams({
@@ -265,28 +287,9 @@ async function handleDeviceCode(request, env, origin) {
  * @returns {Promise<Response>} Response with access token or polling status
  */
 async function handleTokenPoll(request, env, origin) {
-  // Validate request method
-  if (request.method !== 'POST') {
-    return createErrorResponse(405, 'Method not allowed. Use POST.', origin, env);
-  }
-
-  // Validate origin
-  if (!isOriginAllowed(origin, env)) {
-    return createErrorResponse(403, 'Origin not allowed', origin, env);
-  }
-
-  // Rate limiting
-  const clientIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || 'unknown';
-  const rateLimit = checkRateLimit(clientIp, '/device/token');
-  if (!rateLimit.allowed) {
-    return createErrorResponse(429, 'Too many requests. Please try again later.', origin, env);
-  }
-
-  // Validate configuration
-  if (!env.GITHUB_CLIENT_ID) {
-    console.error('GITHUB_CLIENT_ID not configured');
-    return createErrorResponse(500, 'Server not configured', origin, env);
-  }
+  // Common validation (method, origin, rate limit, config)
+  const validationError = validateRequest(request, env, origin, '/device/token');
+  if (validationError) return validationError;
 
   // Parse request body
   let body;
@@ -307,7 +310,7 @@ async function handleTokenPoll(request, env, origin) {
   }
 
   // Basic validation of device_code format (should be a long string)
-  if (body.device_code.length < 10 || body.device_code.length > 500) {
+  if (body.device_code.length < DEVICE_CODE_MIN_LENGTH || body.device_code.length > DEVICE_CODE_MAX_LENGTH) {
     return createErrorResponse(400, 'Invalid device_code format', origin, env);
   }
 

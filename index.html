@@ -2581,7 +2581,6 @@ classDiagram
         // Configuration - Cloudflare Worker OAuth proxy URL (origin-aware)
         // Determine worker URL based on current origin to prevent unauthorized usage
         function getOAuthProxyUrl() {
-            const origin = globalThis.location.origin;
             const hostname = globalThis.location.hostname;
 
             // Allow production domains and localhost
@@ -2642,6 +2641,12 @@ classDiagram
                 ? Date.now() + (tokenData.expires_in * 1000)
                 : null;
 
+            // Store in localStorage (accessible to all scripts on this origin).
+            // This is acceptable for Merview because:
+            // 1. Token only grants 'gist' scope (limited permissions)
+            // 2. No sensitive user data is stored
+            // 3. Token expires and can be revoked on GitHub
+            // For higher security needs, consider sessionStorage or in-memory only.
             localStorage.setItem('github_gist_token', JSON.stringify({
                 accessToken: tokenData.access_token,
                 expiresAt: expiresAt,
@@ -2669,8 +2674,16 @@ classDiagram
             // Cancel any ongoing polling
             if (gistAuthState.pollTimeoutId) {
                 clearTimeout(gistAuthState.pollTimeoutId);
-                gistAuthState.pollTimeoutId = null;
             }
+            // Reset state to prevent stale data on retry
+            gistAuthState = {
+                deviceCode: null,
+                userCode: null,
+                verificationUri: null,
+                expiresAt: null,
+                interval: 5,
+                pollTimeoutId: null
+            };
         }
 
         // Close modal when clicking backdrop (outside modal content)
@@ -3049,6 +3062,8 @@ classDiagram
                 await navigator.clipboard.writeText(url);
                 showStatus('Link copied to clipboard!');
             } catch (error) {
+                // Clipboard API may fail due to permissions or browser support
+                console.debug('Clipboard copy failed:', error.message);
                 showStatus('Failed to copy - please copy manually');
             }
         }
