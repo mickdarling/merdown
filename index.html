@@ -916,17 +916,17 @@
         </div>
     </dialog>
 
-    <dialog class="gist-modal-overlay" id="privateUrlModal" aria-labelledby="privateUrlModalTitle">
-        <div class="gist-modal private-url-modal">
-            <div class="security-icon">🔒</div>
+    <dialog class="gist-modal-overlay" id="privateUrlModal" aria-labelledby="privateUrlModalTitle" aria-describedby="privateUrlModalDesc">
+        <div class="gist-modal private-url-modal" role="document">
+            <div class="security-icon" aria-hidden="true">🔒</div>
             <h2 id="privateUrlModalTitle">Private Repository Detected</h2>
-            <p>This URL contains a private access token. To protect your security, choose how you'd like to proceed:</p>
-            <div class="option-buttons">
-                <button class="option-btn" data-action="view-local" type="button">
+            <p id="privateUrlModalDesc">This URL contains a private access token. To protect your security, choose how you'd like to proceed:</p>
+            <div class="option-buttons" role="group" aria-label="Security options">
+                <button class="option-btn" data-action="view-local" type="button" aria-label="View Locally Only - Render content without a shareable URL">
                     <span class="option-title">View Locally Only</span>
                     <span class="option-desc">Render content without a shareable URL</span>
                 </button>
-                <button class="option-btn primary" data-action="share-gist" type="button">
+                <button class="option-btn primary" data-action="share-gist" type="button" aria-label="Share Securely via Gist - Create a safe, shareable copy">
                     <span class="option-title">Share Securely via Gist</span>
                     <span class="option-desc">Create a safe, shareable copy</span>
                 </button>
@@ -2784,14 +2784,17 @@ classDiagram
         // Private URL modal state
         let privateUrlState = {
             originalUrl: null,  // URL with token (for fetching)
-            cleanUrl: null,     // URL without token
             resolve: null       // Promise resolver for modal choice
         };
 
         // Show the private URL security modal
-        function showPrivateUrlModal(originalUrl, cleanUrl) {
+        function showPrivateUrlModal(originalUrl) {
+            // Security: Strip URL from browser immediately when modal shows
+            // This prevents users from copying the token-containing URL before choosing
+            globalThis.history.replaceState(null, '', globalThis.location.pathname);
+
             return new Promise((resolve) => {
-                privateUrlState = { originalUrl, cleanUrl, resolve };
+                privateUrlState = { originalUrl, resolve };
                 const modal = document.getElementById('privateUrlModal');
                 modal.showModal();
             });
@@ -2801,6 +2804,11 @@ classDiagram
         function hidePrivateUrlModal() {
             const modal = document.getElementById('privateUrlModal');
             modal.close();
+        }
+
+        // Reset private URL state to prevent memory leaks
+        function resetPrivateUrlState() {
+            privateUrlState = { originalUrl: null, resolve: null };
         }
 
         // Handle private URL modal button clicks
@@ -2813,48 +2821,41 @@ classDiagram
                     if (!btn) return;
 
                     const action = btn.dataset.action;
+                    // Capture state before hiding modal (in case of race conditions)
+                    const { originalUrl, resolve } = privateUrlState;
                     hidePrivateUrlModal();
 
                     if (action === 'view-local') {
-                        // Strip URL parameter entirely - no shareable URL
-                        globalThis.history.replaceState(null, '', globalThis.location.pathname);
-
-                        // Load the content
-                        await loadMarkdownFromURL(privateUrlState.originalUrl);
+                        // Load the content (URL already stripped when modal was shown)
+                        await loadMarkdownFromURL(originalUrl);
                         showStatus('Content loaded locally (URL not shareable)', 'warning');
 
-                        if (privateUrlState.resolve) {
-                            privateUrlState.resolve('view-local');
-                        }
+                        if (resolve) resolve('view-local');
+                        resetPrivateUrlState();
                     } else if (action === 'share-gist') {
-                        // First load the content, then trigger gist flow
-                        await loadMarkdownFromURL(privateUrlState.originalUrl);
-
-                        // Strip URL param
-                        globalThis.history.replaceState(null, '', globalThis.location.pathname);
-
-                        // Now trigger the Share to Gist flow
+                        // Load content then trigger gist flow (URL already stripped)
+                        await loadMarkdownFromURL(originalUrl);
                         shareToGist();
 
-                        if (privateUrlState.resolve) {
-                            privateUrlState.resolve('share-gist');
-                        }
+                        if (resolve) resolve('share-gist');
+                        resetPrivateUrlState();
                     }
                 });
 
                 // Close on backdrop click
                 privateModal.addEventListener('click', function(e) {
                     if (e.target === privateModal) {
+                        // Capture state before hiding modal
+                        const { originalUrl, resolve } = privateUrlState;
                         hidePrivateUrlModal();
-                        // If user dismisses, just load locally
-                        if (privateUrlState.originalUrl) {
-                            globalThis.history.replaceState(null, '', globalThis.location.pathname);
-                            loadMarkdownFromURL(privateUrlState.originalUrl);
+
+                        // If user dismisses, just load locally (URL already stripped)
+                        if (originalUrl) {
+                            loadMarkdownFromURL(originalUrl);
                             showStatus('Content loaded locally (URL not shareable)', 'warning');
                         }
-                        if (privateUrlState.resolve) {
-                            privateUrlState.resolve('dismissed');
-                        }
+                        if (resolve) resolve('dismissed');
+                        resetPrivateUrlState();
                     }
                 });
             }
@@ -3285,8 +3286,7 @@ classDiagram
             // Warnings show longer (6s) than success messages (3s)
             const duration = type === 'warning' ? 6000 : 3000;
             setTimeout(() => {
-                statusDiv.classList.remove('show');
-                statusDiv.classList.remove('warning');
+                statusDiv.classList.remove('show', 'warning');
             }, duration);
         }
         // Expose for testing
@@ -3610,11 +3610,11 @@ classDiagram
 
             if (remoteURL) {
                 // Security: Check for GitHub private repo tokens
-                const { cleanUrl, hadToken } = stripGitHubToken(remoteURL);
+                const { hadToken } = stripGitHubToken(remoteURL);
 
                 if (hadToken) {
                     // Show modal to let user choose how to handle private repo content
-                    showPrivateUrlModal(remoteURL, cleanUrl);
+                    showPrivateUrlModal(remoteURL);
                     // Modal handlers will load the content and update URL
                 } else {
                     // No token - load normally with shareable URL
