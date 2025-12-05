@@ -197,6 +197,125 @@ function scopeSelector(selector) {
 }
 
 /**
+ * Skip whitespace characters and add them to result
+ * @param {string} css - CSS text
+ * @param {number} i - Current index
+ * @param {Array<string>} result - Result array to append to
+ * @returns {number} New index after skipping whitespace
+ */
+function skipWhitespace(css, i, result) {
+    const len = css.length;
+    while (i < len && /\s/.test(css[i])) {
+        result.push(css[i]);
+        i++;
+    }
+    return i;
+}
+
+/**
+ * Parse an @-rule and add it to result unchanged
+ * @param {string} css - CSS text
+ * @param {number} i - Current index (pointing at '@')
+ * @param {Array<string>} result - Result array to append to
+ * @returns {number} New index after parsing @-rule
+ */
+function parseAtRule(css, i, result) {
+    const atStart = i;
+    const len = css.length;
+
+    // Find the opening brace or semicolon
+    while (i < len && css[i] !== '{' && css[i] !== ';') {
+        i++;
+    }
+
+    if (i < len && css[i] === '{') {
+        // Find matching closing brace (handle nested braces)
+        let depth = 1;
+        i++;
+        while (i < len && depth > 0) {
+            if (css[i] === '{') {
+                depth++;
+            } else if (css[i] === '}') {
+                depth--;
+            }
+            i++;
+        }
+    } else if (i < len) {
+        i++; // Skip the semicolon
+    }
+
+    result.push(css.substring(atStart, i));
+    return i;
+}
+
+/**
+ * Parse a CSS comment and add it to result
+ * @param {string} css - CSS text
+ * @param {number} i - Current index (pointing at '/')
+ * @param {Array<string>} result - Result array to append to
+ * @returns {number} New index after parsing comment
+ */
+function parseComment(css, i, result) {
+    const commentStart = i;
+    const len = css.length;
+    i += 2; // Skip /*
+
+    while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) {
+        i++;
+    }
+    i += 2; // Skip closing */
+
+    result.push(css.substring(commentStart, i));
+    return i;
+}
+
+/**
+ * Parse selector and rule block, scoping the selectors
+ * @param {string} css - CSS text
+ * @param {number} i - Current index (pointing at start of selector)
+ * @param {Array<string>} result - Result array to append to
+ * @returns {number} New index after parsing selector and block
+ */
+function parseSelectorAndBlock(css, i, result) {
+    const selectorStart = i;
+    const len = css.length;
+
+    // Read selector(s) until opening brace
+    while (i < len && css[i] !== '{') {
+        i++;
+    }
+
+    if (i >= len) {
+        result.push(css.substring(selectorStart));
+        return i;
+    }
+
+    // Extract and scope selectors
+    const selectorText = css.substring(selectorStart, i);
+    const selectors = selectorText.split(',');
+    const scopedSelectors = selectors.map(scopeSelector).join(', ');
+    result.push(scopedSelectors);
+
+    // Copy the opening brace
+    result.push(css[i]);
+    i++;
+
+    // Copy rule body until closing brace (handle nested braces for @-rules)
+    let depth = 1;
+    while (i < len && depth > 0) {
+        if (css[i] === '{') {
+            depth++;
+        } else if (css[i] === '}') {
+            depth--;
+        }
+        result.push(css[i]);
+        i++;
+    }
+
+    return i;
+}
+
+/**
  * Scope CSS to only affect #wrapper using a character-by-character parser
  * This avoids regex backtracking vulnerabilities (DoS prevention)
  * @param {string} css - CSS text to scope
@@ -209,75 +328,23 @@ function scopeCSSToPreview(css) {
 
     while (i < len) {
         // Skip whitespace
-        while (i < len && /\s/.test(css[i])) {
-            result.push(css[i]);
-            i++;
-        }
+        i = skipWhitespace(css, i, result);
         if (i >= len) break;
 
         // Check for @-rule (pass through unchanged until matching brace)
         if (css[i] === '@') {
-            const atStart = i;
-            // Find the opening brace or semicolon
-            while (i < len && css[i] !== '{' && css[i] !== ';') {
-                i++;
-            }
-            if (i < len && css[i] === '{') {
-                // Find matching closing brace (handle nested braces)
-                let depth = 1;
-                i++;
-                while (i < len && depth > 0) {
-                    if (css[i] === '{') depth++;
-                    else if (css[i] === '}') depth--;
-                    i++;
-                }
-            } else if (i < len) {
-                i++; // Skip the semicolon
-            }
-            result.push(css.substring(atStart, i));
+            i = parseAtRule(css, i, result);
             continue;
         }
 
         // Check for comment
         if (css[i] === '/' && css[i + 1] === '*') {
-            const commentStart = i;
-            i += 2;
-            while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) {
-                i++;
-            }
-            i += 2; // Skip closing */
-            result.push(css.substring(commentStart, i));
+            i = parseComment(css, i, result);
             continue;
         }
 
-        // Read selector(s) until opening brace
-        const selectorStart = i;
-        while (i < len && css[i] !== '{') {
-            i++;
-        }
-        if (i >= len) {
-            result.push(css.substring(selectorStart));
-            break;
-        }
-
-        // Extract and scope selectors
-        const selectorText = css.substring(selectorStart, i);
-        const selectors = selectorText.split(',');
-        const scopedSelectors = selectors.map(scopeSelector).join(', ');
-        result.push(scopedSelectors);
-
-        // Copy the opening brace
-        result.push(css[i]);
-        i++;
-
-        // Copy rule body until closing brace (handle nested braces for @-rules)
-        let depth = 1;
-        while (i < len && depth > 0) {
-            if (css[i] === '{') depth++;
-            else if (css[i] === '}') depth--;
-            result.push(css[i]);
-            i++;
-        }
+        // Parse selector and rule block
+        i = parseSelectorAndBlock(css, i, result);
     }
 
     return result.join('');

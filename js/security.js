@@ -86,10 +86,8 @@ export function stripGitHubToken(url) {
  */
 export function isValidBackgroundColor(value) {
     const trimmed = value.trim().toLowerCase();
-    // Block dangerous patterns first
-    // NOSONAR: javascript:S1523 - False positive: This code BLOCKS javascript: URLs for security,
-    // it does not execute them. The string literal is used to detect and reject malicious input.
-    if (trimmed.includes('javascript:') || trimmed.includes('url(')) {
+    // Block dangerous patterns first (returns false to reject malicious input)
+    if (trimmed.includes('javascript:') || trimmed.includes('url(')) { // NOSONAR S1523 - This BLOCKS dangerous URLs, doesn't execute them
         return false;
     }
     // Allow safe color formats:
