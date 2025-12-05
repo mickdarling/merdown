@@ -5,6 +5,27 @@
 const { test, expect } = require('@playwright/test');
 
 /**
+ * Browser-side helper: Check if clicking Open button triggers file input click
+ * Extracted to avoid deep function nesting (SonarCloud S2004)
+ * @returns {Promise<boolean>} True if file input was clicked
+ */
+function browserCheckOpenButtonClick() {
+  const fileInput = document.getElementById('mdFileInput');
+  if (!fileInput) return Promise.resolve(false);
+
+  return new Promise(function resolveOnClick(resolve) {
+    fileInput.addEventListener('click', function onFileInputClick() {
+      resolve(true);
+    }, { once: true });
+
+    const openButton = document.querySelector('button[onclick="openFile()"]');
+    if (openButton) openButton.click();
+
+    setTimeout(function fallbackTimeout() { resolve(false); }, 1000);
+  });
+}
+
+/**
  * Tests for Open button functionality
  *
  * These tests ensure the Open button and file input infrastructure exists
@@ -71,30 +92,8 @@ test.describe('Open Functionality', () => {
 
     test('clicking Open button should trigger file input click', async ({ page }) => {
       // Track if file input was clicked by listening for the click event
-      const wasClicked = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const fileInput = document.getElementById('mdFileInput');
-          if (!fileInput) {
-            resolve(false);
-            return;
-          }
-
-          // Listen for click on file input
-          fileInput.addEventListener('click', () => {
-            resolve(true);
-          }, { once: true });
-
-          // Click the Open button
-          const openButton = document.querySelector('button[onclick="openFile()"]');
-          if (openButton) {
-            openButton.click();
-          }
-
-          // Timeout fallback
-          setTimeout(() => resolve(false), 1000);
-        });
-      });
-
+      // Uses extracted helper to avoid deep nesting (SonarCloud S2004)
+      const wasClicked = await page.evaluate(browserCheckOpenButtonClick);
       expect(wasClicked).toBe(true);
     });
   });
