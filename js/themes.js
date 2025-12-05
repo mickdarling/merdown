@@ -401,21 +401,12 @@ function applySyntaxOverride() {
 }
 
 /**
- * Apply loaded CSS to the page
- * Preloads background color before removing old CSS to prevent white flash (#110 fix)
- * @param {string} cssText - CSS text to apply
- * @param {string} styleName - Name of the style for saving preference
- * @param {object} style - Style config object
+ * Core CSS application logic - preloads background, swaps CSS, re-renders
+ * Shared by applyStyleToPage and applyCSSDirectly to avoid duplication
+ * @param {string} cssText - Processed CSS text to apply
+ * @returns {Promise<void>}
  */
-async function applyStyleToPage(cssText, styleName, style) {
-    // Remove @media print blocks that might override colors for printing
-    cssText = stripPrintMediaQueries(cssText);
-
-    // Scope the CSS to only affect #wrapper (the content area)
-    if (style.source !== 'local' && !cssText.includes('#wrapper')) {
-        cssText = scopeCSSToPreview(cssText);
-    }
-
+async function applyCSSCore(cssText) {
     // PRELOAD: Extract and apply background BEFORE removing old CSS (#110 fix)
     // This prevents the white flash by setting background early
     const bgColor = extractBackgroundColor(cssText);
@@ -444,19 +435,39 @@ async function applyStyleToPage(cssText, styleName, style) {
     // Apply full background with Mermaid theme update (handles null bgColor case)
     applyPreviewBackground(cssText);
 
-    // Apply layout constraints based on toggle setting
-    applyLayoutConstraints();
-
     // Apply minimal structure override (no color changes)
     applySyntaxOverride();
-
-    // Save preference
-    saveMarkdownStyle(styleName);
 
     // Re-render markdown to update Mermaid diagrams with new CSS
     if (state.renderMarkdown) {
         await state.renderMarkdown();
     }
+}
+
+/**
+ * Apply loaded CSS to the page
+ * Preloads background color before removing old CSS to prevent white flash (#110 fix)
+ * @param {string} cssText - CSS text to apply
+ * @param {string} styleName - Name of the style for saving preference
+ * @param {object} style - Style config object
+ */
+async function applyStyleToPage(cssText, styleName, style) {
+    // Remove @media print blocks that might override colors for printing
+    cssText = stripPrintMediaQueries(cssText);
+
+    // Scope the CSS to only affect #wrapper (the content area)
+    if (style.source !== 'local' && !cssText.includes('#wrapper')) {
+        cssText = scopeCSSToPreview(cssText);
+    }
+
+    // Apply core CSS logic
+    await applyCSSCore(cssText);
+
+    // Apply layout constraints based on toggle setting
+    applyLayoutConstraints();
+
+    // Save preference
+    saveMarkdownStyle(styleName);
 }
 
 /**
@@ -657,43 +668,12 @@ async function applyCSSDirectly(cssText, sourceName) {
         cssText = scopeCSSToPreview(cssText);
     }
 
-    // PRELOAD: Extract and apply background BEFORE removing old CSS (#110 fix)
-    const bgColor = extractBackgroundColor(cssText);
-    if (bgColor) {
-        const { preview } = getElements();
-        if (preview) {
-            preview.style.background = bgColor;
-            updateMermaidTheme(isDarkColor(bgColor));
-        }
-    }
-
-    // NOW remove previous style (preview already has new background color)
-    if (state.currentStyleLink) {
-        state.currentStyleLink.remove();
-    }
-
-    // Create style element
-    const styleElement = document.createElement('style');
-    styleElement.id = 'marked-custom-style';
-    styleElement.textContent = cssText;
-    document.head.appendChild(styleElement);
-
-    state.currentStyleLink = styleElement;
-
-    // Apply full background with Mermaid theme update
-    applyPreviewBackground(cssText);
-
-    // Apply minimal structure override
-    applySyntaxOverride();
+    // Apply core CSS logic (handles preload, swap, render)
+    await applyCSSCore(cssText);
 
     // Save preference (if it's a named style)
     if (sourceName && !sourceName.startsWith('http')) {
         saveMarkdownStyle(sourceName);
-    }
-
-    // Re-render to apply styles
-    if (state.renderMarkdown) {
-        await state.renderMarkdown();
     }
 }
 
