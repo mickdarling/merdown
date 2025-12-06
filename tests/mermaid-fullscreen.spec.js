@@ -6,7 +6,10 @@ const { test, expect } = require('@playwright/test');
 const {
   waitForPageReady,
   waitForGlobalFunction,
-  isGlobalFunctionAvailable
+  isGlobalFunctionAvailable,
+  setCodeMirrorContent,
+  renderMarkdownAndWait,
+  WAIT_TIMES
 } = require('./helpers/test-utils');
 
 /**
@@ -37,11 +40,39 @@ test.describe('Mermaid Fullscreen and Zoom', () => {
     });
   }
 
-  // Note: Mermaid rendering tests moved to a separate describe block with longer timeouts
-  // The mermaid library loads asynchronously and may take longer in CI environments
+  test.describe('Mermaid expand interactions', () => {
+    const mermaidDiagram = '```mermaid\ngraph TD\nA[Start] --> B[End]\n```';
 
-  // Note: Fullscreen overlay and zoom control tests require mermaid rendering
-  // which is covered by the existing comprehensive mermaid tests in the codebase.
-  // These tests focus on verifying the global functions are available, which
-  // prevents the regression pattern from issue #123 (missing initialization).
+    test('double-click on mermaid diagram opens fullscreen', async ({ page }) => {
+      // Render a mermaid diagram
+      await setCodeMirrorContent(page, mermaidDiagram);
+      await renderMarkdownAndWait(page, WAIT_TIMES.EXTRA_LONG);
+
+      // Wait for mermaid to render the SVG
+      await page.waitForSelector('.mermaid svg', { timeout: 10000 });
+
+      // Double-click on the mermaid diagram
+      const mermaidEl = await page.$('.mermaid');
+      await mermaidEl.dblclick();
+
+      // Verify fullscreen overlay appears
+      await expect(page.locator('#mermaid-fullscreen-overlay')).toBeVisible({ timeout: 5000 });
+    });
+
+    test('expand button click opens fullscreen', async ({ page }) => {
+      // Render a mermaid diagram
+      await setCodeMirrorContent(page, mermaidDiagram);
+      await renderMarkdownAndWait(page, WAIT_TIMES.EXTRA_LONG);
+
+      // Wait for mermaid to render the SVG
+      await page.waitForSelector('.mermaid svg', { timeout: 10000 });
+
+      // Click the expand button
+      const expandBtn = await page.$('.mermaid-expand-btn');
+      await expandBtn.click();
+
+      // Verify fullscreen overlay appears
+      await expect(page.locator('#mermaid-fullscreen-overlay')).toBeVisible({ timeout: 5000 });
+    });
+  });
 });
