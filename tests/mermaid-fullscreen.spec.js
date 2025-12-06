@@ -3,6 +3,11 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunction,
+  isGlobalFunctionAvailable
+} = require('./helpers/test-utils');
 
 /**
  * Tests for Mermaid Fullscreen and Zoom functionality
@@ -14,33 +19,32 @@ const { test, expect } = require('@playwright/test');
 test.describe('Mermaid Fullscreen and Zoom', () => {
   test.describe('Global Function Availability', () => {
     test.beforeEach(async ({ page }) => {
-      await page.goto('/');
-      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
-      await page.waitForFunction(() => typeof globalThis.openFile === 'function', { timeout: 5000 });
+      await waitForPageReady(page);
+      await waitForGlobalFunction(page, 'openFile');
     });
 
     test('expandMermaid function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.expandMermaid === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'expandMermaid');
       expect(isFunction).toBe(true);
     });
 
     test('closeMermaidFullscreen function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.closeMermaidFullscreen === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'closeMermaidFullscreen');
       expect(isFunction).toBe(true);
     });
 
     test('mermaidZoomIn function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.mermaidZoomIn === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomIn');
       expect(isFunction).toBe(true);
     });
 
     test('mermaidZoomOut function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.mermaidZoomOut === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomOut');
       expect(isFunction).toBe(true);
     });
 
     test('mermaidZoomReset function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.mermaidZoomReset === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomReset');
       expect(isFunction).toBe(true);
     });
   });

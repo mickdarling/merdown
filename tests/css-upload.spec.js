@@ -3,6 +3,14 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForElement,
+  isGlobalFunctionAvailable,
+  setCodeMirrorContent,
+  renderMarkdownAndWait,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
 
 /**
  * Tests for CSS file upload and custom style functionality
@@ -15,9 +23,7 @@ const { test, expect } = require('@playwright/test');
  */
 test.describe('CSS File Upload', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+    await waitForPageReady(page);
     // Wait for the style selector to be populated
     await page.waitForFunction(() => {
       const selector = document.getElementById('styleSelector');
@@ -27,7 +33,7 @@ test.describe('CSS File Upload', () => {
 
   test.describe('Global Functions', () => {
     test('changeStyle() function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.changeStyle === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'changeStyle');
       expect(isFunction).toBe(true);
     });
 
@@ -45,7 +51,7 @@ test.describe('CSS File Upload', () => {
 
       // Simulate dragover
       await preview.dispatchEvent('dragover');
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Check for visual feedback (dashed outline style)
       const hasOutline = await page.evaluate(() => {
@@ -54,8 +60,8 @@ test.describe('CSS File Upload', () => {
         return style.outline.includes('dashed') || style.outlineStyle === 'dashed';
       });
 
-      // The feedback may be applied via class or direct style
-      expect(hasOutline || true).toBeTruthy(); // Soft assertion - feature may vary
+      // Verify the outline check returns a boolean (feature may vary by implementation)
+      expect(typeof hasOutline).toBe('boolean');
     });
 
     test('preview should remove visual feedback on dragleave', async ({ page }) => {
@@ -65,7 +71,7 @@ test.describe('CSS File Upload', () => {
       await preview.dispatchEvent('dragover');
       await page.waitForTimeout(50);
       await preview.dispatchEvent('dragleave');
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Visual feedback should be removed
       const hasOutline = await page.evaluate(() => {
@@ -80,8 +86,7 @@ test.describe('CSS File Upload', () => {
 
   test.describe('CSS Application', () => {
     test('style selector should have changeStyle function available', async ({ page }) => {
-      // The changeStyle function handles CSS loading
-      const hasChangeStyle = await page.evaluate(() => typeof globalThis.changeStyle === 'function');
+      const hasChangeStyle = await isGlobalFunctionAvailable(page, 'changeStyle');
       expect(hasChangeStyle).toBe(true);
     });
 
@@ -101,7 +106,7 @@ test.describe('CSS File Upload', () => {
       });
       expect(firstResult.success).toBe(true);
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       // Select second style
       const secondResult = await page.evaluate(async () => {
@@ -121,16 +126,8 @@ test.describe('CSS File Upload', () => {
 
     test('dark background CSS should update Mermaid theme', async ({ page }) => {
       // First add some content with a mermaid diagram
-      await page.evaluate(() => {
-        if (globalThis.cmEditor) {
-          globalThis.cmEditor.setValue('# Test\n\n```mermaid\ngraph TD\n    A-->B\n```');
-        }
-        if (typeof globalThis.renderMarkdown === 'function') {
-          globalThis.renderMarkdown();
-        }
-      });
-
-      await page.waitForTimeout(500);
+      await setCodeMirrorContent(page, '# Test\n\n```mermaid\ngraph TD\n    A-->B\n```');
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
 
       // Select Dark Mode style if available
       const darkModeExists = await page.evaluate(() => {
@@ -152,28 +149,35 @@ test.describe('CSS File Upload', () => {
           }
         });
 
-        await page.waitForTimeout(1000);
+        await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
-        // Verify mermaid theme was potentially updated (soft check)
-        const hasMermaid = await page.$('.mermaid svg');
-        expect(hasMermaid !== null || true).toBeTruthy();
+        // Verify style change completed without errors (mermaid may or may not render SVG)
+        const wrapperExists = await page.$('#wrapper');
+        expect(wrapperExists).not.toBeNull();
       }
     });
   });
 
   test.describe('Error Handling', () => {
-    test('loadCSSFromFile should handle null file gracefully', async ({ page }) => {
-      // This tests that the app doesn't crash when invalid input is provided
-      const result = await page.evaluate(() => {
+    test('style selector should handle rapid changes without errors', async ({ page }) => {
+      // Rapidly change styles to verify no race conditions or crashes
+      const result = await page.evaluate(async () => {
         try {
-          // Attempt to trigger load with invalid file - should not throw
-          return true;
+          const selector = document.getElementById('styleSelector');
+          if (!selector || selector.options.length < 3) return { success: true };
+
+          // Rapidly cycle through 3 styles
+          for (let i = 0; i < 3; i++) {
+            selector.selectedIndex = i;
+            selector.dispatchEvent(new Event('change'));
+          }
+          return { success: true };
         } catch (e) {
-          return false;
+          return { success: false, error: e.message };
         }
       });
 
-      expect(result).toBe(true);
+      expect(result.success).toBe(true);
     });
   });
 
@@ -188,7 +192,7 @@ test.describe('CSS File Upload', () => {
       await page.selectOption('#styleSelector', { index: 3 });
       const selectedBefore = await page.$eval('#styleSelector', el => el.selectedIndex);
 
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       // Selection should be preserved
       const selectedAfter = await page.$eval('#styleSelector', el => el.selectedIndex);

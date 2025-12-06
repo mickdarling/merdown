@@ -3,6 +3,14 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForElement,
+  isGlobalFunctionAvailable,
+  elementExists,
+  elementHasClass,
+  getElementAttribute
+} = require('./helpers/test-utils');
 
 /**
  * Browser-side helper: Check if modal can be programmatically opened
@@ -83,9 +91,7 @@ function browserCheckBackdropClose() {
  */
 test.describe('Private URL Modal', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+    await waitForPageReady(page);
     // Wait for the security module to be ready
     await page.waitForFunction(() => {
       return typeof globalThis.initPrivateUrlModalHandlers === 'function' ||
@@ -95,8 +101,8 @@ test.describe('Private URL Modal', () => {
 
   test.describe('Modal Element', () => {
     test('privateUrlModal element should exist in DOM', async ({ page }) => {
-      const modal = await page.$('#privateUrlModal');
-      expect(modal).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal');
+      expect(exists).toBe(true);
     });
 
     test('privateUrlModal should be a dialog element', async ({ page }) => {
@@ -110,16 +116,16 @@ test.describe('Private URL Modal', () => {
     });
 
     test('privateUrlModal should have proper ARIA attributes', async ({ page }) => {
-      const ariaLabelledBy = await page.$eval('#privateUrlModal', el => el.getAttribute('aria-labelledby'));
-      const ariaDescribedBy = await page.$eval('#privateUrlModal', el => el.getAttribute('aria-describedby'));
+      const ariaLabelledBy = await getElementAttribute(page, '#privateUrlModal', 'aria-labelledby');
+      const ariaDescribedBy = await getElementAttribute(page, '#privateUrlModal', 'aria-describedby');
 
       expect(ariaLabelledBy).toBe('privateUrlModalTitle');
       expect(ariaDescribedBy).toBe('privateUrlModalDesc');
     });
 
     test('privateUrlModal should have correct class names', async ({ page }) => {
-      const classes = await page.$eval('#privateUrlModal', el => el.className);
-      expect(classes).toContain('gist-modal-overlay');
+      const hasClass = await elementHasClass(page, '#privateUrlModal', 'gist-modal-overlay');
+      expect(hasClass).toBe(true);
     });
 
     test('modal should have private-url-modal class on inner container', async ({ page }) => {
@@ -130,8 +136,8 @@ test.describe('Private URL Modal', () => {
 
   test.describe('Modal Content', () => {
     test('modal should display security icon', async ({ page }) => {
-      const icon = await page.$('#privateUrlModal .security-icon');
-      expect(icon).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal .security-icon');
+      expect(exists).toBe(true);
     });
 
     test('modal should have correct title', async ({ page }) => {
@@ -146,15 +152,15 @@ test.describe('Private URL Modal', () => {
     });
 
     test('modal should have option buttons container', async ({ page }) => {
-      const optionsContainer = await page.$('#privateUrlModal .option-buttons');
-      expect(optionsContainer).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal .option-buttons');
+      expect(exists).toBe(true);
     });
   });
 
   test.describe('Modal Buttons', () => {
     test('View Locally Only button should exist', async ({ page }) => {
-      const viewLocalBtn = await page.$('#privateUrlModal button[data-action="view-local"]');
-      expect(viewLocalBtn).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal button[data-action="view-local"]');
+      expect(exists).toBe(true);
     });
 
     test('View Locally Only button should have correct text', async ({ page }) => {
@@ -168,13 +174,13 @@ test.describe('Private URL Modal', () => {
     });
 
     test('View Locally Only button should have proper ARIA label', async ({ page }) => {
-      const ariaLabel = await page.$eval('#privateUrlModal button[data-action="view-local"]', el => el.getAttribute('aria-label'));
+      const ariaLabel = await getElementAttribute(page, '#privateUrlModal button[data-action="view-local"]', 'aria-label');
       expect(ariaLabel).toContain('View Locally Only');
     });
 
     test('Share Securely via Gist button should exist', async ({ page }) => {
-      const shareGistBtn = await page.$('#privateUrlModal button[data-action="share-gist"]');
-      expect(shareGistBtn).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal button[data-action="share-gist"]');
+      expect(exists).toBe(true);
     });
 
     test('Share Securely via Gist button should have correct text', async ({ page }) => {
@@ -188,13 +194,13 @@ test.describe('Private URL Modal', () => {
     });
 
     test('Share Securely via Gist button should have primary class', async ({ page }) => {
-      const classes = await page.$eval('#privateUrlModal button[data-action="share-gist"]', el => el.className);
-      expect(classes).toContain('primary');
+      const hasClass = await elementHasClass(page, '#privateUrlModal button[data-action="share-gist"]', 'primary');
+      expect(hasClass).toBe(true);
     });
 
     test('both buttons should have type="button" attribute', async ({ page }) => {
-      const viewLocalType = await page.$eval('#privateUrlModal button[data-action="view-local"]', el => el.type);
-      const shareGistType = await page.$eval('#privateUrlModal button[data-action="share-gist"]', el => el.type);
+      const viewLocalType = await getElementAttribute(page, '#privateUrlModal button[data-action="view-local"]', 'type');
+      const shareGistType = await getElementAttribute(page, '#privateUrlModal button[data-action="share-gist"]', 'type');
 
       expect(viewLocalType).toBe('button');
       expect(shareGistType).toBe('button');
@@ -391,8 +397,8 @@ test.describe('Private URL Modal', () => {
     test('modal should strip URL from browser when shown', async ({ page }) => {
       // This is tested indirectly by verifying the modal exists
       // The actual URL stripping happens in showPrivateUrlModal()
-      const modalExists = await page.$('#privateUrlModal');
-      expect(modalExists).not.toBeNull();
+      const exists = await elementExists(page, '#privateUrlModal');
+      expect(exists).toBe(true);
     });
 
     test('modal content should warn about private access token', async ({ page }) => {
@@ -420,13 +426,13 @@ test.describe('Private URL Modal', () => {
     });
 
     test('modal title should be properly associated via aria-labelledby', async ({ page }) => {
-      const titleId = await page.$eval('#privateUrlModal', el => el.getAttribute('aria-labelledby'));
+      const titleId = await getElementAttribute(page, '#privateUrlModal', 'aria-labelledby');
       const titleExists = await page.$(`#${titleId}`);
       expect(titleExists).not.toBeNull();
     });
 
     test('modal description should be properly associated via aria-describedby', async ({ page }) => {
-      const descId = await page.$eval('#privateUrlModal', el => el.getAttribute('aria-describedby'));
+      const descId = await getElementAttribute(page, '#privateUrlModal', 'aria-describedby');
       const descExists = await page.$(`#${descId}`);
       expect(descExists).not.toBeNull();
     });

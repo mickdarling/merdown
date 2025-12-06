@@ -3,6 +3,13 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunctions,
+  isGlobalFunctionAvailable,
+  getElementAttribute,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
 
 /**
  * Tests for Theme Selector functionality
@@ -13,16 +20,13 @@ const { test, expect } = require('@playwright/test');
  */
 test.describe('Theme Selectors', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+    await waitForPageReady(page);
     // Wait for theme functions to be globally available
-    await page.waitForFunction(() =>
-      typeof globalThis.changeStyle === 'function' &&
-      typeof globalThis.changeSyntaxTheme === 'function' &&
-      typeof globalThis.changeEditorTheme === 'function',
-      { timeout: 5000 }
-    );
+    await waitForGlobalFunctions(page, [
+      'changeStyle',
+      'changeSyntaxTheme',
+      'changeEditorTheme'
+    ]);
   });
 
   test.describe('Style Selector (#styleSelector)', () => {
@@ -48,7 +52,7 @@ test.describe('Theme Selectors', () => {
     });
 
     test('changeStyle() function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.changeStyle === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'changeStyle');
       expect(isFunction).toBe(true);
     });
 
@@ -76,8 +80,8 @@ test.describe('Theme Selectors', () => {
         // Change to the new style
         await page.selectOption('#styleSelector', newValue);
 
-        // Wait a bit for the style to load
-        await page.waitForTimeout(500);
+        // Wait for the style to load
+        await page.waitForTimeout(WAIT_TIMES.LONG);
 
         // Verify the selection changed
         const currentValue = await page.$eval('#styleSelector', select => select.value);
@@ -118,7 +122,7 @@ test.describe('Theme Selectors', () => {
     });
 
     test('changeSyntaxTheme() function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.changeSyntaxTheme === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'changeSyntaxTheme');
       expect(isFunction).toBe(true);
     });
 
@@ -131,7 +135,7 @@ test.describe('Theme Selectors', () => {
     test('#syntax-override style element should exist or be created', async ({ page }) => {
       // The syntax-override element should exist after initialization
       // It might be created during theme initialization
-      await page.waitForTimeout(500); // Wait for initialization
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       const syntaxOverride = await page.$('#syntax-override');
       // Should exist after initialization
@@ -157,7 +161,7 @@ test.describe('Theme Selectors', () => {
         await page.selectOption('#syntaxThemeSelector', newValue);
 
         // Wait for the theme to load
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(WAIT_TIMES.LONG);
 
         // Verify the selection changed
         const currentValue = await page.$eval('#syntaxThemeSelector', select => select.value);
@@ -171,11 +175,11 @@ test.describe('Theme Selectors', () => {
 
     test('syntax theme link should have SRI integrity attribute', async ({ page }) => {
       // Wait for the syntax theme to load
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       const syntaxThemeLink = await page.$('#syntax-theme');
       if (syntaxThemeLink) {
-        const integrity = await page.$eval('#syntax-theme', link => link.integrity);
+        const integrity = await getElementAttribute(page, '#syntax-theme', 'integrity');
         // Should have SRI hash for security
         expect(integrity).toBeTruthy();
         expect(integrity).toContain('sha');
@@ -206,7 +210,7 @@ test.describe('Theme Selectors', () => {
     });
 
     test('changeEditorTheme() function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.changeEditorTheme === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'changeEditorTheme');
       expect(isFunction).toBe(true);
     });
 
@@ -235,7 +239,7 @@ test.describe('Theme Selectors', () => {
         await page.selectOption('#editorThemeSelector', newValue);
 
         // Wait for the theme to load
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(WAIT_TIMES.LONG);
 
         // Verify the selection changed
         const currentValue = await page.$eval('#editorThemeSelector', select => select.value);
@@ -249,7 +253,7 @@ test.describe('Theme Selectors', () => {
 
     test('editor theme style should contain CSS rules', async ({ page }) => {
       // Wait for the editor theme to load
-      await page.waitForTimeout(500);
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       const editorThemeStyle = await page.$('#editor-theme');
       if (editorThemeStyle) {
@@ -282,7 +286,7 @@ test.describe('Theme Selectors', () => {
           await page.selectOption('#editorThemeSelector', newValue);
 
           // Wait for theme to apply
-          await page.waitForTimeout(500);
+          await page.waitForTimeout(WAIT_TIMES.LONG);
 
           // Get new background (may or may not be different depending on theme)
           const newBackground = await page.$eval('.CodeMirror',
@@ -325,7 +329,7 @@ test.describe('Theme Selectors', () => {
 
       if (newStyle) {
         await page.selectOption('#styleSelector', newStyle);
-        await page.waitForTimeout(300);
+        await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
         // Verify other selectors didn't change
         const syntaxAfter = await page.$eval('#syntaxThemeSelector', s => s.value);

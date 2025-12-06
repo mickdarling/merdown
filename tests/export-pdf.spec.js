@@ -3,6 +3,13 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunctions,
+  isGlobalFunctionAvailable,
+  loadSampleContent,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
 
 /**
  * Browser-side helper: Mock window.print and test exportToPDF()
@@ -194,15 +201,8 @@ function browserTestExportToPDFDirectNoContent() {
  */
 test.describe('Export PDF Functionality', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
-    // Wait for export functions to be available
-    await page.waitForFunction(() =>
-      typeof globalThis.exportToPDF === 'function' &&
-      typeof globalThis.exportToPDFDirect === 'function',
-      { timeout: 5000 }
-    );
+    await waitForPageReady(page);
+    await waitForGlobalFunctions(page, ['exportToPDF', 'exportToPDFDirect']);
   });
 
   test.describe('Export Buttons', () => {
@@ -229,12 +229,12 @@ test.describe('Export PDF Functionality', () => {
 
   test.describe('Global Functions', () => {
     test('exportToPDF function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.exportToPDF === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'exportToPDF');
       expect(isFunction).toBe(true);
     });
 
     test('exportToPDFDirect function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.exportToPDFDirect === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'exportToPDFDirect');
       expect(isFunction).toBe(true);
     });
   });
@@ -265,8 +265,7 @@ test.describe('Export PDF Functionality', () => {
   test.describe('exportToPDF() Behavior', () => {
     test('exportToPDF should trigger window.print when content exists', async ({ page }) => {
       // Load sample content first
-      await page.evaluate(() => globalThis.loadSample());
-      await page.waitForTimeout(500);
+      await loadSampleContent(page);
 
       // Test exportToPDF with mocked window.print
       const result = await page.evaluate(browserTestExportToPDF);
@@ -313,8 +312,7 @@ test.describe('Export PDF Functionality', () => {
   test.describe('exportToPDFDirect() Behavior', () => {
     test('exportToPDFDirect should open new window when content exists', async ({ page }) => {
       // Load sample content first
-      await page.evaluate(() => globalThis.loadSample());
-      await page.waitForTimeout(500);
+      await loadSampleContent(page);
 
       // Test exportToPDFDirect with mocked window.open
       const result = await page.evaluate(browserTestExportToPDFDirect);
@@ -402,8 +400,7 @@ test.describe('Export PDF Functionality', () => {
   test.describe('Status Messages', () => {
     test('exportToPDF should show status message before opening print dialog', async ({ page }) => {
       // Load content
-      await page.evaluate(() => globalThis.loadSample());
-      await page.waitForTimeout(500);
+      await loadSampleContent(page);
 
       // Capture status messages
       const statusShown = await page.evaluate(() => {
@@ -439,8 +436,7 @@ test.describe('Export PDF Functionality', () => {
 
     test('exportToPDFDirect should show status message when generating PDF', async ({ page }) => {
       // Load content
-      await page.evaluate(() => globalThis.loadSample());
-      await page.waitForTimeout(500);
+      await loadSampleContent(page);
 
       // Capture status messages
       const statusShown = await page.evaluate(() => {

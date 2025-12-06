@@ -3,6 +3,16 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunction,
+  isGlobalFunctionAvailable,
+  getCodeMirrorContent,
+  setCodeMirrorContent,
+  clearCodeMirrorContent,
+  loadSampleContent,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
 
 /**
  * Tests for Load Sample functionality
@@ -13,11 +23,8 @@ const { test, expect } = require('@playwright/test');
  */
 test.describe('Load Sample Functionality', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
-    // Wait for the editor API to be ready
-    await page.waitForFunction(() => typeof globalThis.loadSample === 'function', { timeout: 5000 });
+    await waitForPageReady(page);
+    await waitForGlobalFunction(page, 'loadSample');
   });
 
   test.describe('Load Sample Button', () => {
@@ -47,16 +54,13 @@ test.describe('Load Sample Functionality', () => {
 
   test.describe('Global Function', () => {
     test('loadSample() function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.loadSample === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'loadSample');
       expect(isFunction).toBe(true);
     });
 
     test('loadSample() should be callable without errors', async ({ page }) => {
       // Clear editor first to ensure we can detect the change
-      await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        if (cmEditor) cmEditor.setValue('');
-      });
+      await clearCodeMirrorContent(page);
 
       // Call loadSample and check it doesn't throw
       const didExecute = await page.evaluate(() => {
@@ -76,44 +80,32 @@ test.describe('Load Sample Functionality', () => {
   test.describe('Sample Content Loading', () => {
     test('clicking Load Sample should populate the editor with content', async ({ page }) => {
       // Clear editor first
-      await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        if (cmEditor) cmEditor.setValue('');
-      });
+      await clearCodeMirrorContent(page);
 
       // Wait a moment for clearing to complete
-      await page.waitForTimeout(100);
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Verify editor is empty
-      const emptyContent = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const emptyContent = await getCodeMirrorContent(page);
       expect(emptyContent).toBe('');
 
       // Click Load Sample button
       await page.click('button[onclick="loadSample()"]');
 
       // Wait for content to load
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
       // Verify editor now has content
-      const loadedContent = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const loadedContent = await getCodeMirrorContent(page);
 
       expect(loadedContent.length).toBeGreaterThan(0);
     });
 
     test('editor should not be empty after loading sample', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       expect(content).not.toBe('');
       expect(content.trim().length).toBeGreaterThan(100);
@@ -121,12 +113,9 @@ test.describe('Load Sample Functionality', () => {
 
     test('sample content should include expected elements', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       // Check for expected markdown elements
       expect(content).toContain('# Comprehensive Markdown + Mermaid Feature Demo');
@@ -140,12 +129,9 @@ test.describe('Load Sample Functionality', () => {
 
     test('sample content should include code blocks with various languages', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       // Check for language-specific code blocks
       expect(content).toContain('```javascript');
@@ -156,12 +142,9 @@ test.describe('Load Sample Functionality', () => {
 
     test('sample content should include mermaid diagram blocks', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       // Check for mermaid diagram types
       expect(content).toContain('```mermaid');
@@ -172,12 +155,9 @@ test.describe('Load Sample Functionality', () => {
 
     test('sample content should include markdown tables', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       // Check for table syntax
       expect(content).toContain('| Feature | Status | Priority |');
@@ -190,7 +170,7 @@ test.describe('Load Sample Functionality', () => {
       await page.click('button[onclick="loadSample()"]');
 
       // Wait for rendering to complete
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
       // Check that preview has rendered content
       const previewHTML = await page.$eval('#wrapper', el => el.innerHTML);
@@ -205,7 +185,7 @@ test.describe('Load Sample Functionality', () => {
 
     test('preview should contain rendered headings from sample', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
       // Check for specific rendered headings
       const hasMainHeading = await page.$eval('#wrapper', el =>
@@ -224,7 +204,7 @@ test.describe('Load Sample Functionality', () => {
 
     test('preview should contain syntax-highlighted code blocks', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG + WAIT_TIMES.LONG);
 
       // Check for syntax highlighted code blocks (hljs class added by highlight.js)
       const hasCodeBlocks = await page.evaluate(() => {
@@ -238,7 +218,7 @@ test.describe('Load Sample Functionality', () => {
       await page.click('button[onclick="loadSample()"]');
 
       // Wait longer for mermaid to render
-      await page.waitForTimeout(2000);
+      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
       // Check for mermaid SVG elements
       const hasMermaidDiagrams = await page.evaluate(() => {
@@ -250,7 +230,7 @@ test.describe('Load Sample Functionality', () => {
 
     test('preview should contain rendered tables', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(1000);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
       const hasTables = await page.evaluate(() => {
         const tables = document.querySelectorAll('#wrapper table');
@@ -263,28 +243,19 @@ test.describe('Load Sample Functionality', () => {
   test.describe('Edge Cases', () => {
     test('loading sample when editor already has content should replace it', async ({ page }) => {
       // First, put some initial content in the editor
-      await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        if (cmEditor) cmEditor.setValue('# Initial Content\n\nThis is some initial content.');
-      });
-      await page.waitForTimeout(100);
+      await setCodeMirrorContent(page, '# Initial Content\n\nThis is some initial content.');
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Verify initial content is set
-      const initialContent = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const initialContent = await getCodeMirrorContent(page);
       expect(initialContent).toContain('Initial Content');
 
       // Now load the sample
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
       // Verify content was replaced
-      const newContent = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const newContent = await getCodeMirrorContent(page);
 
       expect(newContent).not.toContain('Initial Content');
       expect(newContent).toContain('Comprehensive Markdown + Mermaid Feature Demo');
@@ -293,21 +264,15 @@ test.describe('Load Sample Functionality', () => {
     test('loading sample multiple times should work consistently', async ({ page }) => {
       // Load sample first time
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const firstLoad = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const firstLoad = await getCodeMirrorContent(page);
 
       // Load sample second time
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const secondLoad = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const secondLoad = await getCodeMirrorContent(page);
 
       // Both loads should produce identical content
       expect(firstLoad).toBe(secondLoad);
@@ -316,18 +281,15 @@ test.describe('Load Sample Functionality', () => {
 
     test('loading sample should trigger re-render of preview', async ({ page }) => {
       // Clear everything first
-      await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        if (cmEditor) cmEditor.setValue('');
-      });
-      await page.waitForTimeout(500);
+      await clearCodeMirrorContent(page);
+      await page.waitForTimeout(WAIT_TIMES.LONG);
 
       // Get initial preview HTML (should be empty)
       const initialPreview = await page.$eval('#wrapper', el => el.innerHTML.trim());
 
       // Load sample
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG + WAIT_TIMES.LONG);
 
       // Get new preview HTML
       const newPreview = await page.$eval('#wrapper', el => el.innerHTML.trim());
@@ -339,12 +301,9 @@ test.describe('Load Sample Functionality', () => {
 
     test('sample content should be valid markdown', async ({ page }) => {
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       // Basic markdown validation checks
       // - Should have headings starting with #
@@ -365,22 +324,14 @@ test.describe('Load Sample Functionality', () => {
   test.describe('Integration', () => {
     test('sample loading should work after editor has content', async ({ page }) => {
       // Set some initial content
-      await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        if (cmEditor) {
-          cmEditor.setValue('# My Document\n\nSome initial content.');
-        }
-      });
-      await page.waitForTimeout(100);
+      await setCodeMirrorContent(page, '# My Document\n\nSome initial content.');
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Now load sample (should replace the content)
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(200);
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
-      const content = await page.evaluate(() => {
-        const cmEditor = document.querySelector('.CodeMirror')?.CodeMirror;
-        return cmEditor ? cmEditor.getValue() : '';
-      });
+      const content = await getCodeMirrorContent(page);
 
       expect(content).toContain('Comprehensive Markdown + Mermaid Feature Demo');
       expect(content).not.toContain('My Document');
@@ -389,7 +340,7 @@ test.describe('Load Sample Functionality', () => {
     test('sample content should render with current style theme', async ({ page }) => {
       // Load sample first
       await page.click('button[onclick="loadSample()"]');
-      await page.waitForTimeout(1500);
+      await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG + WAIT_TIMES.LONG);
 
       // Check that preview wrapper has content and styling is applied
       const wrapperExists = await page.evaluate(() => {

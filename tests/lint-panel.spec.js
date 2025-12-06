@@ -3,6 +3,16 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunction,
+  waitForElementClass,
+  waitForElementClassRemoved,
+  elementHasClass,
+  isGlobalFunctionAvailable,
+  getElementAttribute,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
 
 /**
  * Browser-side helper: Toggle lint panel and wait for transition
@@ -38,11 +48,8 @@ function browserToggleLintPanel() {
  */
 test.describe('Lint Panel Toggle', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    // Wait for CodeMirror to initialize
-    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
-    // Wait for the toggleLintPanel function to be available
-    await page.waitForFunction(() => typeof globalThis.toggleLintPanel === 'function', { timeout: 5000 });
+    await waitForPageReady(page);
+    await waitForGlobalFunction(page, 'toggleLintPanel');
   });
 
   test.describe('DOM Elements', () => {
@@ -57,7 +64,7 @@ test.describe('Lint Panel Toggle', () => {
     });
 
     test('lintToggle button should have correct onclick handler', async ({ page }) => {
-      const onclick = await page.$eval('#lintToggle', el => el.getAttribute('onclick'));
+      const onclick = await getElementAttribute(page, '#lintToggle', 'onclick');
       expect(onclick).toBe('toggleLintPanel()');
     });
 
@@ -75,53 +82,53 @@ test.describe('Lint Panel Toggle', () => {
     });
 
     test('lint close button should have correct onclick handler', async ({ page }) => {
-      const onclick = await page.$eval('#lintPanel .lint-close', el => el.getAttribute('onclick'));
+      const onclick = await getElementAttribute(page, '#lintPanel .lint-close', 'onclick');
       expect(onclick).toBe('toggleLintPanel()');
     });
   });
 
   test.describe('Global Function Availability', () => {
     test('toggleLintPanel function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.toggleLintPanel === 'function');
+      const isFunction = await isGlobalFunctionAvailable(page, 'toggleLintPanel');
       expect(isFunction).toBe(true);
     });
   });
 
   test.describe('Panel Visibility Toggle', () => {
     test('lint panel should be hidden by default', async ({ page }) => {
-      const hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      const hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
     });
 
     test('clicking toggle button should show the lint panel', async ({ page }) => {
       // Initial state: panel should be hidden
-      let hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      let hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
 
       // Click the toggle button
       await page.click('#lintToggle');
 
-      // Wait for CSS transition (300ms as defined in styles)
-      await page.waitForTimeout(350);
+      // Wait for CSS transition using condition-based wait
+      await waitForElementClass(page, '#lintPanel', 'show');
 
       // Panel should now be visible
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
     });
 
     test('clicking toggle button twice should hide the lint panel again', async ({ page }) => {
       // Show the panel
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
+      await waitForElementClass(page, '#lintPanel', 'show');
 
-      let hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      let hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
 
       // Hide the panel
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
+      await waitForElementClassRemoved(page, '#lintPanel', 'show');
 
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
     });
   });
@@ -130,65 +137,65 @@ test.describe('Lint Panel Toggle', () => {
     test('clicking close button (X) should hide the lint panel', async ({ page }) => {
       // Show the panel first
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
+      await waitForElementClass(page, '#lintPanel', 'show');
 
-      let hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      let hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
 
       // Click the close button
       await page.click('#lintPanel .lint-close');
-      await page.waitForTimeout(350);
+      await waitForElementClassRemoved(page, '#lintPanel', 'show');
 
       // Panel should now be hidden
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
     });
   });
 
   test.describe('Panel State Toggle Sequence', () => {
-    test('panel state should toggle correctly: visible → hidden → visible', async ({ page }) => {
+    test('panel state should toggle correctly: visible -> hidden -> visible', async ({ page }) => {
       // Initial state: hidden
-      let hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      let hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
 
       // First toggle: show
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      await waitForElementClass(page, '#lintPanel', 'show');
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
 
       // Second toggle: hide
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      await waitForElementClassRemoved(page, '#lintPanel', 'show');
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
 
       // Third toggle: show again
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      await waitForElementClass(page, '#lintPanel', 'show');
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
     });
 
     test('toggle button should have active class when panel is shown', async ({ page }) => {
       // Initial state: button should not have active class
-      let hasActiveClass = await page.$eval('#lintToggle', el => el.classList.contains('active'));
+      let hasActiveClass = await elementHasClass(page, '#lintToggle', 'active');
       expect(hasActiveClass).toBe(false);
 
       // Show panel
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
+      await waitForElementClass(page, '#lintPanel', 'show');
 
       // Button should have active class
-      hasActiveClass = await page.$eval('#lintToggle', el => el.classList.contains('active'));
+      hasActiveClass = await elementHasClass(page, '#lintToggle', 'active');
       expect(hasActiveClass).toBe(true);
 
       // Hide panel
       await page.click('#lintToggle');
-      await page.waitForTimeout(350);
+      await waitForElementClassRemoved(page, '#lintPanel', 'show');
 
       // Button should not have active class
-      hasActiveClass = await page.$eval('#lintToggle', el => el.classList.contains('active'));
+      hasActiveClass = await elementHasClass(page, '#lintToggle', 'active');
       expect(hasActiveClass).toBe(false);
     });
   });
@@ -243,9 +250,9 @@ test.describe('Lint Panel Toggle', () => {
           globalThis.toggleLintPanel();
         }
       });
-      await page.waitForTimeout(350);
+      await waitForElementClass(page, '#lintPanel', 'show');
 
-      let hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      let hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(true);
 
       // Second call: hide
@@ -254,9 +261,9 @@ test.describe('Lint Panel Toggle', () => {
           globalThis.toggleLintPanel();
         }
       });
-      await page.waitForTimeout(350);
+      await waitForElementClassRemoved(page, '#lintPanel', 'show');
 
-      hasShowClass = await page.$eval('#lintPanel', el => el.classList.contains('show'));
+      hasShowClass = await elementHasClass(page, '#lintPanel', 'show');
       expect(hasShowClass).toBe(false);
     });
   });
