@@ -7,197 +7,58 @@ const {
   waitForPageReady,
   waitForGlobalFunctions,
   isGlobalFunctionAvailable,
-  loadSampleContent,
-  WAIT_TIMES
+  loadSampleContent
 } = require('./helpers/test-utils');
 
 /**
- * Browser-side helper: Mock window.print and test exportToPDF()
- * Extracted to avoid deep function nesting (SonarCloud S2004)
- * @returns {Promise<{printCalled: boolean, errorStatus: string | null}>}
+ * Browser-side helper: Test export function with mock
+ * @param {Object} opts - Configuration
+ * @param {'print'|'open'} opts.mockType - Which global to mock
+ * @param {string} opts.exportFn - Export function name to call
+ * @param {boolean} opts.clearContent - Whether to clear wrapper first
  */
-function browserTestExportToPDF() {
+function browserTestExport({ mockType, exportFn, clearContent }) {
   return new Promise(function resolveAfterTest(resolve) {
-    let printCalled = false;
+    let functionCalled = false;
     let errorStatus = null;
+    let originalContent = null;
 
-    // Mock window.print
-    const originalPrint = globalThis.print;
-    globalThis.print = function mockPrint() {
-      printCalled = true;
-    };
-
-    // Capture status messages
-    const statusElement = document.getElementById('status');
-    const observer = new MutationObserver(function onStatusChange() {
-      const statusText = statusElement.textContent;
-      if (statusText && statusText.includes('Error')) {
-        errorStatus = statusText;
-      }
-    });
-    observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
-
-    // Call exportToPDF
-    globalThis.exportToPDF();
-
-    // Wait for async operations to complete
-    setTimeout(function checkResults() {
-      observer.disconnect();
-      globalThis.print = originalPrint;
-      resolve({ printCalled, errorStatus });
-    }, 200);
-  });
-}
-
-/**
- * Browser-side helper: Mock window.open and test exportToPDFDirect()
- * Extracted to avoid deep function nesting (SonarCloud S2004)
- * @returns {Promise<{openCalled: boolean, errorStatus: string | null}>}
- */
-function browserTestExportToPDFDirect() {
-  return new Promise(function resolveAfterTest(resolve) {
-    let openCalled = false;
-    let errorStatus = null;
-
-    // Mock window.open
-    const originalOpen = globalThis.open;
-    globalThis.open = function mockOpen() {
-      openCalled = true;
-      // Return a mock window object
-      return {
-        document: {
-          open: function() {},
-          write: function() {},
-          close: function() {}
-        },
-        onload: null
-      };
-    };
-
-    // Capture status messages
-    const statusElement = document.getElementById('status');
-    const observer = new MutationObserver(function onStatusChange() {
-      const statusText = statusElement.textContent;
-      if (statusText && statusText.includes('Error')) {
-        errorStatus = statusText;
-      }
-    });
-    observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
-
-    // Call exportToPDFDirect
-    globalThis.exportToPDFDirect();
-
-    // Wait for async operations to complete
-    setTimeout(function checkResults() {
-      observer.disconnect();
-      globalThis.open = originalOpen;
-      resolve({ openCalled, errorStatus });
-    }, 200);
-  });
-}
-
-/**
- * Browser-side helper: Test exportToPDF with no content
- * Extracted to avoid deep function nesting (SonarCloud S2004)
- * @returns {Promise<{printCalled: boolean, errorStatus: string | null}>}
- */
-function browserTestExportToPDFNoContent() {
-  return new Promise(function resolveAfterTest(resolve) {
-    let printCalled = false;
-    let errorStatus = null;
-
-    // Clear wrapper content
     const wrapper = document.getElementById('wrapper');
-    const originalContent = wrapper.innerHTML;
-    wrapper.innerHTML = '';
+    if (clearContent) {
+      originalContent = wrapper.innerHTML;
+      wrapper.innerHTML = '';
+    }
 
-    // Mock window.print
-    const originalPrint = globalThis.print;
-    globalThis.print = function mockPrint() {
-      printCalled = true;
-    };
-
-    // Capture status messages
-    const statusElement = document.getElementById('status');
-    const observer = new MutationObserver(function onStatusChange() {
-      const statusText = statusElement.textContent;
-      if (statusText && statusText.includes('Error')) {
-        errorStatus = statusText;
-      }
-    });
-    observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
-
-    // Call exportToPDF
-    globalThis.exportToPDF();
-
-    // Wait for async operations to complete
-    setTimeout(function checkResults() {
-      observer.disconnect();
-      globalThis.print = originalPrint;
-      wrapper.innerHTML = originalContent;
-      resolve({ printCalled, errorStatus });
-    }, 200);
-  });
-}
-
-/**
- * Browser-side helper: Test exportToPDFDirect with no content
- * Extracted to avoid deep function nesting (SonarCloud S2004)
- * @returns {Promise<{openCalled: boolean, errorStatus: string | null}>}
- */
-function browserTestExportToPDFDirectNoContent() {
-  return new Promise(function resolveAfterTest(resolve) {
-    let openCalled = false;
-    let errorStatus = null;
-
-    // Clear wrapper content
-    const wrapper = document.getElementById('wrapper');
-    const originalContent = wrapper.innerHTML;
-    wrapper.innerHTML = '';
-
-    // Mock window.open
-    const originalOpen = globalThis.open;
-    globalThis.open = function mockOpen() {
-      openCalled = true;
-      return {
-        document: {
-          open: function() {},
-          write: function() {},
-          close: function() {}
-        },
-        onload: null
+    const originalFn = globalThis[mockType];
+    if (mockType === 'print') {
+      globalThis.print = function mockPrint() { functionCalled = true; };
+    } else {
+      globalThis.open = function mockOpen() {
+        functionCalled = true;
+        return { document: { open() {}, write() {}, close() {} }, onload: null };
       };
-    };
+    }
 
-    // Capture status messages
     const statusElement = document.getElementById('status');
     const observer = new MutationObserver(function onStatusChange() {
       const statusText = statusElement.textContent;
-      if (statusText && statusText.includes('Error')) {
-        errorStatus = statusText;
-      }
+      if (statusText && statusText.includes('Error')) errorStatus = statusText;
     });
     observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
 
-    // Call exportToPDFDirect
-    globalThis.exportToPDFDirect();
+    globalThis[exportFn]();
 
-    // Wait for async operations to complete
     setTimeout(function checkResults() {
       observer.disconnect();
-      globalThis.open = originalOpen;
-      wrapper.innerHTML = originalContent;
-      resolve({ openCalled, errorStatus });
+      globalThis[mockType] = originalFn;
+      if (clearContent && originalContent !== null) wrapper.innerHTML = originalContent;
+      resolve({ functionCalled, errorStatus });
     }, 200);
   });
 }
 
 /**
  * Tests for Export to PDF functionality
- *
- * These tests ensure the PDF export buttons and functions exist and work correctly.
- * Tests cover both exportToPDF() (print dialog) and exportToPDFDirect() (new tab)
- * including proper error handling when no content exists.
  */
 test.describe('Export PDF Functionality', () => {
   test.beforeEach(async ({ page }) => {
@@ -206,90 +67,69 @@ test.describe('Export PDF Functionality', () => {
   });
 
   test.describe('Export Buttons', () => {
-    test('Print/PDF button should exist in toolbar', async ({ page }) => {
-      const printButton = await page.$('button[onclick="exportToPDF()"]');
-      expect(printButton).not.toBeNull();
-    });
+    const buttons = [
+      { selector: 'button[onclick="exportToPDF()"]', handler: 'exportToPDF()', name: 'Print/PDF' },
+      { selector: 'button[onclick="exportToPDFDirect()"]', handler: 'exportToPDFDirect()', name: 'Print (New Tab)' }
+    ];
 
-    test('Print/PDF button should have exportToPDF onclick handler', async ({ page }) => {
-      const onclick = await page.$eval('button[onclick="exportToPDF()"]', el => el.getAttribute('onclick'));
-      expect(onclick).toBe('exportToPDF()');
-    });
+    for (const btn of buttons) {
+      test(`${btn.name} button should exist in toolbar`, async ({ page }) => {
+        expect(await page.$(btn.selector)).not.toBeNull();
+      });
 
-    test('Print (New Tab) button should exist in toolbar', async ({ page }) => {
-      const printDirectButton = await page.$('button[onclick="exportToPDFDirect()"]');
-      expect(printDirectButton).not.toBeNull();
-    });
-
-    test('Print (New Tab) button should have exportToPDFDirect onclick handler', async ({ page }) => {
-      const onclick = await page.$eval('button[onclick="exportToPDFDirect()"]', el => el.getAttribute('onclick'));
-      expect(onclick).toBe('exportToPDFDirect()');
-    });
+      test(`${btn.name} button should have correct onclick handler`, async ({ page }) => {
+        const onclick = await page.$eval(btn.selector, el => el.getAttribute('onclick'));
+        expect(onclick).toBe(btn.handler);
+      });
+    }
   });
 
   test.describe('Global Functions', () => {
-    test('exportToPDF function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'exportToPDF');
-      expect(isFunction).toBe(true);
-    });
-
-    test('exportToPDFDirect function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'exportToPDFDirect');
-      expect(isFunction).toBe(true);
-    });
+    for (const fnName of ['exportToPDF', 'exportToPDFDirect']) {
+      test(`${fnName} function should be globally available`, async ({ page }) => {
+        expect(await isGlobalFunctionAvailable(page, fnName)).toBe(true);
+      });
+    }
   });
 
   test.describe('Dependencies', () => {
     test('wrapper element should exist for export content', async ({ page }) => {
-      // The #wrapper element is required for export functions to work
-      const wrapper = await page.$('#wrapper');
-      expect(wrapper).not.toBeNull();
+      expect(await page.$('#wrapper')).not.toBeNull();
     });
 
     test('wrapper element should be inside preview container', async ({ page }) => {
-      const wrapperExists = await page.evaluate(() => {
+      const wrapperInPreview = await page.evaluate(() => {
         const preview = document.getElementById('preview');
         const wrapper = document.getElementById('wrapper');
         return preview && wrapper && preview.contains(wrapper);
       });
-      expect(wrapperExists).toBe(true);
+      expect(wrapperInPreview).toBe(true);
     });
 
     test('status element should exist for error messages', async ({ page }) => {
-      // Export functions use status element to show error messages
-      const status = await page.$('#status');
-      expect(status).not.toBeNull();
+      expect(await page.$('#status')).not.toBeNull();
     });
   });
 
   test.describe('exportToPDF() Behavior', () => {
     test('exportToPDF should trigger window.print when content exists', async ({ page }) => {
-      // Load sample content first
       await loadSampleContent(page);
-
-      // Test exportToPDF with mocked window.print
-      const result = await page.evaluate(browserTestExportToPDF);
-
-      expect(result.printCalled).toBe(true);
+      const result = await page.evaluate(browserTestExport, { mockType: 'print', exportFn: 'exportToPDF', clearContent: false });
+      expect(result.functionCalled).toBe(true);
       expect(result.errorStatus).toBeNull();
     });
 
     test('exportToPDF should show error when no content exists', async ({ page }) => {
-      // Test exportToPDF with empty content
-      const result = await page.evaluate(browserTestExportToPDFNoContent);
-
-      expect(result.printCalled).toBe(false);
+      const result = await page.evaluate(browserTestExport, { mockType: 'print', exportFn: 'exportToPDF', clearContent: true });
+      expect(result.functionCalled).toBe(false);
       expect(result.errorStatus).toContain('Error');
       expect(result.errorStatus).toContain('No content');
     });
 
     test('exportToPDF should validate wrapper content before proceeding', async ({ page }) => {
-      // Verify exportToPDF checks for content
       const validatesContent = await page.evaluate(() => {
         const wrapper = document.getElementById('wrapper');
         const originalContent = wrapper.innerHTML;
-
-        // Test with whitespace-only content
         wrapper.innerHTML = '   ';
 
         let printCalled = false;
@@ -300,90 +140,60 @@ test.describe('Export PDF Functionality', () => {
 
         globalThis.print = originalPrint;
         wrapper.innerHTML = originalContent;
-
-        // Should not call print with whitespace-only content
         return !printCalled;
       });
-
       expect(validatesContent).toBe(true);
     });
   });
 
   test.describe('exportToPDFDirect() Behavior', () => {
     test('exportToPDFDirect should open new window when content exists', async ({ page }) => {
-      // Load sample content first
       await loadSampleContent(page);
-
-      // Test exportToPDFDirect with mocked window.open
-      const result = await page.evaluate(browserTestExportToPDFDirect);
-
-      expect(result.openCalled).toBe(true);
+      const result = await page.evaluate(browserTestExport, { mockType: 'open', exportFn: 'exportToPDFDirect', clearContent: false });
+      expect(result.functionCalled).toBe(true);
       expect(result.errorStatus).toBeNull();
     });
 
     test('exportToPDFDirect should show error when no content exists', async ({ page }) => {
-      // Test exportToPDFDirect with empty content
-      const result = await page.evaluate(browserTestExportToPDFDirectNoContent);
-
-      expect(result.openCalled).toBe(false);
+      const result = await page.evaluate(browserTestExport, { mockType: 'open', exportFn: 'exportToPDFDirect', clearContent: true });
+      expect(result.functionCalled).toBe(false);
       expect(result.errorStatus).toContain('Error');
       expect(result.errorStatus).toContain('No content');
     });
 
     test('exportToPDFDirect should validate wrapper content before proceeding', async ({ page }) => {
-      // Verify exportToPDFDirect checks for content
       const validatesContent = await page.evaluate(() => {
         const wrapper = document.getElementById('wrapper');
         const originalContent = wrapper.innerHTML;
-
-        // Test with whitespace-only content
         wrapper.innerHTML = '   ';
 
         let openCalled = false;
         const originalOpen = globalThis.open;
         globalThis.open = function() {
           openCalled = true;
-          return { document: { open: function() {}, write: function() {}, close: function() {} }, onload: null };
+          return { document: { open() {}, write() {}, close() {} }, onload: null };
         };
 
         globalThis.exportToPDFDirect();
 
         globalThis.open = originalOpen;
         wrapper.innerHTML = originalContent;
-
-        // Should not call open with whitespace-only content
         return !openCalled;
       });
-
       expect(validatesContent).toBe(true);
     });
 
     test('exportToPDFDirect should access current style and syntax theme elements', async ({ page }) => {
-      // Verify exportToPDFDirect attempts to access styling elements
       const accessesStyleElements = await page.evaluate(() => {
-        // Load sample to ensure content exists
         globalThis.loadSample();
-
-        // Check if function accesses these elements (they may be null, that's OK)
-        // We're verifying the function doesn't crash when accessing them
         try {
           const wrapper = document.getElementById('wrapper');
           if (wrapper && wrapper.innerHTML.trim()) {
-            // Mock window.open to prevent actual window opening
             const originalOpen = globalThis.open;
             globalThis.open = function() {
-              return {
-                document: {
-                  open: function() {},
-                  write: function() {},
-                  close: function() {}
-                },
-                onload: null
-              };
+              return { document: { open() {}, write() {}, close() {} }, onload: null };
             };
-
             globalThis.exportToPDFDirect();
-
             globalThis.open = originalOpen;
             return true;
           }
@@ -392,34 +202,25 @@ test.describe('Export PDF Functionality', () => {
           return false;
         }
       });
-
       expect(accessesStyleElements).toBe(true);
     });
   });
 
   test.describe('Status Messages', () => {
     test('exportToPDF should show status message before opening print dialog', async ({ page }) => {
-      // Load content
       await loadSampleContent(page);
-
-      // Capture status messages
       const statusShown = await page.evaluate(() => {
         return new Promise(function resolveAfterStatus(resolve) {
           let statusMessage = null;
-
           const statusElement = document.getElementById('status');
           const observer = new MutationObserver(function onStatusChange() {
             const text = statusElement.textContent;
-            if (text && text.includes('print')) {
-              statusMessage = text;
-            }
+            if (text && text.includes('print')) statusMessage = text;
           });
           observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
 
-          // Mock print to prevent actual dialog
           const originalPrint = globalThis.print;
           globalThis.print = function() {};
-
           globalThis.exportToPDF();
 
           setTimeout(function checkStatus() {
@@ -429,42 +230,26 @@ test.describe('Export PDF Functionality', () => {
           }, 200);
         });
       });
-
       expect(statusShown).toBeTruthy();
       expect(statusShown.toLowerCase()).toContain('print');
     });
 
     test('exportToPDFDirect should show status message when generating PDF', async ({ page }) => {
-      // Load content
       await loadSampleContent(page);
-
-      // Capture status messages
       const statusShown = await page.evaluate(() => {
         return new Promise(function resolveAfterStatus(resolve) {
           let statusMessage = null;
-
           const statusElement = document.getElementById('status');
           const observer = new MutationObserver(function onStatusChange() {
             const text = statusElement.textContent;
-            if (text && (text.includes('PDF') || text.includes('print'))) {
-              statusMessage = text;
-            }
+            if (text && (text.includes('PDF') || text.includes('print'))) statusMessage = text;
           });
           observer.observe(statusElement, { childList: true, subtree: true, characterData: true });
 
-          // Mock open to prevent actual window
           const originalOpen = globalThis.open;
           globalThis.open = function() {
-            return {
-              document: {
-                open: function() {},
-                write: function() {},
-                close: function() {}
-              },
-              onload: null
-            };
+            return { document: { open() {}, write() {}, close() {} }, onload: null };
           };
-
           globalThis.exportToPDFDirect();
 
           setTimeout(function checkStatus() {
@@ -474,7 +259,6 @@ test.describe('Export PDF Functionality', () => {
           }, 200);
         });
       });
-
       expect(statusShown).toBeTruthy();
     });
   });

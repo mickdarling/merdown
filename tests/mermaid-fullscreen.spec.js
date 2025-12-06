@@ -17,37 +17,25 @@ const {
  * mermaid-fullscreen.js module functionality.
  */
 test.describe('Mermaid Fullscreen and Zoom', () => {
-  test.describe('Global Function Availability', () => {
-    test.beforeEach(async ({ page }) => {
-      await waitForPageReady(page);
-      await waitForGlobalFunction(page, 'openFile');
-    });
-
-    test('expandMermaid function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'expandMermaid');
-      expect(isFunction).toBe(true);
-    });
-
-    test('closeMermaidFullscreen function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'closeMermaidFullscreen');
-      expect(isFunction).toBe(true);
-    });
-
-    test('mermaidZoomIn function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomIn');
-      expect(isFunction).toBe(true);
-    });
-
-    test('mermaidZoomOut function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomOut');
-      expect(isFunction).toBe(true);
-    });
-
-    test('mermaidZoomReset function should be globally available', async ({ page }) => {
-      const isFunction = await isGlobalFunctionAvailable(page, 'mermaidZoomReset');
-      expect(isFunction).toBe(true);
-    });
+  test.beforeEach(async ({ page }) => {
+    await waitForPageReady(page);
+    await waitForGlobalFunction(page, 'openFile');
   });
+
+  // Data-driven tests for global function availability
+  const mermaidFunctions = [
+    'expandMermaid',
+    'closeMermaidFullscreen',
+    'mermaidZoomIn',
+    'mermaidZoomOut',
+    'mermaidZoomReset'
+  ];
+
+  for (const fnName of mermaidFunctions) {
+    test(`${fnName} function should be globally available`, async ({ page }) => {
+      expect(await isGlobalFunctionAvailable(page, fnName)).toBe(true);
+    });
+  }
 
   // Note: Mermaid rendering tests moved to a separate describe block with longer timeouts
   // The mermaid library loads asynchronously and may take longer in CI environments
