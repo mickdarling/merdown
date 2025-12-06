@@ -20,53 +20,57 @@ const {
  * not executed code. They verify sanitization works correctly.
  */
 
-// Dangerous content: [name, markdown, ...shouldNotContain]
-const DANGEROUS_PAYLOADS = [
-  ['script tag', '# Hello\n<script>alert("XSS")</script>', '<script', 'alert('],
-  ['encoded script', '<script>document.location="http://evil.com"</script>', '<script', 'document.location'],
-  ['img onerror', '<img src="x" onerror="alert(1)">', 'onerror'],
-  ['img onload', '<img src="x.jpg" onload="alert(1)">', 'onload='],
-  ['svg onload', '<svg onload="alert(1)"><circle/></svg>', 'onload'],
-  ['body onload', '<body onload="alert(1)">', '<body', 'onload'],
-  ['div onclick', '<div onclick="alert(1)">x</div>', 'onclick'],
-  ['anchor onmouseover', '<a onmouseover="alert(1)">x</a>', 'onmouseover'],
-  ['input onfocus', '<input onfocus="alert(1)" autofocus>', 'onfocus'],
-  ['marquee onstart', '<marquee onstart="alert(1)">x</marquee>', 'onstart'],
-  ['svg animate onbegin', '<svg><animate onbegin="alert(1)"/></svg>', 'onbegin'],
-  ['svg foreignObject', '<svg><foreignObject><body onload="x"/></foreignObject></svg>', 'onload'],
-  ['js url anchor', '[x](javascript:void(0))', 'javascript:'],
-  ['js url img', '<img src="javascript:void(0)">', 'javascript:'],
-  ['js url form', '<form action="javascript:void(0)"></form>', 'javascript:'],
-  ['js url meta', '<meta http-equiv="refresh" content="0;url=javascript:0">', '<meta', 'javascript:'],
-  ['js url base', '<base href="javascript:0//">', '<base'],
-  ['js url table bg', '<table background="javascript:0"><tr><td/></tr></table>', 'javascript:'],
-  ['js url video', '<video poster="javascript:0"></video>', 'javascript:'],
-  ['js url math', '<math xlink:href="javascript:0">x</math>', 'javascript:', 'xlink:href'],
-  ['data url', '<a href="data:text/html,<script>x</script>">x</a>', 'data:text/html'],
-  ['iframe', '<iframe src="about:blank"></iframe>', '<iframe'],
-  ['iframe srcdoc', '<iframe srcdoc="<script>x</script>"></iframe>', '<iframe', 'srcdoc'],
-  ['object', '<object data="about:blank"></object>', '<object'],
-  ['embed', '<embed src="about:blank">', '<embed'],
-  ['link', '<link href="http://evil.com/x.css">', '<link'],
-  ['svg script', '<svg><script>alert(1)</script></svg>', '<script'],
-];
-
-// Safe content: [name, markdown, shouldContain]
-const SAFE_CONTENT = [
-  ['paragraph', 'This is a paragraph.', '<p>this is a paragraph.</p>'],
-  ['heading', '# My Heading', '<h1'],
-  ['link', '[Link](https://example.com)', 'href="https://example.com"'],
-  ['image', '![Alt](https://example.com/x.png)', 'src="https://example.com/x.png"'],
-  ['bold', '**bold**', '<strong>bold</strong>'],
-  ['italic', '*italic*', '<em>italic</em>'],
-  ['code', '`snippet`', '<code>snippet</code>'],
-  ['blockquote', '> Quote', '<blockquote>'],
-  ['ul', '- Item', '<ul>'],
-  ['ol', '1. First', '<ol>'],
-  ['hr', '---', '<hr'],
-  ['table', '| H |\n|---|\n| C |', '<table>'],
-  ['code block', '```js\nx\n```', 'class="hljs'],
-  ['mailto', '[Email](mailto:x@y.com)', 'href="mailto:x@y.com"'],
+/**
+ * Content test cases: [name, markdown, assertion, ...patterns]
+ * assertion: 'block' = patterns should NOT appear, 'allow' = patterns SHOULD appear
+ */
+const CONTENT_TESTS = [
+  // Dangerous: script injection
+  ['script tag', '# Hello\n<script>alert("XSS")</script>', 'block', '<script', 'alert('],
+  ['encoded script', '<script>document.location="http://evil.com"</script>', 'block', '<script', 'document.location'],
+  // Dangerous: event handlers
+  ['img onerror', '<img src="x" onerror="alert(1)">', 'block', 'onerror'],
+  ['img onload', '<img src="x.jpg" onload="alert(1)">', 'block', 'onload='],
+  ['svg onload', '<svg onload="alert(1)"><circle/></svg>', 'block', 'onload'],
+  ['body onload', '<body onload="alert(1)">', 'block', '<body', 'onload'],
+  ['div onclick', '<div onclick="alert(1)">x</div>', 'block', 'onclick'],
+  ['anchor onmouseover', '<a onmouseover="alert(1)">x</a>', 'block', 'onmouseover'],
+  ['input onfocus', '<input onfocus="alert(1)" autofocus>', 'block', 'onfocus'],
+  ['marquee onstart', '<marquee onstart="alert(1)">x</marquee>', 'block', 'onstart'],
+  ['svg animate onbegin', '<svg><animate onbegin="alert(1)"/></svg>', 'block', 'onbegin'],
+  ['svg foreignObject', '<svg><foreignObject><body onload="x"/></foreignObject></svg>', 'block', 'onload'],
+  // Dangerous: javascript URLs
+  ['js url anchor', '[x](javascript:void(0))', 'block', 'javascript:'],
+  ['js url img', '<img src="javascript:void(0)">', 'block', 'javascript:'],
+  ['js url form', '<form action="javascript:void(0)"></form>', 'block', 'javascript:'],
+  ['js url meta', '<meta http-equiv="refresh" content="0;url=javascript:0">', 'block', '<meta', 'javascript:'],
+  ['js url base', '<base href="javascript:0//">', 'block', '<base'],
+  ['js url table bg', '<table background="javascript:0"><tr><td/></tr></table>', 'block', 'javascript:'],
+  ['js url video', '<video poster="javascript:0"></video>', 'block', 'javascript:'],
+  ['js url math', '<math xlink:href="javascript:0">x</math>', 'block', 'javascript:', 'xlink:href'],
+  // Dangerous: other vectors
+  ['data url', '<a href="data:text/html,<script>x</script>">x</a>', 'block', 'data:text/html'],
+  ['iframe', '<iframe src="about:blank"></iframe>', 'block', '<iframe'],
+  ['iframe srcdoc', '<iframe srcdoc="<script>x</script>"></iframe>', 'block', '<iframe', 'srcdoc'],
+  ['object', '<object data="about:blank"></object>', 'block', '<object'],
+  ['embed', '<embed src="about:blank">', 'block', '<embed'],
+  ['link', '<link href="http://evil.com/x.css">', 'block', '<link'],
+  ['svg script', '<svg><script>alert(1)</script></svg>', 'block', '<script'],
+  // Safe content that should be preserved
+  ['paragraph', 'This is a paragraph.', 'allow', '<p>this is a paragraph.</p>'],
+  ['heading', '# My Heading', 'allow', '<h1'],
+  ['link', '[Link](https://example.com)', 'allow', 'href="https://example.com"'],
+  ['image', '![Alt](https://example.com/x.png)', 'allow', 'src="https://example.com/x.png"'],
+  ['bold', '**bold**', 'allow', '<strong>bold</strong>'],
+  ['italic', '*italic*', 'allow', '<em>italic</em>'],
+  ['code', '`snippet`', 'allow', '<code>snippet</code>'],
+  ['blockquote', '> Quote', 'allow', '<blockquote>'],
+  ['ul', '- Item', 'allow', '<ul>'],
+  ['ol', '1. First', 'allow', '<ol>'],
+  ['hr', '---', 'allow', '<hr'],
+  ['table', '| H |\n|---|\n| C |', 'allow', '<table>'],
+  ['code block', '```js\nx\n```', 'allow', 'class="hljs'],
+  ['mailto', '[Email](mailto:x@y.com)', 'allow', 'href="mailto:x@y.com"'],
 ];
 
 /** Render markdown and return lowercase wrapper HTML */
@@ -88,22 +92,18 @@ test.describe('XSS Prevention', () => {
     await waitForPageReady(page);
   });
 
-  test.describe('Blocks dangerous content', () => {
-    for (const [name, markdown, ...forbidden] of DANGEROUS_PAYLOADS) {
-      test(`blocks ${name}`, async ({ page }) => {
+  test.describe('Content sanitization', () => {
+    for (const [name, markdown, mode, ...patterns] of CONTENT_TESTS) {
+      const prefix = mode === 'block' ? 'blocks' : 'preserves';
+      test(`${prefix} ${name}`, async ({ page }) => {
         const html = await renderAndGetHtml(page, markdown);
-        for (const f of forbidden) {
-          expect(html, `${f} should be stripped`).not.toContain(f.toLowerCase());
+        for (const p of patterns) {
+          if (mode === 'block') {
+            expect(html, `${p} should be stripped`).not.toContain(p.toLowerCase());
+          } else {
+            expect(html, `${p} should exist`).toContain(p.toLowerCase());
+          }
         }
-      });
-    }
-  });
-
-  test.describe('Preserves safe content', () => {
-    for (const [name, markdown, expected] of SAFE_CONTENT) {
-      test(`preserves ${name}`, async ({ page }) => {
-        const html = await renderAndGetHtml(page, markdown);
-        expect(html, `${expected} should exist`).toContain(expected.toLowerCase());
       });
     }
   });
