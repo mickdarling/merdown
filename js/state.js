@@ -38,6 +38,7 @@ export const state = {
     renderTimeout: null,                 // Debounce timeout handle for render scheduling
     validationTimeout: null,             // Debounce timeout handle for validation scheduling
     mermaidTheme: 'default',             // Current Mermaid theme ('default' for light, 'dark' for dark backgrounds)
+    mermaidThemeMode: 'auto',            // User's theme selection: 'auto' or specific theme name ('default', 'forest', 'dark', 'neutral', 'base')
 
     // Lint panel state
     lintEnabled: false,                  // Whether lint panel is visible

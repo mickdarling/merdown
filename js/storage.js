@@ -71,6 +71,22 @@ export function saveEditorTheme(themeName) {
 }
 
 /**
+ * Get saved Mermaid theme preference
+ * @returns {string|null} Saved theme name or null (defaults to 'Auto')
+ */
+export function getMermaidTheme() {
+    return localStorage.getItem('mermaid-theme');
+}
+
+/**
+ * Save Mermaid theme preference
+ * @param {string} themeName - The theme name to save ('Auto', 'default', 'forest', 'dark', 'neutral', 'base')
+ */
+export function saveMermaidTheme(themeName) {
+    localStorage.setItem('mermaid-theme', themeName);
+}
+
+/**
  * Get "Respect Style Layout" toggle preference
  * @returns {boolean} True if style layout should be respected
  */

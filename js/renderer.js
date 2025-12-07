@@ -17,12 +17,23 @@ mermaid.initialize({
 });
 
 /**
- * Update Mermaid theme based on preview background
- * Called when preview style changes to sync diagram colors with background
+ * Update Mermaid theme based on preview background or user selection
+ * Called when preview style changes to sync diagram colors with background,
+ * but only applies auto-detection if user has selected 'Auto' mode.
+ * If user has manually selected a theme, that theme takes precedence.
  * @param {boolean} isDark - Whether the preview background is dark
  */
 export function updateMermaidTheme(isDark) {
-    const newTheme = isDark ? 'dark' : 'default';
+    // Determine the actual theme to use
+    let newTheme;
+    if (state.mermaidThemeMode === 'auto') {
+        // Auto mode: switch based on background
+        newTheme = isDark ? 'dark' : 'default';
+    } else {
+        // Manual selection: use the user's chosen theme
+        newTheme = state.mermaidThemeMode;
+    }
+
     if (state.mermaidTheme !== newTheme) {
         state.mermaidTheme = newTheme;
         // Reinitialize Mermaid with new theme

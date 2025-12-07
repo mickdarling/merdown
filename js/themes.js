@@ -6,8 +6,8 @@
 
 import { state } from './state.js';
 import { getElements } from './dom.js';
-import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles } from './config.js';
-import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout } from './storage.js';
+import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles, mermaidThemes } from './config.js';
+import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, getMermaidTheme, saveMermaidTheme } from './storage.js';
 import { showStatus, isDarkColor } from './utils.js';
 import { isAllowedCSSURL, isValidBackgroundColor, normalizeGistUrl } from './security.js';
 import { updateMermaidTheme } from './renderer.js';
@@ -902,6 +902,79 @@ async function initEditorThemeSelector() {
 }
 
 /**
+ * Load Mermaid theme
+ * @param {string} themeValue - Theme value to load ('auto', 'default', 'forest', 'dark', 'neutral', 'base')
+ */
+async function loadMermaidTheme(themeValue) {
+    const theme = mermaidThemes.find(t => t.value === themeValue);
+    if (!theme) return;
+
+    try {
+        // Update state with user's selection
+        state.mermaidThemeMode = themeValue;
+
+        // If in auto mode, determine theme based on current background
+        if (themeValue === 'auto') {
+            const { preview } = getElements();
+            if (preview) {
+                const bgColor = window.getComputedStyle(preview).backgroundColor;
+                updateMermaidTheme(isDarkColor(bgColor));
+            }
+        } else {
+            // Manual theme selection - apply directly
+            updateMermaidTheme(false); // The function will use mermaidThemeMode instead of isDark when not in auto
+        }
+
+        // Save preference
+        saveMermaidTheme(themeValue);
+
+        showStatus(`Mermaid theme: ${theme.name}`);
+    } catch (error) {
+        console.error('Failed to load Mermaid theme:', error);
+        showStatus(`Error loading Mermaid theme: ${theme.name}`);
+    }
+}
+
+/**
+ * Change Mermaid theme
+ * @param {string} themeValue - Theme value to change to
+ */
+async function changeMermaidTheme(themeValue) {
+    if (!themeValue) return;
+    await loadMermaidTheme(themeValue);
+    // Re-render to apply new Mermaid theme
+    if (state.renderMarkdown) {
+        await state.renderMarkdown();
+    }
+}
+
+/**
+ * Initialize Mermaid theme selector
+ */
+async function initMermaidThemeSelector() {
+    const { mermaidThemeSelector } = getElements();
+    if (!mermaidThemeSelector) return;
+
+    mermaidThemeSelector.innerHTML = '';
+
+    mermaidThemes.forEach(theme => {
+        const option = document.createElement('option');
+        option.value = theme.value;
+        option.textContent = theme.name;
+        option.title = theme.description;
+        mermaidThemeSelector.appendChild(option);
+    });
+
+    // Load saved theme or default
+    const savedTheme = getMermaidTheme();
+    const defaultTheme = mermaidThemes.find(t => t.default)?.value || 'auto';
+    const themeToLoad = savedTheme || defaultTheme;
+
+    mermaidThemeSelector.value = themeToLoad;
+    await loadMermaidTheme(themeToLoad);
+}
+
+/**
  * Initialize style selector
  */
 async function initStyleSelector() {
@@ -988,10 +1061,12 @@ export {
     initStyleSelector,
     initSyntaxThemeSelector,
     initEditorThemeSelector,
+    initMermaidThemeSelector,
     initPreviewDragDrop,
     changeStyle,
     changeSyntaxTheme,
     changeEditorTheme,
+    changeMermaidTheme,
     applyLayoutConstraints,
     applyPreviewBackground
 };
