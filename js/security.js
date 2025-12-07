@@ -91,7 +91,7 @@ export function isAllowedMarkdownURL(url) {
         }
 
         // Check for non-ASCII hostname BEFORE URL parsing (browser converts to punycode)
-        // This catches IDN homograph attacks like raw.gіthubusercontent.com (Cyrillic 'і')
+        // This catches IDN homograph attacks like rаw.githubusercontent.com (Cyrillic 'а' U+0430)
         const rawHostname = extractHostnameFromString(url);
         if (rawHostname && !isASCII(rawHostname)) {
             console.warn('Markdown URL blocked: non-ASCII hostname not allowed (possible homograph attack)');
