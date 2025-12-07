@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Security
+- Add URL validation edge case protections for remote markdown loading (#82)
+  - Block URLs with embedded credentials (user:pass@host) to prevent credential leakage
+  - Enforce 2048 character URL length limit to prevent DoS attacks
+  - Block IDN/punycode homograph attacks by rejecting non-ASCII hostnames
+
 ### Changed
 - Fresh visits to merview.com now load the sample document instead of cached content (#137)
   - Opening a new tab/window always shows the sample document for predictable UX

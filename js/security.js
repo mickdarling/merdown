@@ -35,18 +35,89 @@ export function isAllowedCSSURL(url) {
     }
 }
 
+/** Maximum allowed URL length (matches common browser limits) */
+const MAX_URL_LENGTH = 2048;
+
 /**
- * Validate markdown URL against allowlist (HTTPS only, case-insensitive)
+ * Check if a string contains only printable ASCII characters (no spaces)
+ * Used to detect IDN/punycode homograph attacks in hostnames
+ * Allows: ! through ~ (0x21-0x7E) - printable ASCII excluding space
+ * Rejects: non-ASCII (> 127), control characters (< 32), and space (0x20)
+ * @param {string} str - The string to check
+ * @returns {boolean} True if string contains only printable non-space ASCII
+ */
+function isASCII(str) {
+    // Only allow printable ASCII excluding space (0x21-0x7E)
+    // Hostnames cannot contain spaces, so this is stricter than general printable ASCII
+    return /^[\x21-\x7E]*$/.test(str);
+}
+
+/**
+ * Extract hostname from URL string without full parsing
+ * Used to check for non-ASCII characters before browser normalizes to punycode
+ *
+ * This extracts the hostname portion between :// and the next / or : (port)
+ * Example: "https://example.com:8080/path" → "example.com"
+ *
+ * Note: For URLs with credentials (user:pass@host), this extracts "user:pass@host"
+ * which is semantically incorrect but doesn't affect security - the ASCII check
+ * still works, and credentials are explicitly blocked in a separate check later.
+ *
+ * @param {string} url - The URL string to extract hostname from
+ * @returns {string|null} The hostname (or user:pass@hostname) or null if extraction fails
+ */
+function extractHostnameFromString(url) {
+    // Match content between :// and the next / or : (port) or end of string
+    // Note: This intentionally doesn't strip credentials - see JSDoc above
+    const hostnameRegex = /:\/\/([^/:]+)/;
+    const match = hostnameRegex.exec(url);
+    return match ? match[1] : null;
+}
+
+/**
+ * Validate markdown URL against allowlist with security edge case protections
+ *
+ * Security checks performed:
+ * 1. HTTPS protocol required
+ * 2. URL length limit (prevents DoS with extremely long URLs)
+ * 3. No embedded credentials (user:pass@host)
+ * 4. ASCII-only hostname (prevents IDN homograph attacks)
+ * 5. Domain must be in allowlist
+ *
  * @param {string} url - The markdown URL to validate
  * @returns {boolean} True if URL is allowed
  */
 export function isAllowedMarkdownURL(url) {
     try {
+        // Check URL length before parsing (defense against DoS)
+        if (url.length > MAX_URL_LENGTH) {
+            console.warn('Markdown URL blocked: URL too long (' + url.length + ' chars, max ' + MAX_URL_LENGTH + ')');
+            return false;
+        }
+
+        // Check for non-ASCII hostname BEFORE URL parsing (browser converts to punycode)
+        // This catches IDN homograph attacks like rаw.githubusercontent.com (Cyrillic 'а' U+0430)
+        const rawHostname = extractHostnameFromString(url);
+        if (rawHostname && !isASCII(rawHostname)) {
+            console.warn('Markdown URL blocked: non-ASCII hostname not allowed (possible homograph attack)');
+            return false;
+        }
+
         const parsed = new URL(url);
+
+        // Require HTTPS
         if (parsed.protocol !== 'https:') {
             console.warn('Markdown URL blocked: HTTPS required, got', parsed.protocol);
             return false;
         }
+
+        // Block URLs with embedded credentials (security risk)
+        if (parsed.username || parsed.password) {
+            console.warn('Markdown URL blocked: URLs with credentials not allowed');
+            return false;
+        }
+
+        // Check against allowlist
         const isAllowed = ALLOWED_MARKDOWN_DOMAINS.includes(parsed.hostname.toLowerCase());
         if (!isAllowed) {
             console.warn('Markdown URL blocked: domain not in allowlist:', parsed.hostname);
