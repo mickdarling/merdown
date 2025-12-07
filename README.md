@@ -75,6 +75,70 @@ This will start a local server at http://localhost:8080.
 - `Cmd/Ctrl + P` - Open print dialog (save as PDF)
 - `Cmd/Ctrl + Shift + P` - Open in new tab for printing
 
+## PDF Export with Page Breaks
+
+Merview supports page breaks for creating slide decks and paginated documents.
+
+### Using Horizontal Rules for Page Breaks
+
+In markdown, use `---` (horizontal rule) to create page breaks:
+
+```markdown
+# Slide 1
+
+Welcome to my presentation!
+
+---
+
+# Slide 2
+
+Here's the second slide.
+
+---
+
+# Slide 3
+
+And the conclusion.
+```
+
+When you export to PDF, each `---` will start a new page. The horizontal rules are hidden in the PDF output.
+
+### CSS Utility Classes
+
+For more control, use these CSS classes in your HTML:
+
+| Class | Effect |
+|-------|--------|
+| `.page-break-before` | Start a new page before this element |
+| `.page-break-after` | Start a new page after this element |
+| `.page-break-avoid` | Prevent page breaks inside this element |
+
+Example with inline HTML:
+
+```markdown
+<div class="page-break-before">
+
+# This heading starts on a new page
+
+</div>
+
+<div class="page-break-avoid">
+
+This table won't be split across pages:
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Data     | Data     |
+
+</div>
+```
+
+### Tips for PDF Export
+
+- Headings automatically avoid being orphaned (they won't appear alone at the bottom of a page)
+- Tables, code blocks, and blockquotes avoid being split across pages when possible
+- Use the "Print (New Tab)" button for more control over PDF settings
+
 ## Mermaid Diagram Examples
 
 ### Flowchart

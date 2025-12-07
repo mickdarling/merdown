@@ -7,7 +7,10 @@ const {
   waitForPageReady,
   waitForGlobalFunctions,
   isGlobalFunctionAvailable,
-  loadSampleContent
+  loadSampleContent,
+  setCodeMirrorContent,
+  renderMarkdownAndWait,
+  WAIT_TIMES
 } = require('./helpers/test-utils');
 
 /**
@@ -302,6 +305,242 @@ test.describe('Export PDF Functionality', () => {
         { mockType: 'open', searchText: 'PDF', exportFn: 'exportToPDFDirect' }
       );
       expect(statusShown).not.toBeNull();
+    });
+  });
+});
+
+/**
+ * Tests for PDF Page Break functionality
+ */
+test.describe('PDF Page Break Functionality', () => {
+  test.beforeEach(async ({ page }) => {
+    await waitForPageReady(page);
+    await waitForGlobalFunctions(page, ['exportToPDFDirect']);
+  });
+
+  test.describe('Print CSS Rules', () => {
+    test('hr elements should have page-break-after: always in print styles', async ({ page }) => {
+      const hasPageBreakRule = await page.evaluate(() => {
+        // Check if print styles are defined in any stylesheet
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('hr') &&
+                      innerRule.style?.pageBreakAfter === 'always') {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasPageBreakRule).toBe(true);
+    });
+
+    test('hr elements should be hidden in print (visibility: hidden)', async ({ page }) => {
+      const hasVisibilityRule = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('hr') &&
+                      innerRule.style?.visibility === 'hidden') {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasVisibilityRule).toBe(true);
+    });
+
+    test('hr elements should have zero height in print', async ({ page }) => {
+      const hasHeightRule = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('hr') &&
+                      innerRule.style?.height === '0px') {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasHeightRule).toBe(true);
+    });
+
+    test('headings should have page-break-after: avoid in print', async ({ page }) => {
+      const hasAvoidRule = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('h1') &&
+                      innerRule.style?.pageBreakAfter === 'avoid') {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasAvoidRule).toBe(true);
+    });
+  });
+
+  test.describe('Page Break Utility Classes', () => {
+    test('page-break-before class rule should exist in print styles', async ({ page }) => {
+      const hasClass = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('.page-break-before')) {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasClass).toBe(true);
+    });
+
+    test('page-break-after class rule should exist in print styles', async ({ page }) => {
+      const hasClass = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('.page-break-after')) {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasClass).toBe(true);
+    });
+
+    test('page-break-avoid class rule should exist in print styles', async ({ page }) => {
+      const hasClass = await page.evaluate(() => {
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                for (const innerRule of rule.cssRules) {
+                  if (innerRule.selectorText?.includes('.page-break-avoid')) {
+                    return true;
+                  }
+                }
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return false;
+      });
+      expect(hasClass).toBe(true);
+    });
+  });
+
+  test.describe('Markdown HR Rendering', () => {
+    test('markdown --- should render as hr element', async ({ page }) => {
+      await setCodeMirrorContent(page, '# Slide 1\n\nContent here\n\n---\n\n# Slide 2\n\nMore content');
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+      const hrCount = await page.evaluate(() => {
+        const wrapper = document.getElementById('wrapper');
+        return wrapper?.querySelectorAll('hr').length || 0;
+      });
+
+      expect(hrCount).toBeGreaterThanOrEqual(1);
+    });
+
+    test('number of hr elements should match number of --- in content', async ({ page }) => {
+      // Set content with exactly 3 horizontal rules
+      const testContent = '# Title\n\nParagraph\n\n---\n\nSection 2\n\n---\n\nSection 3\n\n---\n\nEnd';
+      const expectedHrCount = 3;
+
+      await setCodeMirrorContent(page, testContent);
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+      const hrCount = await page.evaluate(() => {
+        const wrapper = document.getElementById('wrapper');
+        return wrapper?.querySelectorAll('hr').length || 0;
+      });
+
+      expect(hrCount).toBe(expectedHrCount);
+    });
+  });
+
+  test.describe('Export Content Includes Page Break Styles', () => {
+    test('exportToPDFDirect should include page break CSS in exported HTML', async ({ page }) => {
+      await setCodeMirrorContent(page, '# Slide 1\n\n---\n\n# Slide 2');
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+      const exportedContent = await page.evaluate(() => {
+        // Capture what would be written to the new window
+        let capturedContent = '';
+        const originalOpen = globalThis.open;
+
+        globalThis.open = function() {
+          return {
+            document: {
+              open() {},
+              write(content) { capturedContent = content; },
+              close() {}
+            },
+            onload: null
+          };
+        };
+
+        globalThis.exportToPDFDirect();
+        globalThis.open = originalOpen;
+
+        return capturedContent;
+      });
+
+      // Verify page break CSS is included
+      expect(exportedContent).toContain('page-break-after');
+      expect(exportedContent).toContain('<hr');
     });
   });
 });
