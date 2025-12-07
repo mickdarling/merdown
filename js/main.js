@@ -128,8 +128,6 @@ function handleURLParameters() {
             // No token - load normally with shareable URL
             loadMarkdownFromURL(remoteURL);
         }
-        // Mark session initialized since we're loading explicit URL content
-        markSessionInitialized();
     } else {
         // Check for inline markdown parameter
         const inlineMarkdown = urlParams.get('md');
@@ -140,8 +138,6 @@ function handleURLParameters() {
                 const decoded = decodeURIComponent(inlineMarkdown);
                 setEditorContent(decoded);
                 renderMarkdown();
-                // Mark session initialized since we're loading explicit content
-                markSessionInitialized();
             } catch (error) {
                 console.error('Error decoding inline markdown:', error);
                 showStatus('Error loading markdown from URL', 'warning');
@@ -152,6 +148,11 @@ function handleURLParameters() {
             loadSavedContentOrSample();
         }
     }
+
+    // Mark session as initialized after any content loading path completes.
+    // This is called once at the end rather than in each branch for simplicity.
+    // Subsequent calls are idempotent (sessionStorage.setItem with same value is fine).
+    markSessionInitialized();
 
     // Check for style parameter
     const styleParam = urlParams.get('style');
@@ -165,13 +166,15 @@ function handleURLParameters() {
  * Load saved content from localStorage or load sample
  * Fresh visits (new tab/window) always load the sample document.
  * Same-session refreshes preserve the user's localStorage content.
+ *
+ * Note: markSessionInitialized() is called by handleURLParameters() after
+ * this function returns, so we don't call it here.
  */
 function loadSavedContentOrSample() {
     // Fresh visit = new tab/window, always show sample for predictable UX
     // This also addresses minor security concern of cached content persisting
     if (isFreshVisit()) {
         loadSample();
-        markSessionInitialized();
         return;
     }
 

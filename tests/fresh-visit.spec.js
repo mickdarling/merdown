@@ -17,43 +17,56 @@ const {
  *
  * This uses sessionStorage to detect fresh visits since sessionStorage
  * is cleared when the tab/window is closed.
+ *
+ * Note on multi-tab behavior: Each browser tab has its own sessionStorage,
+ * so opening merview.com in a new tab will always show the sample document,
+ * even if another tab has edited content. This is intentional for privacy
+ * and predictable UX reasons - see issue #137 for details.
  */
+
+/**
+ * Helper to clear all storage for a clean test state
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ */
+async function clearAllStorage(page) {
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+}
+
+/**
+ * Helper to set localStorage content without session marker
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} content - Content to set
+ */
+async function setLocalStorageContent(page, content) {
+  await page.evaluate((text) => {
+    localStorage.setItem('markdown-content', text);
+  }, content);
+}
+
+/**
+ * Helper to get sessionStorage marker
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @returns {Promise<string|null>} The session marker value
+ */
+async function getSessionMarker(page) {
+  return page.evaluate(() => {
+    return sessionStorage.getItem('merview-session-initialized');
+  });
+}
+
+/**
+ * Helper to check if content contains sample document markers
+ * @param {string|null} content - Content to check
+ * @returns {boolean} True if content is the sample document
+ */
+function isSampleContent(content) {
+  return content?.includes('Comprehensive Markdown + Mermaid Feature Demo') ?? false;
+}
+
 test.describe('Fresh Visit Behavior', () => {
-  /**
-   * Helper to clear all storage for a clean test state
-   */
-  async function clearAllStorage(page) {
-    await page.evaluate(() => {
-      localStorage.clear();
-      sessionStorage.clear();
-    });
-  }
-
-  /**
-   * Helper to set localStorage content without session marker
-   */
-  async function setLocalStorageContent(page, content) {
-    await page.evaluate((text) => {
-      localStorage.setItem('markdown-content', text);
-    }, content);
-  }
-
-  /**
-   * Helper to get sessionStorage marker
-   */
-  async function getSessionMarker(page) {
-    return page.evaluate(() => {
-      return sessionStorage.getItem('merview-session-initialized');
-    });
-  }
-
-  /**
-   * Helper to check if content contains sample document markers
-   */
-  function isSampleContent(content) {
-    return content && content.includes('Comprehensive Markdown + Mermaid Feature Demo');
-  }
-
   test.describe('Fresh Visit Detection', () => {
     test('fresh visit with no localStorage should load sample document', async ({ page }) => {
       // Clear everything to simulate truly fresh visit
@@ -70,12 +83,16 @@ test.describe('Fresh Visit Behavior', () => {
     });
 
     test('fresh visit with existing localStorage should still load sample document', async ({ page }) => {
-      // Set up localStorage content but NO session marker
+      // Set up localStorage content but NO session marker.
+      // We go to the page first, then clear storage, then set localStorage content.
+      // This ensures we have a controlled state before the reload test.
       await page.goto('/');
       await clearAllStorage(page);
       await setLocalStorageContent(page, '# My Custom Document\n\nThis is cached content.');
 
-      // Reload - should be treated as fresh visit
+      // Reload triggers fresh visit detection because sessionStorage was cleared.
+      // Since there's no session marker, isFreshVisit() returns true and
+      // the app loads the sample document instead of the localStorage content.
       await page.reload();
       await page.waitForSelector('.CodeMirror', { timeout: 15000 });
       await page.waitForTimeout(WAIT_TIMES.LONG);
@@ -240,6 +257,99 @@ test.describe('Fresh Visit Behavior', () => {
       });
 
       expect(storedContent).toContain('Test Persistence');
+    });
+  });
+
+  test.describe('Multi-Tab Behavior', () => {
+    test('new tab should show sample even if another tab has edited content', async ({ context }) => {
+      // Open first tab and edit content
+      const page1 = await context.newPage();
+      await page1.goto('/');
+      await page1.waitForSelector('.CodeMirror', { timeout: 15000 });
+      await page1.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+      // Edit content in first tab
+      await page1.evaluate(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        const cmEditor = cmElement?.CodeMirror;
+        if (cmEditor) {
+          cmEditor.setValue('# Content from Tab 1\n\nThis was edited in the first tab.');
+          if (typeof globalThis.renderMarkdown === 'function') {
+            globalThis.renderMarkdown();
+          }
+        }
+      });
+      await page1.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+      // Verify first tab has edited content saved to localStorage
+      const localStorageContent = await page1.evaluate(() => {
+        return localStorage.getItem('markdown-content');
+      });
+      expect(localStorageContent).toContain('Content from Tab 1');
+
+      // Open second tab - should show sample document, NOT the edited content.
+      // This is intentional: each tab has its own sessionStorage, so the
+      // second tab is treated as a "fresh visit" even though localStorage
+      // has content from the first tab.
+      const page2 = await context.newPage();
+      await page2.goto('/');
+      await page2.waitForSelector('.CodeMirror', { timeout: 15000 });
+      await page2.waitForTimeout(WAIT_TIMES.LONG);
+
+      const content2 = await page2.evaluate(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        const cmEditor = cmElement?.CodeMirror;
+        return cmEditor ? cmEditor.getValue() : '';
+      });
+
+      // Second tab shows sample (this is the designed behavior for privacy)
+      expect(isSampleContent(content2)).toBe(true);
+      expect(content2).not.toContain('Content from Tab 1');
+
+      await page1.close();
+      await page2.close();
+    });
+
+    test('tabs in same session share localStorage but have separate sessionStorage', async ({ context }) => {
+      // Open first tab
+      const page1 = await context.newPage();
+      await page1.goto('/');
+      await page1.waitForSelector('.CodeMirror', { timeout: 15000 });
+
+      // Verify session marker is set in first tab
+      const marker1 = await page1.evaluate(() => {
+        return sessionStorage.getItem('merview-session-initialized');
+      });
+      expect(marker1).toBe('true');
+
+      // Open second tab
+      const page2 = await context.newPage();
+      await page2.goto('/');
+      await page2.waitForSelector('.CodeMirror', { timeout: 15000 });
+
+      // Second tab also has its own session marker (separate sessionStorage)
+      const marker2 = await page2.evaluate(() => {
+        return sessionStorage.getItem('merview-session-initialized');
+      });
+      expect(marker2).toBe('true');
+
+      // But localStorage is shared - set in one, visible in other
+      await page1.evaluate(() => {
+        localStorage.setItem('test-shared', 'from-tab-1');
+      });
+
+      const sharedValue = await page2.evaluate(() => {
+        return localStorage.getItem('test-shared');
+      });
+      expect(sharedValue).toBe('from-tab-1');
+
+      // Cleanup
+      await page1.evaluate(() => {
+        localStorage.removeItem('test-shared');
+      });
+
+      await page1.close();
+      await page2.close();
     });
   });
 

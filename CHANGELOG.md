@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Fresh visits to merview.com now load the sample document instead of cached content (#137)
+  - Opening a new tab/window always shows the sample document for predictable UX
+  - Refreshing within the same session preserves your edited content
+  - Each tab has independent session state (opening a new tab = fresh start)
+  - Addresses minor privacy concern of cached content persisting indefinitely
+
 ## [1.0.0] - 2025-01-30
 
 ### Added
