@@ -3,6 +3,22 @@
  *
  * This module contains all mutable shared state variables used across the application.
  * Exporting a single state object makes it easier to track, debug, and manage application state.
+ *
+ * IMPORTANT: PUBLICLY ACCESSIBLE STATE
+ * =====================================
+ * This state object is exposed globally via `globalThis.state` in main.js for testing
+ * and debugging purposes. This means:
+ *
+ * 1. DO NOT store sensitive information here (passwords, tokens, secrets, etc.)
+ * 2. Any data in this object is accessible from the browser console and browser extensions
+ * 3. This is acceptable for Merview because:
+ *    - It's a client-side-only application
+ *    - No sensitive user data is stored in state
+ *    - Users only affect their own browser instance
+ *    - It enables reliable integration testing
+ *
+ * If you need to store sensitive data, create a separate private module that is NOT
+ * exposed to globalThis.
  */
 
 export const state = {
@@ -20,6 +36,7 @@ export const state = {
     // Rendering
     mermaidCounter: 0,                   // Counter for generating unique Mermaid diagram IDs
     renderTimeout: null,                 // Debounce timeout handle for render scheduling
+    validationTimeout: null,             // Debounce timeout handle for validation scheduling
     mermaidTheme: 'default',             // Current Mermaid theme ('default' for light, 'dark' for dark backgrounds)
 
     // Lint panel state
