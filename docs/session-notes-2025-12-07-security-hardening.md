@@ -19,7 +19,7 @@ Implemented three security hardening PRs for the URL loading feature in preparat
   - S6594: Changed `String.match()` to `RegExp.exec()`
 - Addressed all Claude review suggestions
 
-### PR #142 - Fetch Timeout and Size Limits (Issue #85) 🔄 READY FOR REVIEW
+### PR #142 - Fetch Timeout and Size Limits (Issue #85) ✅ MERGED
 - 10-second fetch timeout using AbortController
 - 10MB content size limit (two-layer defense: Content-Length header + actual size)
 - User-friendly error messages
@@ -27,7 +27,6 @@ Implemented three security hardening PRs for the URL loading feature in preparat
 - Rebased onto main after PR #141 merge
 - Fixed SonarCloud issues:
   - S7773: Changed `parseInt()` to `Number.parseInt()` (2 occurrences)
-- Awaiting Claude review re-run after force push
 
 ### PR #143 - Content-Type Validation (Issue #83) 📋 PENDING
 - Allows text/* types and application/octet-stream
@@ -66,11 +65,9 @@ Implemented three security hardening PRs for the URL loading feature in preparat
 
 ## Next Steps
 
-1. **Wait for Claude review** on PR #142 after force push
-2. **Merge PR #142** once review passes
-3. **Rebase PR #143** onto main after PR #142 merges
-4. **Fix any SonarCloud issues** in PR #143
-5. **Merge PR #143** to complete security hardening
+1. **Rebase PR #143** onto main (will have conflicts similar to PR #142)
+2. **Fix any SonarCloud issues** in PR #143
+3. **Merge PR #143** to complete security hardening
 
 ## Current Test Count
 
