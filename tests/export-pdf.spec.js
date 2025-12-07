@@ -490,16 +490,17 @@ test.describe('PDF Page Break Functionality', () => {
         const hr = wrapper?.querySelector('hr');
         if (!hr) return null;
 
-        const computed = window.getComputedStyle(hr);
+        const computed = globalThis.getComputedStyle(hr);
         return {
           visibility: computed.visibility,
-          pageBreakAfter: computed.pageBreakAfter
+          breakAfter: computed.breakAfter
         };
       });
 
       expect(hrStyles).not.toBeNull();
       expect(hrStyles.visibility).toBe('hidden');
-      expect(hrStyles.pageBreakAfter).toBe('always');
+      // Modern browsers use 'page' for break-after, legacy returns 'always' for page-break-after
+      expect(['page', 'always']).toContain(hrStyles.breakAfter);
     });
   });
 
