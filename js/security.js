@@ -39,13 +39,17 @@ export function isAllowedCSSURL(url) {
 const MAX_URL_LENGTH = 2048;
 
 /**
- * Check if a string contains only ASCII characters
- * Used to detect IDN/punycode homograph attacks
+ * Check if a string contains only printable ASCII characters
+ * Used to detect IDN/punycode homograph attacks in hostnames
+ * Allows: letters, digits, hyphens, dots (valid hostname characters)
+ * Rejects: non-ASCII (> 127) and control characters (< 32)
  * @param {string} str - The string to check
- * @returns {boolean} True if string is ASCII-only
+ * @returns {boolean} True if string is printable ASCII-only
  */
 function isASCII(str) {
-    return /^[\x00-\x7F]*$/.test(str);
+    // Only allow printable ASCII (space through tilde: 0x20-0x7E)
+    // This is safer than allowing all ASCII including control characters
+    return /^[\x20-\x7E]*$/.test(str);
 }
 
 /**
