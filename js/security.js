@@ -35,18 +35,75 @@ export function isAllowedCSSURL(url) {
     }
 }
 
+/** Maximum allowed URL length (matches common browser limits) */
+const MAX_URL_LENGTH = 2048;
+
 /**
- * Validate markdown URL against allowlist (HTTPS only, case-insensitive)
+ * Check if a string contains only ASCII characters
+ * Used to detect IDN/punycode homograph attacks
+ * @param {string} str - The string to check
+ * @returns {boolean} True if string is ASCII-only
+ */
+function isASCII(str) {
+    return /^[\x00-\x7F]*$/.test(str);
+}
+
+/**
+ * Extract hostname from URL string without full parsing
+ * Used to check for non-ASCII characters before browser normalizes to punycode
+ * @param {string} url - The URL string
+ * @returns {string|null} The hostname or null if extraction fails
+ */
+function extractHostnameFromString(url) {
+    // Match hostname between :// and the next / or end of string
+    const match = url.match(/:\/\/([^/:]+)/);
+    return match ? match[1] : null;
+}
+
+/**
+ * Validate markdown URL against allowlist with security edge case protections
+ *
+ * Security checks performed:
+ * 1. HTTPS protocol required
+ * 2. URL length limit (prevents DoS with extremely long URLs)
+ * 3. No embedded credentials (user:pass@host)
+ * 4. ASCII-only hostname (prevents IDN homograph attacks)
+ * 5. Domain must be in allowlist
+ *
  * @param {string} url - The markdown URL to validate
  * @returns {boolean} True if URL is allowed
  */
 export function isAllowedMarkdownURL(url) {
     try {
+        // Check URL length before parsing (defense against DoS)
+        if (url.length > MAX_URL_LENGTH) {
+            console.warn('Markdown URL blocked: URL too long (' + url.length + ' chars, max ' + MAX_URL_LENGTH + ')');
+            return false;
+        }
+
+        // Check for non-ASCII hostname BEFORE URL parsing (browser converts to punycode)
+        // This catches IDN homograph attacks like raw.gіthubusercontent.com (Cyrillic 'і')
+        const rawHostname = extractHostnameFromString(url);
+        if (rawHostname && !isASCII(rawHostname)) {
+            console.warn('Markdown URL blocked: non-ASCII hostname not allowed (possible homograph attack)');
+            return false;
+        }
+
         const parsed = new URL(url);
+
+        // Require HTTPS
         if (parsed.protocol !== 'https:') {
             console.warn('Markdown URL blocked: HTTPS required, got', parsed.protocol);
             return false;
         }
+
+        // Block URLs with embedded credentials (security risk)
+        if (parsed.username || parsed.password) {
+            console.warn('Markdown URL blocked: URLs with credentials not allowed');
+            return false;
+        }
+
+        // Check against allowlist
         const isAllowed = ALLOWED_MARKDOWN_DOMAINS.includes(parsed.hostname.toLowerCase());
         if (!isAllowed) {
             console.warn('Markdown URL blocked: domain not in allowlist:', parsed.hostname);

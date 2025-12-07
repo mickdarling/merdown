@@ -115,6 +115,126 @@ test.describe('URL Loading', () => {
     });
   });
 
+  test.describe('URL Security Edge Cases (Issue #82)', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+    });
+
+    test('should block URLs with embedded credentials (user:pass@host)', async ({ page }) => {
+      const urlWithCreds = 'https://user:password@raw.githubusercontent.com/user/repo/main/file.md';
+      const isAllowed = await testUrlValidation(page, urlWithCreds);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should block URLs with username only', async ({ page }) => {
+      const urlWithUser = 'https://admin@raw.githubusercontent.com/user/repo/main/file.md';
+      const isAllowed = await testUrlValidation(page, urlWithUser);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should block URLs exceeding 2048 characters', async ({ page }) => {
+      // Create a URL that exceeds the 2048 character limit
+      const baseUrl = 'https://raw.githubusercontent.com/user/repo/main/';
+      const longPath = 'a'.repeat(2100);
+      const longUrl = baseUrl + longPath + '.md';
+
+      expect(longUrl.length).toBeGreaterThan(2048);
+
+      const isAllowed = await testUrlValidation(page, longUrl);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should allow URLs just under 2048 characters', async ({ page }) => {
+      // Create a URL that is exactly at the limit
+      const baseUrl = 'https://raw.githubusercontent.com/user/repo/main/';
+      const targetLength = 2048;
+      const pathLength = targetLength - baseUrl.length - 3; // -3 for ".md"
+      const path = 'a'.repeat(pathLength);
+      const validUrl = baseUrl + path + '.md';
+
+      expect(validUrl.length).toBeLessThanOrEqual(2048);
+
+      const isAllowed = await testUrlValidation(page, validUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should block IDN homograph attack URLs (Cyrillic characters)', async ({ page }) => {
+      // URL with Cyrillic 'а' (U+0430) instead of Latin 'a' in 'raw'
+      // This simulates a homograph attack: rаw.githubusercontent.com
+      const homographUrl = 'https://r\u0430w.githubusercontent.com/user/repo/main/file.md';
+
+      const isAllowed = await testUrlValidation(page, homographUrl);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should block URLs with other non-ASCII hostname characters', async ({ page }) => {
+      // URL with Unicode character in hostname
+      const unicodeUrl = 'https://raw.githüb.com/user/repo/main/file.md';
+
+      const isAllowed = await testUrlValidation(page, unicodeUrl);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should allow legitimate ASCII URLs from trusted domains', async ({ page }) => {
+      const legitimateUrls = [
+        'https://raw.githubusercontent.com/user/repo/main/README.md',
+        'https://raw.githubusercontent.com/org/project/branch/path/to/file.md',
+        'https://gist.githubusercontent.com/user/abc123/raw/file.md'
+      ];
+
+      for (const url of legitimateUrls) {
+        const isAllowed = await testUrlValidation(page, url);
+        expect(isAllowed).toBe(true);
+      }
+    });
+
+    test('should log appropriate warning for credential URLs', async ({ page }) => {
+      const consoleMessages = [];
+      page.on('console', msg => {
+        if (msg.type() === 'warning') {
+          consoleMessages.push(msg.text());
+        }
+      });
+
+      const urlWithCreds = 'https://user:pass@raw.githubusercontent.com/user/repo/main/file.md';
+      await testUrlValidation(page, urlWithCreds);
+
+      const credentialWarning = consoleMessages.find(msg => msg.includes('credentials not allowed'));
+      expect(credentialWarning).toBeTruthy();
+    });
+
+    test('should log appropriate warning for long URLs', async ({ page }) => {
+      const consoleMessages = [];
+      page.on('console', msg => {
+        if (msg.type() === 'warning') {
+          consoleMessages.push(msg.text());
+        }
+      });
+
+      const longUrl = 'https://raw.githubusercontent.com/' + 'a'.repeat(2100) + '.md';
+      await testUrlValidation(page, longUrl);
+
+      const lengthWarning = consoleMessages.find(msg => msg.includes('URL too long'));
+      expect(lengthWarning).toBeTruthy();
+    });
+
+    test('should log appropriate warning for IDN homograph URLs', async ({ page }) => {
+      const consoleMessages = [];
+      page.on('console', msg => {
+        if (msg.type() === 'warning') {
+          consoleMessages.push(msg.text());
+        }
+      });
+
+      const homographUrl = 'https://r\u0430w.githubusercontent.com/user/repo/main/file.md';
+      await testUrlValidation(page, homographUrl);
+
+      const homographWarning = consoleMessages.find(msg => msg.includes('non-ASCII hostname'));
+      expect(homographWarning).toBeTruthy();
+    });
+  });
+
   test.describe('URL Parameter Behavior', () => {
     // Common test URL used across multiple tests
     const TEST_README_URL = 'https://raw.githubusercontent.com/mickdarling/merview/main/README.md';
