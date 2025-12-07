@@ -13,7 +13,7 @@ import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUr
 import { toggleLintPanel, validateCode } from './validation.js';
 import { initMermaidFullscreen } from './mermaid-fullscreen.js';
 import { isAllowedMarkdownURL, stripGitHubToken, showPrivateUrlModal, initPrivateUrlModalHandlers } from './security.js';
-import { getMarkdownContent } from './storage.js';
+import { getMarkdownContent, isFreshVisit, markSessionInitialized } from './storage.js';
 import { showStatus } from './utils.js';
 import { initResizeHandle } from './resize.js';
 
@@ -128,6 +128,8 @@ function handleURLParameters() {
             // No token - load normally with shareable URL
             loadMarkdownFromURL(remoteURL);
         }
+        // Mark session initialized since we're loading explicit URL content
+        markSessionInitialized();
     } else {
         // Check for inline markdown parameter
         const inlineMarkdown = urlParams.get('md');
@@ -138,6 +140,8 @@ function handleURLParameters() {
                 const decoded = decodeURIComponent(inlineMarkdown);
                 setEditorContent(decoded);
                 renderMarkdown();
+                // Mark session initialized since we're loading explicit content
+                markSessionInitialized();
             } catch (error) {
                 console.error('Error decoding inline markdown:', error);
                 showStatus('Error loading markdown from URL', 'warning');
@@ -159,8 +163,19 @@ function handleURLParameters() {
 
 /**
  * Load saved content from localStorage or load sample
+ * Fresh visits (new tab/window) always load the sample document.
+ * Same-session refreshes preserve the user's localStorage content.
  */
 function loadSavedContentOrSample() {
+    // Fresh visit = new tab/window, always show sample for predictable UX
+    // This also addresses minor security concern of cached content persisting
+    if (isFreshVisit()) {
+        loadSample();
+        markSessionInitialized();
+        return;
+    }
+
+    // Same session (refresh) - restore saved content if available
     const saved = getMarkdownContent();
     if (saved) {
         setEditorContent(saved);
