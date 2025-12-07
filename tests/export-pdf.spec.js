@@ -310,6 +310,38 @@ test.describe('Export PDF Functionality', () => {
 });
 
 /**
+ * Browser-side helper: Check if a print CSS rule exists matching given criteria
+ * @param {Object} opts - Search criteria
+ * @param {string} opts.selectorContains - Text that must appear in the selector
+ * @param {string} [opts.styleProperty] - CSS property name to check
+ * @param {string} [opts.styleValue] - Expected value for the CSS property
+ * @returns {boolean} True if matching rule found
+ */
+function browserFindPrintCssRule({ selectorContains, styleProperty, styleValue }) {
+  // Get all print media rules from stylesheets
+  const printRules = [];
+  for (const sheet of document.styleSheets) {
+    try {
+      for (const rule of sheet.cssRules) {
+        if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+          printRules.push(...rule.cssRules);
+        }
+      }
+    } catch {
+      // Skip cross-origin stylesheets
+    }
+  }
+
+  // Search for matching rule
+  return printRules.some(rule => {
+    const selectorMatches = rule.selectorText?.includes(selectorContains);
+    if (!selectorMatches) return false;
+    if (!styleProperty) return true;
+    return rule.style?.[styleProperty] === styleValue;
+  });
+}
+
+/**
  * Tests for PDF Page Break functionality
  */
 test.describe('PDF Page Break Functionality', () => {
@@ -320,162 +352,60 @@ test.describe('PDF Page Break Functionality', () => {
 
   test.describe('Print CSS Rules', () => {
     test('hr elements should have page-break-after: always in print styles', async ({ page }) => {
-      const hasPageBreakRule = await page.evaluate(() => {
-        // Check if print styles are defined in any stylesheet
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('hr') &&
-                      innerRule.style?.pageBreakAfter === 'always') {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasRule = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: 'hr',
+        styleProperty: 'pageBreakAfter',
+        styleValue: 'always'
       });
-      expect(hasPageBreakRule).toBe(true);
+      expect(hasRule).toBe(true);
     });
 
     test('hr elements should be hidden in print (visibility: hidden)', async ({ page }) => {
-      const hasVisibilityRule = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('hr') &&
-                      innerRule.style?.visibility === 'hidden') {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasRule = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: 'hr',
+        styleProperty: 'visibility',
+        styleValue: 'hidden'
       });
-      expect(hasVisibilityRule).toBe(true);
+      expect(hasRule).toBe(true);
     });
 
     test('hr elements should have zero height in print', async ({ page }) => {
-      const hasHeightRule = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('hr') &&
-                      innerRule.style?.height === '0px') {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasRule = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: 'hr',
+        styleProperty: 'height',
+        styleValue: '0px'
       });
-      expect(hasHeightRule).toBe(true);
+      expect(hasRule).toBe(true);
     });
 
     test('headings should have page-break-after: avoid in print', async ({ page }) => {
-      const hasAvoidRule = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('h1') &&
-                      innerRule.style?.pageBreakAfter === 'avoid') {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasRule = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: 'h1',
+        styleProperty: 'pageBreakAfter',
+        styleValue: 'avoid'
       });
-      expect(hasAvoidRule).toBe(true);
+      expect(hasRule).toBe(true);
     });
   });
 
   test.describe('Page Break Utility Classes', () => {
     test('page-break-before class rule should exist in print styles', async ({ page }) => {
-      const hasClass = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('.page-break-before')) {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasClass = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: '.page-break-before'
       });
       expect(hasClass).toBe(true);
     });
 
     test('page-break-after class rule should exist in print styles', async ({ page }) => {
-      const hasClass = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('.page-break-after')) {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasClass = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: '.page-break-after'
       });
       expect(hasClass).toBe(true);
     });
 
     test('page-break-avoid class rule should exist in print styles', async ({ page }) => {
-      const hasClass = await page.evaluate(() => {
-        for (const sheet of document.styleSheets) {
-          try {
-            for (const rule of sheet.cssRules) {
-              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
-                for (const innerRule of rule.cssRules) {
-                  if (innerRule.selectorText?.includes('.page-break-avoid')) {
-                    return true;
-                  }
-                }
-              }
-            }
-          } catch {
-            // Skip cross-origin stylesheets
-          }
-        }
-        return false;
+      const hasClass = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: '.page-break-avoid'
       });
       expect(hasClass).toBe(true);
     });
