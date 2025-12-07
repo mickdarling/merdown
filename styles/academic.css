@@ -206,13 +206,49 @@
 /* Page breaks for print */
 @media print {
     #wrapper h1,
-    #wrapper h2 {
+    #wrapper h2,
+    #wrapper h3,
+    #wrapper h4,
+    #wrapper h5,
+    #wrapper h6 {
         page-break-after: avoid;
+        break-after: avoid;
     }
 
     #wrapper p,
     #wrapper blockquote,
-    #wrapper pre {
+    #wrapper pre,
+    #wrapper table {
         page-break-inside: avoid;
+        break-inside: avoid;
+    }
+
+    /* Horizontal rules trigger page breaks in PDF */
+    #wrapper hr {
+        page-break-after: always;
+        break-after: page;
+        visibility: hidden;
+        height: 0;
+        margin: 0;
+        border: none;
+    }
+
+    /* Utility classes for page breaks */
+    #wrapper [style*="page-break-before: always"],
+    #wrapper .page-break-before {
+        page-break-before: always;
+        break-before: page;
+    }
+
+    #wrapper [style*="page-break-after: always"],
+    #wrapper .page-break-after {
+        page-break-after: always;
+        break-after: page;
+    }
+
+    #wrapper [style*="page-break-inside: avoid"],
+    #wrapper .page-break-avoid {
+        page-break-inside: avoid;
+        break-inside: avoid;
     }
 }

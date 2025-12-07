@@ -421,6 +421,43 @@ export async function exportToPDFDirect() {
                 print-color-adjust: exact !important;
                 color-adjust: exact !important;
             }
+
+            /* Page break support for slide decks and paginated documents */
+            /* Horizontal rules (<hr> from ---) trigger new pages */
+            hr {
+                page-break-after: always !important;
+                break-after: page !important;
+                border: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                visibility: hidden !important;
+                height: 0 !important;
+            }
+
+            /* Prevent headings from being orphaned */
+            h1, h2, h3, h4, h5, h6 {
+                page-break-after: avoid;
+                break-after: avoid;
+            }
+
+            /* Respect all CSS page-break properties */
+            [style*="page-break-before: always"],
+            .page-break-before {
+                page-break-before: always;
+                break-before: page;
+            }
+
+            [style*="page-break-after: always"],
+            .page-break-after {
+                page-break-after: always;
+                break-after: page;
+            }
+
+            [style*="page-break-inside: avoid"],
+            .page-break-avoid {
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }
         }
     </style>
 </head>
