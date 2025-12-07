@@ -93,12 +93,16 @@ function isValidMarkdownContentType(contentType) {
     // Extract MIME type (ignore charset and other parameters)
     const mimeType = contentType.split(';')[0].trim().toLowerCase();
 
-    // Block dangerous types first
+    // Block dangerous executable types first
+    // Note: This validation relies on server sending truthful headers.
+    // A compromised allowlisted domain could still send malicious content
+    // with a spoofed Content-Type. Domain allowlisting is the primary defense.
     const blockedTypes = [
         'application/javascript',
         'text/javascript',
         'text/html',
-        'application/x-javascript'
+        'application/x-javascript',
+        'text/vbscript'  // Legacy VBScript (Windows IE)
     ];
     if (blockedTypes.includes(mimeType)) {
         console.warn('Content-Type blocked:', mimeType);

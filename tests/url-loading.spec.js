@@ -356,7 +356,8 @@ test.describe('URL Loading', () => {
           'application/javascript',
           'text/javascript',
           'text/html',
-          'application/x-javascript'
+          'application/x-javascript',
+          'text/vbscript'
         ];
 
         function validateContentType(contentType) {
@@ -386,6 +387,8 @@ test.describe('URL Loading', () => {
           { input: 'application/x-javascript', expected: false, desc: 'application/x-javascript' },
           // Blocked: HTML (script injection risk)
           { input: 'text/html', expected: false, desc: 'text/html' },
+          // Blocked: VBScript (legacy Windows IE)
+          { input: 'text/vbscript', expected: false, desc: 'text/vbscript' },
           // Blocked: Other binary/unknown types
           { input: 'application/json', expected: false, desc: 'application/json' },
           { input: 'image/png', expected: false, desc: 'image/png' }
