@@ -96,15 +96,7 @@ test.describe('Lint Panel Real-Time Validation - Simple Integration', () => {
     await page.click('#lintToggle');
     await waitForElementClass(page, '#lintPanel', 'show');
 
-    // Check that validationTimeout is separate from renderTimeout
-    const timeouts = await page.evaluate(() => {
-      return {
-        hasRenderTimeout: globalThis.state?.renderTimeout !== null && globalThis.state?.renderTimeout !== undefined,
-        hasValidationTimeout: globalThis.state?.validationTimeout !== null && globalThis.state?.validationTimeout !== undefined
-      };
-    });
-
-    // Both should be defined in state
+    // Check that both timeout properties are defined in state
     const hasBothDefined = await page.evaluate(() => {
       return 'renderTimeout' in globalThis.state && 'validationTimeout' in globalThis.state;
     });
