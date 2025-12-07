@@ -13,7 +13,7 @@ import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUr
 import { toggleLintPanel, validateCode } from './validation.js';
 import { initMermaidFullscreen } from './mermaid-fullscreen.js';
 import { isAllowedMarkdownURL, stripGitHubToken, showPrivateUrlModal, initPrivateUrlModalHandlers } from './security.js';
-import { getMarkdownContent } from './storage.js';
+import { getMarkdownContent, isFreshVisit, markSessionInitialized } from './storage.js';
 import { showStatus } from './utils.js';
 import { initResizeHandle } from './resize.js';
 
@@ -109,6 +109,15 @@ function setupKeyboardShortcuts() {
 
 /**
  * Handle URL parameters to load content or apply styles
+ *
+ * URL parameters (?url=, ?md=) intentionally override the "fresh visit = sample document"
+ * behavior. When a user shares a link with content parameters, they expect that content
+ * to load regardless of whether it's a fresh visit or not.
+ *
+ * Priority order:
+ * 1. ?url= parameter - loads from remote URL
+ * 2. ?md= parameter - loads inline markdown
+ * 3. No parameters - uses fresh visit detection (sample or localStorage)
  */
 function handleURLParameters() {
     const urlParams = new URLSearchParams(globalThis.location.search);
@@ -121,7 +130,10 @@ function handleURLParameters() {
         const { hadToken } = stripGitHubToken(remoteURL);
 
         if (hadToken) {
-            // Show modal to let user choose how to handle private repo content
+            // Show modal to let user choose how to handle private repo content.
+            // Note: Session is marked immediately rather than after modal interaction
+            // because the user explicitly navigated here with a URL parameter - this
+            // is intentional content loading, not a "fresh visit" scenario.
             showPrivateUrlModal(remoteURL);
             // Modal handlers will load the content and update URL
         } else {
@@ -144,10 +156,15 @@ function handleURLParameters() {
                 loadSavedContentOrSample();
             }
         } else {
-            // No URL parameters - load saved content or sample
+            // No URL parameters - use fresh visit detection to decide content
             loadSavedContentOrSample();
         }
     }
+
+    // Mark session as initialized after any content loading path completes.
+    // This is called once at the end rather than in each branch for simplicity.
+    // Subsequent calls are idempotent (sessionStorage.setItem with same value is fine).
+    markSessionInitialized();
 
     // Check for style parameter
     const styleParam = urlParams.get('style');
@@ -159,8 +176,21 @@ function handleURLParameters() {
 
 /**
  * Load saved content from localStorage or load sample
+ * Fresh visits (new tab/window) always load the sample document.
+ * Same-session refreshes preserve the user's localStorage content.
+ *
+ * Note: markSessionInitialized() is called by handleURLParameters() after
+ * this function returns, so we don't call it here.
  */
 function loadSavedContentOrSample() {
+    // Fresh visit = new tab/window, always show sample for predictable UX
+    // This also addresses minor security concern of cached content persisting
+    if (isFreshVisit()) {
+        loadSample();
+        return;
+    }
+
+    // Same session (refresh) - restore saved content if available
     const saved = getMarkdownContent();
     if (saved) {
         setEditorContent(saved);

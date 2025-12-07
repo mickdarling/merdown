@@ -163,3 +163,44 @@ export function isTokenExpired() {
         return true;
     }
 }
+
+// Session key for tracking fresh visits
+const SESSION_INITIALIZED_KEY = 'merview-session-initialized';
+
+/**
+ * Check if this is a fresh visit (new browser session/tab)
+ *
+ * Uses sessionStorage which is cleared when the tab is closed.
+ * This allows us to distinguish between:
+ * - Fresh visit (new tab): should load sample document
+ * - Same session (refresh/navigation): should preserve localStorage content
+ *
+ * Why sessionStorage over other approaches:
+ * 1. Tab-scoped: Each tab has isolated sessionStorage, so each new tab is "fresh"
+ * 2. Auto-clearing: Cleared when tab closes, no manual cleanup needed
+ * 3. Simple: Just a boolean flag, no expiration logic or timestamps
+ * 4. Privacy-friendly: Prevents cached content from persisting indefinitely
+ *
+ * Note on multi-tab behavior: Opening merview.com in a new tab will always show
+ * the sample document, even if another tab has edited content. This is intentional
+ * for privacy and predictable UX - see issue #137 for details.
+ *
+ * Browser compatibility: sessionStorage is supported in all modern browsers
+ * (IE8+, all evergreen browsers). If sessionStorage is unavailable (e.g., private
+ * browsing in some older browsers, or storage disabled), the getItem call returns
+ * null and isFreshVisit() returns true, defaulting to showing the sample document.
+ * This is safe fallback behavior.
+ *
+ * @returns {boolean} True if this is a fresh visit
+ */
+export function isFreshVisit() {
+    return !sessionStorage.getItem(SESSION_INITIALIZED_KEY);
+}
+
+/**
+ * Mark the current session as initialized
+ * Called after initial content is loaded to prevent reloading sample on refresh
+ */
+export function markSessionInitialized() {
+    sessionStorage.setItem(SESSION_INITIALIZED_KEY, 'true');
+}
