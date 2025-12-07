@@ -407,6 +407,15 @@ test.describe('PDF Page Break Functionality', () => {
       });
       expect(hasRule).toBe(true);
     });
+
+    test('tables should have page-break-inside: avoid in print styles', async ({ page }) => {
+      const hasRule = await page.evaluate(browserFindPrintCssRule, {
+        selectorContains: 'table',
+        styleProperty: 'pageBreakInside',
+        styleValue: 'avoid'
+      });
+      expect(hasRule).toBe(true);
+    });
   });
 
   test.describe('Page Break Utility Classes', () => {
@@ -442,7 +451,7 @@ test.describe('PDF Page Break Functionality', () => {
         return wrapper?.querySelectorAll('hr').length || 0;
       });
 
-      expect(hrCount).toBeGreaterThanOrEqual(1);
+      expect(hrCount).toBe(1);
     });
 
     test('number of hr elements should match number of --- in content', async ({ page }) => {
@@ -459,6 +468,18 @@ test.describe('PDF Page Break Functionality', () => {
       });
 
       expect(hrCount).toBe(expectedHrCount);
+    });
+
+    test('consecutive --- separators should create multiple page breaks', async ({ page }) => {
+      await setCodeMirrorContent(page, '# Start\n\n---\n\n---\n\n---\n\n# End');
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+      const hrCount = await page.evaluate(() => {
+        const wrapper = document.getElementById('wrapper');
+        return wrapper?.querySelectorAll('hr').length || 0;
+      });
+
+      expect(hrCount).toBe(3);
     });
   });
 
@@ -524,6 +545,21 @@ test.describe('PDF Page Break Functionality', () => {
       expect(exportedContent).toContain('page-break-before');
       expect(exportedContent).toContain('page-break-after');
       expect(exportedContent).toContain('page-break-avoid');
+    });
+
+    test('utility classes should apply correct styles in print', async ({ page }) => {
+      await setCodeMirrorContent(page, '<div class="page-break-before">Content</div>');
+      await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+      await page.emulateMedia({ media: 'print' });
+
+      const hasPageBreak = await page.evaluate(() => {
+        const div = document.querySelector('#wrapper .page-break-before');
+        if (!div) return false;
+        const styles = globalThis.getComputedStyle(div);
+        return styles.pageBreakBefore === 'always' || styles.breakBefore === 'page';
+      });
+
+      expect(hasPageBreak).toBe(true);
     });
   });
 });

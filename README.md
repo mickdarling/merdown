@@ -139,6 +139,15 @@ This table won't be split across pages:
 - Tables, code blocks, and blockquotes avoid being split across pages when possible
 - Use the "Print (New Tab)" button for more control over PDF settings
 
+### Browser Compatibility
+
+PDF page breaks work best in:
+- **Chrome/Edge** (recommended) - Full support for all page break features
+- **Firefox** - Good support, may have minor differences in break positioning
+- **Safari** - Good support for basic page breaks
+
+Note: The `---` separator appears as a horizontal line in the browser preview but becomes an invisible page break in PDF exports.
+
 ## Mermaid Diagram Examples
 
 ### Flowchart

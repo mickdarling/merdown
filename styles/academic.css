@@ -206,7 +206,11 @@
 /* Page breaks for print */
 @media print {
     #wrapper h1,
-    #wrapper h2 {
+    #wrapper h2,
+    #wrapper h3,
+    #wrapper h4,
+    #wrapper h5,
+    #wrapper h6 {
         page-break-after: avoid;
         break-after: avoid;
     }
@@ -226,6 +230,7 @@
         visibility: hidden;
         height: 0;
         margin: 0;
+        border: none;
     }
 
     /* Utility classes for page breaks */
