@@ -109,6 +109,15 @@ function setupKeyboardShortcuts() {
 
 /**
  * Handle URL parameters to load content or apply styles
+ *
+ * URL parameters (?url=, ?md=) intentionally override the "fresh visit = sample document"
+ * behavior. When a user shares a link with content parameters, they expect that content
+ * to load regardless of whether it's a fresh visit or not.
+ *
+ * Priority order:
+ * 1. ?url= parameter - loads from remote URL
+ * 2. ?md= parameter - loads inline markdown
+ * 3. No parameters - uses fresh visit detection (sample or localStorage)
  */
 function handleURLParameters() {
     const urlParams = new URLSearchParams(globalThis.location.search);
@@ -121,7 +130,10 @@ function handleURLParameters() {
         const { hadToken } = stripGitHubToken(remoteURL);
 
         if (hadToken) {
-            // Show modal to let user choose how to handle private repo content
+            // Show modal to let user choose how to handle private repo content.
+            // Note: Session is marked immediately rather than after modal interaction
+            // because the user explicitly navigated here with a URL parameter - this
+            // is intentional content loading, not a "fresh visit" scenario.
             showPrivateUrlModal(remoteURL);
             // Modal handlers will load the content and update URL
         } else {
@@ -144,7 +156,7 @@ function handleURLParameters() {
                 loadSavedContentOrSample();
             }
         } else {
-            // No URL parameters - load saved content or sample
+            // No URL parameters - use fresh visit detection to decide content
             loadSavedContentOrSample();
         }
     }

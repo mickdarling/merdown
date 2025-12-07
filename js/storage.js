@@ -185,6 +185,12 @@ const SESSION_INITIALIZED_KEY = 'merview-session-initialized';
  * the sample document, even if another tab has edited content. This is intentional
  * for privacy and predictable UX - see issue #137 for details.
  *
+ * Browser compatibility: sessionStorage is supported in all modern browsers
+ * (IE8+, all evergreen browsers). If sessionStorage is unavailable (e.g., private
+ * browsing in some older browsers, or storage disabled), the getItem call returns
+ * null and isFreshVisit() returns true, defaulting to showing the sample document.
+ * This is safe fallback behavior.
+ *
  * @returns {boolean} True if this is a fresh visit
  */
 export function isFreshVisit() {
