@@ -7,6 +7,7 @@ import { state } from './state.js';
 import { getElements } from './dom.js';
 import { saveMarkdownContent } from './storage.js';
 import { escapeHtml, slugify } from './utils.js';
+import { validateCode } from './validation.js';
 
 // Initialize Mermaid with security settings (theme set dynamically)
 mermaid.initialize({
@@ -160,6 +161,12 @@ export async function renderMarkdown() {
 
         // Save to localStorage
         saveMarkdownContent(markdown);
+
+        // Trigger validation if lint panel is enabled (debounced)
+        // This ensures the lint panel updates in real-time as content changes
+        if (state.lintEnabled) {
+            scheduleValidation();
+        }
     } catch (error) {
         console.error('Critical error in renderMarkdown:', error);
         const { showStatus } = await import('./utils.js');
@@ -175,4 +182,16 @@ export async function renderMarkdown() {
 export function scheduleRender() {
     clearTimeout(state.renderTimeout);
     state.renderTimeout = setTimeout(renderMarkdown, 300);
+}
+
+/**
+ * Debounced validation function
+ * Schedules code validation after 500ms of inactivity to avoid excessive
+ * validation during typing. Separate from render debounce for independent timing.
+ */
+function scheduleValidation() {
+    clearTimeout(state.validationTimeout);
+    state.validationTimeout = setTimeout(() => {
+        validateCode();
+    }, 500);
 }

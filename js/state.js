@@ -20,6 +20,7 @@ export const state = {
     // Rendering
     mermaidCounter: 0,                   // Counter for generating unique Mermaid diagram IDs
     renderTimeout: null,                 // Debounce timeout handle for render scheduling
+    validationTimeout: null,             // Debounce timeout handle for validation scheduling
     mermaidTheme: 'default',             // Current Mermaid theme ('default' for light, 'dark' for dark backgrounds)
 
     // Lint panel state

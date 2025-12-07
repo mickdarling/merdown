@@ -35,6 +35,9 @@ function clearEditor() {
  * Expose functions to globalThis for onclick handlers in HTML
  */
 function exposeGlobalFunctions() {
+    // State (for testing and debugging)
+    globalThis.state = state;
+
     // Editor functions
     globalThis.getEditorContent = getEditorContent;
     globalThis.setEditorContent = setEditorContent;
