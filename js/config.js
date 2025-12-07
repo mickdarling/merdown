@@ -63,6 +63,23 @@ export const editorThemes = [
 ];
 
 // ==========================================
+// MERMAID DIAGRAM THEMES
+// ==========================================
+
+/**
+ * Available Mermaid diagram themes.
+ * 'Auto' mode automatically switches between 'default' (light) and 'dark' based on preview background.
+ */
+export const mermaidThemes = [
+    { name: 'Auto', value: 'auto', default: true, description: 'Auto-detect based on preview background' },
+    { name: 'Default', value: 'default', description: 'Blue/gray tones (light)' },
+    { name: 'Forest', value: 'forest', description: 'Green tones' },
+    { name: 'Dark', value: 'dark', description: 'Dark background' },
+    { name: 'Neutral', value: 'neutral', description: 'Grayscale' },
+    { name: 'Base', value: 'base', description: 'Minimal, customizable' }
+];
+
+// ==========================================
 // PREVIEW STYLES
 // ==========================================
 

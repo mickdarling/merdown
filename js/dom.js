@@ -21,6 +21,7 @@ export function getElements() {
       styleSelector: document.getElementById('styleSelector'),
       syntaxThemeSelector: document.getElementById('syntaxThemeSelector'),
       editorThemeSelector: document.getElementById('editorThemeSelector'),
+      mermaidThemeSelector: document.getElementById('mermaidThemeSelector'),
 
       // Lint panel elements
       lintPanel: document.getElementById('lintPanel'),

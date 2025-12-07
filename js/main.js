@@ -7,7 +7,7 @@
 import { state } from './state.js';
 import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js';
 import { renderMarkdown, scheduleRender } from './renderer.js';
-import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initPreviewDragDrop, changeStyle, changeSyntaxTheme, changeEditorTheme, applyPreviewBackground } from './themes.js';
+import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground } from './themes.js';
 import { loadMarkdownFromURL, loadSample, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, exportToPDFDirect, initFileInputHandlers } from './file-ops.js';
 import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUrl, disconnectGitHub } from './gist.js';
 import { toggleLintPanel, validateCode } from './validation.js';
@@ -80,6 +80,7 @@ function exposeGlobalFunctions() {
     globalThis.changeStyle = changeStyle;
     globalThis.changeSyntaxTheme = changeSyntaxTheme;
     globalThis.changeEditorTheme = changeEditorTheme;
+    globalThis.changeMermaidTheme = changeMermaidTheme;
     globalThis.applyPreviewBackground = applyPreviewBackground;
 }
 
@@ -224,6 +225,7 @@ function initializeApp() {
     initStyleSelector();
     initSyntaxThemeSelector();
     initEditorThemeSelector();
+    initMermaidThemeSelector();
 
     // Initialize preview drag-and-drop for CSS files
     initPreviewDragDrop();
