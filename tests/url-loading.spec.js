@@ -331,7 +331,7 @@ test.describe('URL Loading', () => {
     });
 
     test('should successfully load files with text/plain Content-Type', async ({ page }) => {
-      // GitHub raw files typically serve text/plain
+      // GitHub raw files typically serve text/plain - integration test
       const testUrl = 'https://raw.githubusercontent.com/mickdarling/merview/main/README.md';
 
       await page.goto(`/?url=${encodeURIComponent(testUrl)}`);
@@ -346,79 +346,63 @@ test.describe('URL Loading', () => {
       expect(statusText).toContain('Loaded');
     });
 
-    test('Content-Type validation should allow text/* types', async ({ page }) => {
-      // Test the validation logic directly
+    test('Content-Type validation logic should correctly categorize MIME types', async ({ page }) => {
+      // Consolidated test for Content-Type validation logic
+      // Tests allowed types, blocked types, and edge cases in a single test
+      // to reduce code duplication while maintaining comprehensive coverage
       const result = await page.evaluate(() => {
-        // Simulate what isValidMarkdownContentType does
-        const testTypes = [
-          { type: 'text/plain', expected: true },
-          { type: 'text/markdown', expected: true },
-          { type: 'text/x-markdown', expected: true },
-          { type: 'text/plain; charset=utf-8', expected: true }
-        ];
-
-        return testTypes.map(({ type, expected }) => {
-          const mimeType = type.split(';')[0].trim().toLowerCase();
-          const isText = mimeType.startsWith('text/');
-          const blockedTypes = ['application/javascript', 'text/javascript', 'text/html'];
-          const isBlocked = blockedTypes.includes(mimeType);
-          const actual = isText && !isBlocked;
-          return { type, expected, actual, pass: actual === expected };
-        });
-      });
-
-      result.forEach(({ type, expected, actual, pass }) => {
-        expect(pass).toBe(true);
-      });
-    });
-
-    test('Content-Type validation should allow application/octet-stream', async ({ page }) => {
-      // GitHub sometimes serves raw files as application/octet-stream
-      const result = await page.evaluate(() => {
-        const mimeType = 'application/octet-stream';
-        return mimeType === 'application/octet-stream';
-      });
-
-      expect(result).toBe(true);
-    });
-
-    test('Content-Type validation should block JavaScript types', async ({ page }) => {
-      const result = await page.evaluate(() => {
-        const dangerousTypes = [
+        // Define the validation logic once (mirrors isValidMarkdownContentType)
+        const blockedTypes = [
           'application/javascript',
           'text/javascript',
+          'text/html',
           'application/x-javascript'
         ];
 
-        return dangerousTypes.map(type => {
-          const blockedTypes = ['application/javascript', 'text/javascript', 'text/html', 'application/x-javascript'];
-          return { type, blocked: blockedTypes.includes(type) };
+        function validateContentType(contentType) {
+          if (!contentType) return true; // Missing = allowed
+          const mimeType = contentType.split(';')[0].trim().toLowerCase();
+          if (blockedTypes.includes(mimeType)) return false;
+          if (mimeType.startsWith('text/')) return true;
+          if (mimeType === 'application/octet-stream') return true;
+          return false;
+        }
+
+        // Test cases: { input, expectedAllowed, description }
+        const testCases = [
+          // Allowed: text/* types
+          { input: 'text/plain', expected: true, desc: 'text/plain' },
+          { input: 'text/markdown', expected: true, desc: 'text/markdown' },
+          { input: 'text/x-markdown', expected: true, desc: 'text/x-markdown' },
+          { input: 'text/plain; charset=utf-8', expected: true, desc: 'with charset' },
+          // Allowed: application/octet-stream (GitHub default)
+          { input: 'application/octet-stream', expected: true, desc: 'octet-stream' },
+          // Allowed: missing Content-Type
+          { input: null, expected: true, desc: 'null/missing' },
+          { input: undefined, expected: true, desc: 'undefined' },
+          // Blocked: JavaScript types
+          { input: 'application/javascript', expected: false, desc: 'application/javascript' },
+          { input: 'text/javascript', expected: false, desc: 'text/javascript' },
+          { input: 'application/x-javascript', expected: false, desc: 'application/x-javascript' },
+          // Blocked: HTML (script injection risk)
+          { input: 'text/html', expected: false, desc: 'text/html' },
+          // Blocked: Other binary/unknown types
+          { input: 'application/json', expected: false, desc: 'application/json' },
+          { input: 'image/png', expected: false, desc: 'image/png' }
+        ];
+
+        return testCases.map(({ input, expected, desc }) => {
+          const actual = validateContentType(input);
+          return { desc, input, expected, actual, pass: actual === expected };
         });
       });
 
-      result.forEach(({ type, blocked }) => {
-        expect(blocked).toBe(true);
-      });
-    });
-
-    test('Content-Type validation should block HTML', async ({ page }) => {
-      const result = await page.evaluate(() => {
-        const blockedTypes = ['application/javascript', 'text/javascript', 'text/html', 'application/x-javascript'];
-        return blockedTypes.includes('text/html');
-      });
-
-      expect(result).toBe(true);
-    });
-
-    test('Content-Type validation should handle missing Content-Type header', async ({ page }) => {
-      // Missing Content-Type should be allowed (some servers don't send it)
-      const result = await page.evaluate(() => {
-        // Simulate null Content-Type
-        const contentType = null;
-        return contentType === null; // We allow null/missing Content-Type
-      });
-
-      expect(result).toBe(true);
+      // Verify all test cases pass
+      const failures = result.filter(r => !r.pass);
+      if (failures.length > 0) {
+        console.log('Failures:', failures);
+      }
+      expect(failures).toHaveLength(0);
     });
   });
 
