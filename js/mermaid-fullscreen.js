@@ -7,6 +7,16 @@
 
 import { state } from './state.js';
 
+// Fullscreen overlay background colors
+// Using 0.98 opacity (not 1.0) to allow subtle content hints behind the overlay
+// while still providing enough contrast for diagram readability
+const FULLSCREEN_BG_DARK = 'rgba(30, 30, 30, 0.98)';
+const FULLSCREEN_BG_LIGHT = 'rgba(255, 255, 255, 0.98)';
+
+// Mermaid themes that require a dark fullscreen background for readability
+// Currently only 'dark' theme has light-colored diagram elements that need dark background
+const DARK_MERMAID_THEMES = new Set(['dark']);
+
 /**
  * Open a Mermaid diagram in fullscreen mode with zoom/pan controls
  * @param {string} mermaidId - The ID of the mermaid element to expand
@@ -22,10 +32,10 @@ export function expandMermaid(mermaidId) {
     const svgContent = mermaidElement.innerHTML;
 
     // Determine appropriate background based on current Mermaid theme
-    // Dark theme needs dark background for readability
-    const bgColor = state.mermaidTheme === 'dark'
-        ? 'rgba(30, 30, 30, 0.98)'
-        : 'rgba(255, 255, 255, 0.98)';
+    // Dark themes have light-colored diagram elements that need dark background for readability
+    const bgColor = DARK_MERMAID_THEMES.has(state.mermaidTheme)
+        ? FULLSCREEN_BG_DARK
+        : FULLSCREEN_BG_LIGHT;
 
     // Create fullscreen overlay
     // Note: Using data attributes instead of inline onclick for consistency and future-proofing
