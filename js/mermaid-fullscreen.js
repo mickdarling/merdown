@@ -23,9 +23,9 @@ export function expandMermaid(mermaidId) {
 
     // Determine appropriate background based on current Mermaid theme
     // Dark theme needs dark background for readability
-    const isDarkTheme = state.mermaidTheme === 'dark';
-    const bgColor = isDarkTheme ? 'rgba(30, 30, 30, 0.98)' : 'rgba(255, 255, 255, 0.98)';
-    const closeBtnColor = isDarkTheme ? '#e74c3c' : '#e74c3c'; // Same red works for both
+    const bgColor = state.mermaidTheme === 'dark'
+        ? 'rgba(30, 30, 30, 0.98)'
+        : 'rgba(255, 255, 255, 0.98)';
 
     // Create fullscreen overlay
     // Note: Using data attributes instead of inline onclick for consistency and future-proofing

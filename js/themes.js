@@ -445,9 +445,7 @@ async function applyCSSCore(cssText) {
     applySyntaxOverride();
 
     // Re-render markdown to update Mermaid diagrams with new CSS
-    if (state.renderMarkdown) {
-        await state.renderMarkdown();
-    }
+    scheduleRender();
 }
 
 /**
@@ -491,9 +489,7 @@ async function handleSpecialStyleSource(style) {
         // Reset Mermaid to default (light) theme
         updateMermaidTheme(false);
         showStatus('CSS removed');
-        if (state.renderMarkdown) {
-            await state.renderMarkdown();
-        }
+        scheduleRender();
         return { handled: true, success: true };
     }
     if (style.source === 'file') {
@@ -798,9 +794,7 @@ async function changeSyntaxTheme(themeName) {
     if (!themeName) return;
     await loadSyntaxTheme(themeName);
     // Re-render to apply new syntax theme
-    if (state.renderMarkdown) {
-        await state.renderMarkdown();
-    }
+    scheduleRender();
 }
 
 /**
@@ -918,7 +912,6 @@ async function loadMermaidTheme(themeValue) {
             const { preview } = getElements();
             if (preview) {
                 const bgColor = globalThis.getComputedStyle(preview).backgroundColor;
-                console.log('[Mermaid Auto] Detecting background:', bgColor, 'isDark:', isDarkColor(bgColor));
                 updateMermaidTheme(isDarkColor(bgColor));
             }
         } else {
