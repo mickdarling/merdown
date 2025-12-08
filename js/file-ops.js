@@ -490,306 +490,161 @@ ${wrapper.innerHTML}
  * Loads a comprehensive demo document showcasing all features
  */
 export function loadSample() {
-    const sample = `# Comprehensive Markdown + Mermaid Feature Demo
+    const sample = `# Welcome to Merview
 
-Welcome to the **Merview** demonstration document! This file showcases all the features including syntax highlighting, Mermaid diagrams, tables, and various formatting options.
+A client-side Markdown editor with first-class Mermaid diagram support.
 
-## Table of Contents
+\`\`\`mermaid
+graph LR
+    subgraph Merview Documentation
+        A[Welcome<br/>You Are Here]
+        B[About]
+        C[Themes]
+        D[Security]
+        E[Contributing]
+        F[Sponsor]
+    end
 
-1. [Text Formatting](#text-formatting)
-2. [Lists](#lists)
-3. [Code Blocks](#code-blocks)
-4. [Tables](#tables)
-5. [Mermaid Diagrams](#mermaid-diagrams)
-6. [Blockquotes](#blockquotes)
+    A --- B
+    A --- C
+    A --- D
+    A --- E
+    A --- F
 
----
-
-## Text Formatting
-
-You can use **bold text**, *italic text*, ***bold and italic***, ~~strikethrough~~, and \`inline code\`.
-
-Here's a paragraph with some [links to external resources](https://github.com). Links are automatically styled according to your selected theme.
-
-### Subheadings Work Too
-
-And they render beautifully with the custom styles applied!
-
----
-
-## Lists
-
-### Unordered Lists
-
-- First item
-- Second item
-  - Nested item 1
-  - Nested item 2
-- Third item
-- Fourth item with **bold** and *italic*
-
-### Ordered Lists
-
-1. Step one: Install the renderer
-2. Step two: Open the HTML file
-3. Step three: Start writing Markdown
-   1. Sub-step A
-   2. Sub-step B
-4. Step four: Export to PDF
-
-### Task Lists
-
-- [x] Completed task
-- [x] Another completed task
-- [ ] Pending task
-- [ ] Another pending task
+    click B "https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/about.md" "About Merview"
+    click C "https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/themes.md" "Theme Guide"
+    click D "https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/security.md" "Security"
+    click E "https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/contributing.md" "Contributing"
+    click F "https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/sponsor.md" "Support the Project"
+\`\`\`
 
 ---
 
-## Code Blocks
+## Quick Links
 
-### JavaScript (labeled)
+- [About Merview](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/about.md) - Features, technology, and how it works
+- [Theme Guide](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/themes.md) - 37 document styles and customization
+- [Security](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/security.md) - Privacy-first design and protections
+- [Contributing](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/contributing.md) - How to help improve Merview
+- [Support the Project](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/sponsor.md) - Sponsor development
+
+---
+
+## Getting Started
+
+### 1. Write Markdown
+
+Type in the left pane. The preview updates in real-time on the right.
+
+### 2. Add Mermaid Diagrams
+
+Use fenced code blocks with \`mermaid\` as the language:
+
+\`\`\`mermaid
+sequenceDiagram
+    You->>Merview: Write Markdown
+    Merview->>You: See it rendered instantly
+\`\`\`
+
+### 3. Choose Your Style
+
+Use the **Style** dropdown to pick from 37 professional themes.
+
+### 4. Export
+
+Click **Print/PDF** to save your document.
+
+---
+
+## Feature Showcase
+
+### Code Syntax Highlighting
+
+190+ languages supported with beautiful themes:
 
 \`\`\`javascript
-function fibonacci(n) {
-    if (n <= 1) return n;
-    return fibonacci(n - 1) + fibonacci(n - 2);
-}
-
-// Calculate the 10th Fibonacci number
-const result = fibonacci(10);
-console.log(\`Fibonacci(10) = \${result}\`);
-
-// Arrow function example
+// JavaScript with syntax highlighting
 const greet = (name) => \`Hello, \${name}!\`;
+console.log(greet('World'));
 \`\`\`
-
-### Python (labeled)
 
 \`\`\`python
-def quick_sort(arr):
-    """Quick sort algorithm implementation"""
-    if len(arr) <= 1:
-        return arr
-
-    pivot = arr[len(arr) // 2]
-    left = [x for x in arr if x < pivot]
-    middle = [x for x in arr if x == pivot]
-    right = [x for x in arr if x > pivot]
-
-    return quick_sort(left) + middle + quick_sort(right)
-
-# Example usage
-numbers = [3, 6, 8, 10, 1, 2, 1]
-sorted_numbers = quick_sort(numbers)
-print(f"Sorted: {sorted_numbers}")
+# Python example
+def fibonacci(n):
+    if n <= 1:
+        return n
+    return fibonacci(n-1) + fibonacci(n-2)
 \`\`\`
 
-### YAML Configuration (labeled)
+### Tables
 
-\`\`\`yaml
-# Application Configuration
-application:
-  name: "Markdown Renderer"
-  version: "1.0.0"
-  author:
-    name: "Development Team"
-    email: "team@example.com"
+| Feature | Status |
+|---------|--------|
+| Markdown Rendering | ✅ |
+| Mermaid Diagrams | ✅ |
+| Syntax Highlighting | ✅ |
+| PDF Export | ✅ |
+| 37 Themes | ✅ |
 
-server:
-  host: "localhost"
-  port: 8080
-  ssl:
-    enabled: true
-    certificate: "/path/to/cert.pem"
-
-features:
-  - syntax-highlighting
-  - mermaid-diagrams
-  - pdf-export
-  - custom-themes
-
-themes:
-  default: "Academia"
-  available:
-    - name: "GitHub"
-      type: "technical"
-    - name: "Torpedo"
-      type: "creative"
-\`\`\`
-
-### JSON Data (labeled)
-
-\`\`\`json
-{
-  "project": {
-    "name": "Merview",
-    "version": "1.0.0",
-    "description": "A beautiful Markdown renderer with Mermaid support",
-    "features": [
-      "Real-time rendering",
-      "Syntax highlighting",
-      "37 professional themes",
-      "PDF export"
-    ],
-    "config": {
-      "autoSave": true,
-      "theme": "Academia",
-      "lintEnabled": false
-    },
-    "stats": {
-      "lines": 1247,
-      "size": "45KB",
-      "lastModified": "2025-01-21T11:55:00Z"
-    }
-  }
-}
-\`\`\`
-
-### Code Without Language Label (unlabeled)
-
-\`\`\`
-This is a code block without a language label.
-It will use auto-detection or render as plain text.
-
-function example() {
-    return "No syntax highlighting specified";
-}
-
-The renderer will still format it nicely!
-\`\`\`
-
----
-
-## Tables
-
-### Basic Table
-
-| Feature | Status | Priority |
-|---------|--------|----------|
-| Markdown Rendering | ✅ Complete | High |
-| Mermaid Diagrams | ✅ Complete | High |
-| Syntax Highlighting | ✅ Complete | High |
-| PDF Export | ✅ Complete | Medium |
-| Code Validation | ✅ Complete | Low |
-
-### Complex Table with Formatting
-
-| Language | Extension | Highlighting | Validation | Notes |
-|----------|-----------|--------------|------------|-------|
-| **JavaScript** | \`.js\` | ✅ Yes | ✅ Syntax Check | Most popular |
-| **Python** | \`.py\` | ✅ Yes | ❌ No | Coming soon |
-| **YAML** | \`.yaml\`, \`.yml\` | ✅ Yes | ❌ No | Config files |
-| **JSON** | \`.json\` | ✅ Yes | ✅ Parse Check | Data format |
-
----
-
-## Mermaid Diagrams
-
-### Flowchart
+### Flowcharts
 
 \`\`\`mermaid
 graph TD
-    A[Start Application] --> B{User Action?}
-    B -->|Load File| C[Parse Markdown]
-    B -->|Type Text| D[Real-time Render]
-    B -->|Export PDF| E[Generate PDF]
-    C --> F[Apply Syntax Highlighting]
-    D --> F
-    F --> G[Render Mermaid]
-    G --> H[Apply Custom Style]
-    H --> I[Display Preview]
-    E --> J[Open Print Dialog]
-    J --> K[Save PDF]
-    K --> L[End]
-    I --> B
+    A[Write Markdown] --> B[Add Diagrams]
+    B --> C[Style Document]
+    C --> D[Export PDF]
 \`\`\`
 
-### Sequence Diagram
+### Sequence Diagrams
 
 \`\`\`mermaid
 sequenceDiagram
     participant User
     participant Editor
-    participant Renderer
-    participant Mermaid
     participant Preview
 
-    User->>Editor: Type Markdown
-    Editor->>Renderer: Request Render
-    Renderer->>Renderer: Parse Markdown
-    Renderer->>Mermaid: Render Diagrams
-    Mermaid-->>Renderer: SVG Output
-    Renderer->>Preview: Update HTML
-    Preview-->>User: Display Result
-
-    User->>Editor: Drop File
-    Editor->>Renderer: Load Content
-    Renderer->>Preview: Render Complete
-    Preview-->>User: Show Document
+    User->>Editor: Type content
+    Editor->>Preview: Render
+    Preview-->>User: See results
 \`\`\`
 
-### Class Diagram
+### Class Diagrams
 
 \`\`\`mermaid
 classDiagram
-    class MarkdownRenderer {
+    class Document {
         +String content
-        +Style currentStyle
-        +Boolean lintEnabled
         +render()
-        +loadStyle(name)
-        +exportPDF()
+        +export()
     }
-
-    class CodeHighlighter {
-        +highlight(code, language)
-        +autoDetect(code)
-        +getLanguage(name)
+    class Theme {
+        +String name
+        +apply()
     }
-
-    class MermaidEngine {
-        +render(element, content)
-        +initialize(config)
-    }
-
-    class StyleManager {
-        +loadFromGitHub(url)
-        +scopeCSS(css)
-        +stripPrintMedia(css)
-    }
-
-    MarkdownRenderer --> CodeHighlighter
-    MarkdownRenderer --> MermaidEngine
-    MarkdownRenderer --> StyleManager
+    Document --> Theme
 \`\`\`
 
 ---
 
-## Blockquotes
+## Tips
 
-> **Note:** This is a blockquote. It's perfect for highlighting important information or quotes.
-
-> You can have multiple paragraphs in a blockquote.
->
-> Like this one! The styling is applied based on your selected theme.
-
----
-
-## Tips for Using This Renderer
-
-1. **Choose Your Style**: Select from 37 professional themes in the dropdown
-2. **Real-time Preview**: The preview updates as you type
-3. **Drag & Drop**: Drop any \`.md\` file to load it instantly
-4. **Resize Panels**: Drag the handle between editor and preview to adjust sizes
-5. **Export Options**:
-   - Use **Print/PDF** for in-place printing
-   - Use **Print (New Tab)** to open in a new window first
-6. **Code Validation**: Toggle the validation panel to check your code blocks
+1. **Drag & Drop** - Drop any \`.md\` file to load it
+2. **Resize Panes** - Drag the divider between editor and preview
+3. **Keyboard Shortcuts** - Ctrl+S to save, Ctrl+P to print
+4. **Auto-save** - Your work is saved to browser storage
 
 ---
 
-**Happy documenting!** 📝`;
+## Open Source
+
+Merview is free and open source under the AGPL-3.0 license.
+
+- **GitHub**: [github.com/mickdarling/merview](https://github.com/mickdarling/merview)
+- **Issues**: [Report a bug or request a feature](https://github.com/mickdarling/merview/issues)
+
+---
+
+**Start writing!** Clear this document and create something amazing.`;
 
     const { cmEditor } = state;
     if (cmEditor) {

@@ -17,18 +17,17 @@ const {
  * Expected content elements in the sample markdown
  */
 const EXPECTED_CONTENT = {
-  mainHeading: '# Comprehensive Markdown + Mermaid Feature Demo',
+  mainHeading: '# Welcome to Merview',
   subHeadings: [
-    '## Text Formatting',
-    '## Lists',
-    '## Code Blocks',
-    '## Tables',
-    '## Mermaid Diagrams',
-    '## Blockquotes'
+    '## Quick Links',
+    '## Getting Started',
+    '## Feature Showcase',
+    '## Tips',
+    '## Open Source'
   ],
-  codeBlocks: ['```javascript', '```python', '```yaml', '```json'],
-  mermaidElements: ['```mermaid', 'graph TD', 'sequenceDiagram', 'classDiagram'],
-  tableMarkers: ['| Feature | Status | Priority |', '|---------|--------|----------|']
+  codeBlocks: ['```javascript', '```python'],
+  mermaidElements: ['```mermaid', 'graph LR', 'sequenceDiagram', 'classDiagram'],
+  tableMarkers: ['| Feature | Status |', '|---------|--------|']
 };
 
 /**
@@ -200,13 +199,13 @@ test.describe('Load Sample Functionality', () => {
 
       const [hasMainHeading, hasSubHeadings] = await Promise.all([
         page.$eval('#wrapper', el =>
-          el.textContent.includes('Comprehensive Markdown + Mermaid Feature Demo')
+          el.textContent.includes('Welcome to Merview')
         ),
         page.$eval('#wrapper', el => {
           const text = el.textContent;
-          return text.includes('Text Formatting') &&
-                 text.includes('Lists') &&
-                 text.includes('Code Blocks');
+          return text.includes('Quick Links') &&
+                 text.includes('Getting Started') &&
+                 text.includes('Feature Showcase');
         })
       ]);
 
@@ -266,7 +265,7 @@ test.describe('Load Sample Functionality', () => {
 
       const newContent = await getCodeMirrorContent(page);
       expect(newContent).not.toContain('Initial Content');
-      expect(newContent).toContain('Comprehensive Markdown + Mermaid Feature Demo');
+      expect(newContent).toContain('Welcome to Merview');
     });
 
     test('loading sample multiple times should work consistently', async ({ page }) => {
@@ -324,7 +323,7 @@ test.describe('Load Sample Functionality', () => {
       await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
       const content = await getCodeMirrorContent(page);
-      expect(content).toContain('Comprehensive Markdown + Mermaid Feature Demo');
+      expect(content).toContain('Welcome to Merview');
       expect(content).not.toContain('My Document');
     });
 

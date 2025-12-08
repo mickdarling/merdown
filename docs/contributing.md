@@ -1,0 +1,192 @@
+# Contributing to Merview
+
+[← Back to Welcome](https://merview.com)
+
+---
+
+Thank you for your interest in contributing to Merview! This document will help you get started.
+
+```mermaid
+graph TD
+    A[Want to Contribute?] --> B{What type?}
+    B -->|Bug Report| C[Open an Issue]
+    B -->|Feature Idea| D[Start a Discussion]
+    B -->|Code Change| E[Fork & PR]
+    B -->|Documentation| F[Edit Docs]
+
+    C --> G[Describe the Problem]
+    D --> H[Explain Your Idea]
+    E --> I[Follow PR Guidelines]
+    F --> J[Improve Content]
+```
+
+---
+
+## Ways to Contribute
+
+### Report Bugs
+
+Found something broken? [Open an issue](https://github.com/mickdarling/merview/issues/new?template=bug_report.md) with:
+
+- **What happened** - Clear description of the bug
+- **What you expected** - How it should have worked
+- **Steps to reproduce** - How we can see the bug
+- **Environment** - Browser, OS, etc.
+
+### Suggest Features
+
+Have an idea? [Open a feature request](https://github.com/mickdarling/merview/issues/new?template=feature_request.md) with:
+
+- **The problem** - What need does this address?
+- **Your solution** - How would it work?
+- **Alternatives** - Other approaches you considered
+
+### Submit Code
+
+Ready to code? Here's the process:
+
+```mermaid
+sequenceDiagram
+    participant You
+    participant Fork
+    participant PR
+    participant Review
+    participant Main
+
+    You->>Fork: Fork the repository
+    You->>Fork: Create feature branch
+    You->>Fork: Make your changes
+    You->>Fork: Run tests locally
+    Fork->>PR: Open Pull Request
+    PR->>Review: Automated checks run
+    Review->>Review: Maintainer reviews
+    Review-->>You: Feedback (if needed)
+    Review->>Main: Merge!
+```
+
+---
+
+## Development Setup
+
+### Prerequisites
+
+- Node.js 18+ (for running tests)
+- A modern web browser
+- Git
+
+### Getting Started
+
+```bash
+# Clone your fork
+git clone https://github.com/YOUR_USERNAME/merview.git
+cd merview
+
+# Install dependencies
+npm install
+
+# Run tests
+npm test
+
+# Start local server (optional)
+npx http-server -p 8080
+```
+
+### Project Structure
+
+```
+merview/
+├── index.html          # Main application
+├── js/                 # JavaScript modules
+│   ├── main.js         # Application entry point
+│   ├── file-ops.js     # File operations
+│   ├── render.js       # Markdown rendering
+│   └── ...
+├── tests/              # Playwright tests
+├── docs/               # Documentation
+└── worker/             # Cloudflare Worker (proxy)
+```
+
+---
+
+## Code Guidelines
+
+### JavaScript
+
+- Use ES6+ features (modules, arrow functions, etc.)
+- No build step required - vanilla JS only
+- Follow existing code style
+- Add JSDoc comments for public functions
+
+### Testing
+
+- Write Playwright tests for new features
+- Ensure existing tests pass: `npm test`
+- Test across browsers when possible
+
+### Commits
+
+We use conventional commit messages:
+
+```
+feat: Add new diagram type support
+fix: Correct theme loading issue
+docs: Update contributing guide
+test: Add edge case coverage
+chore: Update dependencies
+```
+
+---
+
+## Pull Request Process
+
+1. **Create a branch** from `main`:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
+
+2. **Make your changes** with clear, focused commits
+
+3. **Run tests** to ensure nothing broke:
+   ```bash
+   npm test
+   ```
+
+4. **Push** to your fork:
+   ```bash
+   git push origin feature/your-feature-name
+   ```
+
+5. **Open a PR** with:
+   - Clear title describing the change
+   - Description of what and why
+   - Reference to related issues (`Fixes #123`)
+
+6. **Respond to feedback** - we may suggest changes
+
+7. **Celebrate** when it's merged! 🎉
+
+---
+
+## Code of Conduct
+
+- Be respectful and inclusive
+- Focus on constructive feedback
+- Help others learn and grow
+- Assume good intentions
+
+---
+
+## Questions?
+
+- **GitHub Issues**: [github.com/mickdarling/merview/issues](https://github.com/mickdarling/merview/issues)
+- **Discussions**: [github.com/mickdarling/merview/discussions](https://github.com/mickdarling/merview/discussions)
+
+---
+
+## Navigation
+
+- [← Back to Welcome](https://merview.com)
+- [About Merview](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/about.md)
+- [Theme Guide](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/themes.md)
+- [Security](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/security.md)
+- [Support the Project](https://merview.com/?url=https://raw.githubusercontent.com/mickdarling/merview/main/docs/sponsor.md)
