@@ -12,6 +12,10 @@ import { showStatus, isDarkColor } from './utils.js';
 import { isAllowedCSSURL, isValidBackgroundColor, normalizeGistUrl } from './security.js';
 import { updateMermaidTheme, scheduleRender } from './renderer.js';
 
+// Debug flag for Mermaid theme investigation (#168)
+// Enable via: localStorage.setItem('debug-mermaid-theme', 'true')
+const DEBUG_MERMAID_THEME = localStorage.getItem('debug-mermaid-theme') === 'true';
+
 // Local state for theme management
 let layoutToggleOption = null; // Cached reference for performance
 let fileInput = null; // Hidden file input for CSS uploads
@@ -912,6 +916,9 @@ async function loadMermaidTheme(themeValue) {
             const { preview } = getElements();
             if (preview) {
                 const bgColor = globalThis.getComputedStyle(preview).backgroundColor;
+                if (DEBUG_MERMAID_THEME) {
+                    console.log('[Mermaid Auto] Detecting background:', bgColor, 'isDark:', isDarkColor(bgColor));
+                }
                 updateMermaidTheme(isDarkColor(bgColor));
             }
         } else {
