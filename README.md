@@ -6,7 +6,11 @@
 [![Reliability Rating](https://sonarcloud.io/api/project_badges/measure?project=mickdarling_merview&metric=reliability_rating)](https://sonarcloud.io/summary/new_code?id=mickdarling_merview)
 [![Maintainability Rating](https://sonarcloud.io/api/project_badges/measure?project=mickdarling_merview&metric=sqale_rating)](https://sonarcloud.io/summary/new_code?id=mickdarling_merview)
 
+**[Try it now at merview.com](https://merview.com)** - No signup required!
+
 A client-side markdown editor with live Mermaid diagram rendering. No logins, no payments, completely free and open source.
+
+![Merview Screenshot](docs/images/merview-screenshot.png)
 
 ## Features
 
