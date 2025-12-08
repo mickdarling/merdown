@@ -15,7 +15,22 @@ const FULLSCREEN_BG_LIGHT = 'rgba(255, 255, 255, 0.98)';
 
 // Mermaid themes that require a dark fullscreen background for readability
 // Currently only 'dark' theme has light-colored diagram elements that need dark background
+// NOTE: Update this Set if Mermaid adds new dark/high-contrast themes in the future
 const DARK_MERMAID_THEMES = new Set(['dark']);
+
+/**
+ * Update fullscreen overlay background if it's currently open
+ * Called when Mermaid theme changes to keep background in sync
+ * @param {string} mermaidTheme - The new Mermaid theme value
+ */
+export function updateFullscreenBackground(mermaidTheme) {
+    const overlay = document.getElementById('mermaid-fullscreen-overlay');
+    if (overlay) {
+        overlay.style.background = DARK_MERMAID_THEMES.has(mermaidTheme)
+            ? FULLSCREEN_BG_DARK
+            : FULLSCREEN_BG_LIGHT;
+    }
+}
 
 /**
  * Open a Mermaid diagram in fullscreen mode with zoom/pan controls
