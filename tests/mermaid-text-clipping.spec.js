@@ -48,12 +48,12 @@ graph LR
         // line-height: 1 computes to the font-size value in pixels (e.g., "16px")
         // or "normal". We verify it's not an inflated value like "28.8px" from 1.8 * 16
         const numericValue = Number.parseFloat(lineHeight);
-        if (!Number.isNaN(numericValue)) {
-            // If it's a numeric pixel value, it should be close to the font-size (not inflated)
-            expect(numericValue).toBeLessThan(25); // Should not be inflated
-        } else {
+        if (Number.isNaN(numericValue)) {
             // "normal" is the browser default and is acceptable for isolated containers
             expect(lineHeight).toBe('normal');
+        } else {
+            // If it's a numeric pixel value, it should be close to the font-size (not inflated)
+            expect(numericValue).toBeLessThan(25); // Should not be inflated
         }
     });
 
@@ -95,11 +95,11 @@ graph LR
         });
 
         const numericValue = Number.parseFloat(lineHeight);
-        if (!Number.isNaN(numericValue)) {
+        if (Number.isNaN(numericValue)) {
+            expect(lineHeight).toBe('normal');
+        } else {
             // Should still be small, not inflated by Monospace's 1.8 line-height
             expect(numericValue).toBeLessThan(25);
-        } else {
-            expect(lineHeight).toBe('normal');
         }
     });
 });
