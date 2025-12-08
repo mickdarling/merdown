@@ -44,8 +44,8 @@ graph LR
 
         // line-height: 1 computes to the font-size value in pixels (e.g., "16px")
         // or "normal". We verify it's not an inflated value like "28.8px" from 1.8 * 16
-        const numericValue = parseFloat(lineHeight);
-        if (!isNaN(numericValue)) {
+        const numericValue = Number.parseFloat(lineHeight);
+        if (!Number.isNaN(numericValue)) {
             // If it's a numeric pixel value, it should be close to the font-size (not inflated)
             expect(numericValue).toBeLessThan(25); // Should not be inflated
         }
@@ -67,7 +67,7 @@ graph LR
         });
 
         // font-size: initial typically resolves to browser default (16px)
-        const numericSize = parseFloat(fontSize);
+        const numericSize = Number.parseFloat(fontSize);
         expect(numericSize).toBeGreaterThan(0);
         expect(numericSize).toBeLessThanOrEqual(20); // Should be reasonable default
     });
