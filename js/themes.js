@@ -6,7 +6,10 @@
 
 import { state } from './state.js';
 import { getElements } from './dom.js';
-import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles, mermaidThemes } from './config.js';
+import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles, mermaidThemes, ALLOWED_CSS_DOMAINS } from './config.js';
+import { showURLModal } from './components/url-modal.js';
+// Re-export initURLModalHandlers for main.js
+export { initURLModalHandlers } from './components/url-modal.js';
 import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, getMermaidTheme, saveMermaidTheme } from './storage.js';
 import { showStatus, isDarkColor } from './utils.js';
 import { isAllowedCSSURL, isValidBackgroundColor, normalizeGistUrl } from './security.js';
@@ -574,21 +577,19 @@ async function loadCSSFromFile(file) {
 }
 
 /**
- * Prompt user for URL to load CSS from (with result tracking for #108 fix)
+ * Prompt user for URL to load CSS from using accessible modal
+ * @param {string} context - Context for the modal title (e.g., "Style", "Syntax Theme")
  * @returns {Promise<boolean>} True if URL was provided and loading initiated
  */
-async function promptForURLWithResult() {
-    const url = prompt('Enter CSS file URL:\n\n' +
-        'Allowed domains (for security):\n' +
-        '• raw.githubusercontent.com\n' +
-        '• cdn.jsdelivr.net\n' +
-        '• cdnjs.cloudflare.com\n' +
-        '• gist.githubusercontent.com\n' +
-        '• unpkg.com\n\n' +
-        'Example:\nhttps://raw.githubusercontent.com/user/repo/main/style.css');
+async function promptForURLWithResult(context = 'Style') {
+    const url = await showURLModal({
+        title: `Load ${context} from URL`,
+        placeholder: 'https://raw.githubusercontent.com/user/repo/main/style.css',
+        allowedDomains: ALLOWED_CSS_DOMAINS
+    });
 
     if (!url) {
-        return false; // User cancelled or tab switch dismissed prompt
+        return false; // User cancelled
     }
 
     await loadCSSFromURL(url);
@@ -800,26 +801,55 @@ async function loadSyntaxTheme(themeName) {
  */
 async function changeSyntaxTheme(themeName) {
     if (!themeName) return;
+
+    const theme = syntaxThemes.find(t => t.name === themeName);
+    const { syntaxThemeSelector } = getElements();
+    const previousTheme = getSyntaxTheme() || 'GitHub Dark';
+
+    // Handle file picker
+    if (theme?.source === 'file') {
+        initFileInput();
+        fileInput.click();
+        // Revert dropdown to previous selection
+        if (syntaxThemeSelector) {
+            syntaxThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
+    // Handle URL loading
+    if (theme?.source === 'url') {
+        const success = await promptForURLWithResult('Syntax Theme');
+        // Revert dropdown if cancelled
+        if (!success && syntaxThemeSelector) {
+            syntaxThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
     await loadSyntaxTheme(themeName);
     // Re-render to apply new syntax theme
     scheduleRender();
 }
 
 /**
- * Initialize syntax theme selector (for preview code blocks)
+ * Initialize syntax theme selector (for preview code blocks) with optgroups
  */
 async function initSyntaxThemeSelector() {
     const { syntaxThemeSelector } = getElements();
     if (!syntaxThemeSelector) return;
 
-    syntaxThemeSelector.innerHTML = '';
-
-    syntaxThemes.forEach(theme => {
-        const option = document.createElement('option');
-        option.value = theme.name;
-        option.textContent = theme.name;
-        syntaxThemeSelector.appendChild(option);
-    });
+    populateSelectorWithOptgroups(
+        syntaxThemeSelector,
+        syntaxThemes,
+        ['Themes', 'Import'],
+        (theme) => {
+            const option = document.createElement('option');
+            option.value = theme.name;
+            option.textContent = theme.name;
+            return option;
+        }
+    );
 
     // Load saved theme or default
     const savedTheme = getSyntaxTheme();
@@ -875,24 +905,53 @@ async function loadEditorTheme(themeName) {
  */
 async function changeEditorTheme(themeName) {
     if (!themeName) return;
+
+    const theme = editorThemes.find(t => t.name === themeName);
+    const { editorThemeSelector } = getElements();
+    const previousTheme = getEditorTheme() || 'Material Darker';
+
+    // Handle file picker
+    if (theme?.source === 'file') {
+        initFileInput();
+        fileInput.click();
+        // Revert dropdown to previous selection
+        if (editorThemeSelector) {
+            editorThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
+    // Handle URL loading
+    if (theme?.source === 'url') {
+        const success = await promptForURLWithResult('Editor Theme');
+        // Revert dropdown if cancelled
+        if (!success && editorThemeSelector) {
+            editorThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
     await loadEditorTheme(themeName);
 }
 
 /**
- * Initialize editor theme selector
+ * Initialize editor theme selector with optgroups
  */
 async function initEditorThemeSelector() {
     const { editorThemeSelector } = getElements();
     if (!editorThemeSelector) return;
 
-    editorThemeSelector.innerHTML = '';
-
-    editorThemes.forEach(theme => {
-        const option = document.createElement('option');
-        option.value = theme.name;
-        option.textContent = theme.name;
-        editorThemeSelector.appendChild(option);
-    });
+    populateSelectorWithOptgroups(
+        editorThemeSelector,
+        editorThemes,
+        ['Themes', 'Import'],
+        (theme) => {
+            const option = document.createElement('option');
+            option.value = theme.name;
+            option.textContent = theme.name;
+            return option;
+        }
+    );
 
     // Load saved theme or default
     const savedTheme = getEditorTheme();
@@ -951,27 +1010,60 @@ async function loadMermaidTheme(themeValue) {
  */
 async function changeMermaidTheme(themeValue) {
     if (!themeValue) return;
+
+    // Find theme by value or name (for import actions)
+    const theme = mermaidThemes.find(t => t.value === themeValue || t.name === themeValue);
+    const { mermaidThemeSelector } = getElements();
+    const previousTheme = getMermaidTheme() || 'auto';
+
+    // Handle file picker
+    if (theme?.source === 'file') {
+        initFileInput();
+        fileInput.click();
+        // Revert dropdown to previous selection
+        if (mermaidThemeSelector) {
+            mermaidThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
+    // Handle URL loading
+    if (theme?.source === 'url') {
+        const success = await promptForURLWithResult('Mermaid Theme');
+        // Revert dropdown if cancelled
+        if (!success && mermaidThemeSelector) {
+            mermaidThemeSelector.value = previousTheme;
+        }
+        return;
+    }
+
     await loadMermaidTheme(themeValue);
     // Re-render to apply new Mermaid theme
     scheduleRender();
 }
 
 /**
- * Initialize Mermaid theme selector
+ * Initialize Mermaid theme selector with optgroups
  */
 async function initMermaidThemeSelector() {
     const { mermaidThemeSelector } = getElements();
     if (!mermaidThemeSelector) return;
 
-    mermaidThemeSelector.innerHTML = '';
-
-    mermaidThemes.forEach(theme => {
-        const option = document.createElement('option');
-        option.value = theme.value;
-        option.textContent = theme.name;
-        option.title = theme.description;
-        mermaidThemeSelector.appendChild(option);
-    });
+    populateSelectorWithOptgroups(
+        mermaidThemeSelector,
+        mermaidThemes,
+        ['Themes', 'Import'],
+        (theme) => {
+            const option = document.createElement('option');
+            // Use value for regular themes, name for import actions
+            option.value = theme.value || theme.name;
+            option.textContent = theme.name;
+            if (theme.description) {
+                option.title = theme.description;
+            }
+            return option;
+        }
+    );
 
     // Load saved theme or default
     const savedTheme = getMermaidTheme();
@@ -983,33 +1075,68 @@ async function initMermaidThemeSelector() {
 }
 
 /**
- * Initialize style selector
+ * Helper function to populate a selector with optgroups
+ * @param {HTMLSelectElement} selector - The select element to populate
+ * @param {Array} items - Array of items with group property
+ * @param {Array<string>} groupOrder - Order of groups to render
+ * @param {Function} createOption - Function to create option element from item
+ */
+function populateSelectorWithOptgroups(selector, items, groupOrder, createOption) {
+    selector.innerHTML = '';
+
+    // Group items by their group property
+    const groups = {};
+    items.forEach(item => {
+        const groupName = item.group || 'Other';
+        if (!groups[groupName]) {
+            groups[groupName] = [];
+        }
+        groups[groupName].push(item);
+    });
+
+    // Render optgroups in specified order
+    groupOrder.forEach(groupName => {
+        if (groups[groupName] && groups[groupName].length > 0) {
+            const optgroup = document.createElement('optgroup');
+            optgroup.label = groupName;
+
+            groups[groupName].forEach(item => {
+                const option = createOption(item);
+                if (option) {
+                    optgroup.appendChild(option);
+                }
+            });
+
+            selector.appendChild(optgroup);
+        }
+    });
+}
+
+/**
+ * Initialize style selector with optgroups
  */
 async function initStyleSelector() {
     const { styleSelector } = getElements();
     if (!styleSelector) return;
 
-    styleSelector.innerHTML = '';
+    populateSelectorWithOptgroups(
+        styleSelector,
+        availableStyles,
+        ['Themes', 'Options', 'Import'],
+        (style) => {
+            const option = document.createElement('option');
+            option.value = style.name;
+            option.textContent = style.name;
 
-    availableStyles.forEach(style => {
-        const option = document.createElement('option');
-        option.value = style.name;
-        option.textContent = style.name;
+            // Handle toggle with checkmark and cache reference for performance
+            if (style.source === 'toggle') {
+                option.textContent = (state.respectStyleLayout ? '✓ ' : '☐ ') + style.name;
+                layoutToggleOption = option;
+            }
 
-        // Handle separators
-        if (style.source === 'separator') {
-            option.disabled = true;
-            option.textContent = '──────────────────';
+            return option;
         }
-
-        // Handle toggle with checkmark and cache reference for performance
-        if (style.source === 'toggle') {
-            option.textContent = (state.respectStyleLayout ? '✓ ' : '☐ ') + style.name;
-            layoutToggleOption = option;
-        }
-
-        styleSelector.appendChild(option);
-    });
+    );
 
     // Load saved style or default
     const savedStyle = getMarkdownStyle();

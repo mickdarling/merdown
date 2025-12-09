@@ -37,8 +37,13 @@ test.describe('Lint Panel Real-Time Validation - Simple Integration', () => {
       }
     });
 
-    // Wait for validation to complete (renderMarkdown is immediate, then 500ms for validation + buffer)
-    await page.waitForTimeout(800);
+    // Wait for validation to complete - use waitForFunction instead of fixed timeout
+    // to handle system load variations (the validation debounce is 500ms)
+    const VALIDATION_TIMEOUT_MS = 3000;
+    await page.waitForFunction(
+      () => (globalThis.state?.codeIssues?.length || 0) > 0,
+      { timeout: VALIDATION_TIMEOUT_MS }
+    );
 
     // Verify validation ran by checking codeIssues were populated
     const hasIssues = await page.evaluate(() => {
