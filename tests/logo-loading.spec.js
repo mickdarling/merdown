@@ -244,7 +244,7 @@ test.describe('Logo Loading and Display', () => {
       expect(href).toBe('/?sample');
     });
 
-    test('clicking logo link loads welcome document', async ({ page }) => {
+    test('clicking logo link loads welcome document without page reload', async ({ page }) => {
       // First, change the document to something else
       await page.evaluate(() => {
         globalThis.setEditorContent('# Different Content');
@@ -256,15 +256,14 @@ test.describe('Logo Loading and Display', () => {
       const initialContent = await page.evaluate(() => globalThis.getEditorContent());
       expect(initialContent).toBe('# Different Content');
 
-      // Click the logo link
+      // Click the logo link - this should load sample via JS, not page reload
       const logoLink = page.locator('.brand-home-link');
       await logoLink.click();
 
-      // Wait for navigation to complete and app to reinitialize
-      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+      // Wait for the sample to load (no page navigation needed)
       await page.waitForFunction(
         () => globalThis.state?.currentFilename === 'Welcome.md',
-        { timeout: 10000 }
+        { timeout: 5000 }
       );
 
       // Verify welcome document is loaded
@@ -303,16 +302,31 @@ test.describe('Logo Loading and Display', () => {
       await logoLink.focus();
       await page.keyboard.press('Enter');
 
-      // Wait for navigation and app to reinitialize
-      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+      // Wait for the sample to load (no page navigation needed)
       await page.waitForFunction(
         () => globalThis.state?.currentFilename === 'Welcome.md',
-        { timeout: 10000 }
+        { timeout: 5000 }
       );
 
       // Verify welcome document is loaded
       const filename = await page.evaluate(() => globalThis.state.currentFilename);
       expect(filename).toBe('Welcome.md');
+    });
+
+    test('logo link has visible focus indicator for keyboard navigation', async ({ page }) => {
+      const logoLink = page.locator('.brand-home-link');
+
+      // Focus the link using keyboard navigation
+      await logoLink.focus();
+
+      // Check that focus-visible styles are applied
+      const outlineStyle = await logoLink.evaluate(el => {
+        const styles = getComputedStyle(el);
+        return styles.outlineWidth !== '0px' || styles.outlineStyle !== 'none';
+      });
+
+      // The link should have a visible focus indicator
+      expect(outlineStyle).toBe(true);
     });
   });
 
