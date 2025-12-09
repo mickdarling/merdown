@@ -120,7 +120,6 @@ function setupKeyboardShortcuts() {
  * Handle loading content from a remote URL parameter.
  * Resolves relative doc paths and handles private repo tokens.
  * @param {string} remoteURL - The URL to load
- * @returns {boolean} True if handled successfully, false if should fall through
  */
 function handleRemoteURLParam(remoteURL) {
     let resolvedURL = remoteURL;
@@ -133,7 +132,7 @@ function handleRemoteURLParam(remoteURL) {
             console.error('Error resolving doc URL:', error);
             showStatus('Error loading documentation', 'warning');
             loadSavedContentOrSample();
-            return true; // Handled (with fallback)
+            return;
         }
     }
 
@@ -147,13 +146,11 @@ function handleRemoteURLParam(remoteURL) {
         // Load normally with shareable URL
         loadMarkdownFromURL(resolvedURL);
     }
-    return true;
 }
 
 /**
  * Handle loading content from inline markdown parameter.
  * @param {string} inlineMarkdown - The URL-encoded markdown
- * @returns {boolean} True if handled successfully
  */
 function handleInlineMarkdownParam(inlineMarkdown) {
     try {
@@ -165,7 +162,6 @@ function handleInlineMarkdownParam(inlineMarkdown) {
         showStatus('Error loading markdown from URL', 'warning');
         loadSavedContentOrSample();
     }
-    return true;
 }
 
 /**
