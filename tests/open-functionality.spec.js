@@ -239,8 +239,11 @@ test.describe('Open Functionality', () => {
       await page.waitForSelector('.CodeMirror', { timeout: 15000 });
       await page.waitForFunction(() => typeof globalThis.openFile === 'function', { timeout: 5000 });
 
-      // Give the app time to fully initialize and load sample
-      await page.waitForTimeout(500);
+      // Wait for the document selector to show Welcome.md (condition-based, not timeout)
+      await page.waitForFunction(
+        () => globalThis.state?.currentFilename === 'Welcome.md',
+        { timeout: 10000 }
+      );
 
       // The selector should show "Welcome.md" (from loadSample)
       const selectedText = await page.$eval('#documentSelector', getSelectedOptionText);

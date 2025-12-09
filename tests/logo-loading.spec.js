@@ -234,6 +234,88 @@ test.describe('Logo Loading and Display', () => {
     });
   });
 
+  test.describe('Logo Home Link Functionality', () => {
+    test('logo link has correct href to load welcome document', async ({ page }) => {
+      const logoLink = page.locator('.brand-home-link');
+
+      // Verify the link exists and has correct href
+      await expect(logoLink).toBeAttached();
+      const href = await logoLink.getAttribute('href');
+      expect(href).toBe('/?sample');
+    });
+
+    test('clicking logo link loads welcome document', async ({ page }) => {
+      // First, change the document to something else
+      await page.evaluate(() => {
+        globalThis.setEditorContent('# Different Content');
+        globalThis.state.currentFilename = 'other-document.md';
+        globalThis.updateDocumentSelector();
+      });
+
+      // Verify the content changed
+      const initialContent = await page.evaluate(() => globalThis.getEditorContent());
+      expect(initialContent).toBe('# Different Content');
+
+      // Click the logo link
+      const logoLink = page.locator('.brand-home-link');
+      await logoLink.click();
+
+      // Wait for navigation to complete and app to reinitialize
+      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+      await page.waitForFunction(
+        () => globalThis.state?.currentFilename === 'Welcome.md',
+        { timeout: 10000 }
+      );
+
+      // Verify welcome document is loaded
+      const filename = await page.evaluate(() => globalThis.state.currentFilename);
+      expect(filename).toBe('Welcome.md');
+
+      // Verify content contains welcome document text
+      const content = await page.evaluate(() => globalThis.getEditorContent());
+      expect(content).toContain('Welcome to Merview');
+    });
+
+    test('logo link is focusable for keyboard navigation', async ({ page }) => {
+      const logoLink = page.locator('.brand-home-link');
+
+      // Focus the link
+      await logoLink.focus();
+
+      // Verify it's focused
+      const isFocused = await page.evaluate(() => {
+        const link = document.querySelector('.brand-home-link');
+        return document.activeElement === link;
+      });
+      expect(isFocused).toBe(true);
+    });
+
+    test('logo link can be activated via keyboard', async ({ page }) => {
+      // First, change the document
+      await page.evaluate(() => {
+        globalThis.setEditorContent('# Keyboard Test');
+        globalThis.state.currentFilename = 'keyboard-test.md';
+        globalThis.updateDocumentSelector();
+      });
+
+      // Focus and activate the logo link via keyboard
+      const logoLink = page.locator('.brand-home-link');
+      await logoLink.focus();
+      await page.keyboard.press('Enter');
+
+      // Wait for navigation and app to reinitialize
+      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+      await page.waitForFunction(
+        () => globalThis.state?.currentFilename === 'Welcome.md',
+        { timeout: 10000 }
+      );
+
+      // Verify welcome document is loaded
+      const filename = await page.evaluate(() => globalThis.state.currentFilename);
+      expect(filename).toBe('Welcome.md');
+    });
+  });
+
   test.describe('Performance', () => {
     test('logo file size is reasonable for web use', async ({ page }) => {
       // Get the actual file size via network inspection
