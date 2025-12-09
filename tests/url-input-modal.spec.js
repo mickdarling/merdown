@@ -5,15 +5,18 @@
 const { test, expect } = require('@playwright/test');
 const {
   waitForPageReady,
-  waitForElement,
   elementExists,
   elementHasClass,
-  getElementAttribute,
-  WAIT_TIMES
+  getElementAttribute
 } = require('./helpers/test-utils');
+
+// ============================================================================
+// Browser-side helper functions (extracted to reduce nesting in page.evaluate)
+// ============================================================================
 
 /**
  * Browser-side helper: Check if modal can be programmatically opened
+ * Extracted to avoid deep function nesting (SonarCloud S2004)
  * @returns {Promise<boolean>} True if modal opened successfully
  */
 function browserCheckModalOpen() {
@@ -31,13 +34,457 @@ function browserCheckModalOpen() {
       const isOpen = modal.open;
       modal.close();
       resolve(isOpen);
-    } catch (error) {
-      console.debug('Modal operation failed:', error.message);
+    } catch (modalError) {
+      console.debug('Modal operation failed:', modalError.message);
       resolve(false);
     }
   });
 }
 
+/**
+ * Browser-side helper: Check modal open state change
+ * @returns {boolean} True if state changes correctly
+ */
+function browserCheckModalStateChange() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return false;
+
+  const wasClosedBefore = !modal.open;
+  modal.showModal();
+  const isOpenAfter = modal.open;
+  modal.close();
+
+  return wasClosedBefore && isOpenAfter;
+}
+
+/**
+ * Browser-side helper: Check if modal can be closed
+ * @returns {boolean} True if modal can be closed
+ */
+function browserCheckModalClose() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return false;
+
+  modal.showModal();
+  modal.close();
+  return !modal.open;
+}
+
+/**
+ * Browser-side helper: Verify escape close support
+ * @returns {boolean} True if dialog supports close
+ */
+function browserCheckEscapeSupport() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return false;
+
+  modal.showModal();
+  if (!modal.open) return false;
+
+  const supportsClose = typeof modal.close === 'function';
+  modal.close();
+  return supportsClose && !modal.open;
+}
+
+/**
+ * Browser-side helper: Test Enter key triggers Load button
+ * @returns {Promise<boolean>} True if Enter triggers Load
+ */
+function browserTestEnterKey() {
+  const ENTER_KEY_DELAY_MS = 100;
+  return new Promise(function resolveEnterTest(resolve) {
+    const modal = document.getElementById('urlModal');
+    const urlInput = document.getElementById('urlInput');
+    const loadBtn = document.getElementById('urlModalLoad');
+
+    if (!modal || !urlInput || !loadBtn) {
+      resolve(false);
+      return;
+    }
+
+    let loadClicked = false;
+    const originalClick = loadBtn.click.bind(loadBtn);
+    loadBtn.click = function handleClick() {
+      loadClicked = true;
+      originalClick();
+    };
+
+    modal.showModal();
+    urlInput.value = 'https://example.com';
+
+    const enterEvent = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      code: 'Enter',
+      bubbles: true,
+      cancelable: true
+    });
+
+    urlInput.dispatchEvent(enterEvent);
+
+    setTimeout(function checkResult() {
+      modal.close();
+      resolve(loadClicked);
+    }, ENTER_KEY_DELAY_MS);
+  });
+}
+
+/**
+ * Browser-side helper: Check focus input when modal opens
+ * @returns {Promise<boolean>} True if input focused
+ */
+function browserCheckFocusInput() {
+  const FOCUS_DELAY_MS = 200;
+  return new Promise(function resolveFocusTest(resolve) {
+    const modal = document.getElementById('urlModal');
+    const urlInput = document.getElementById('urlInput');
+
+    if (!modal || !urlInput) {
+      resolve(false);
+      return;
+    }
+
+    modal.showModal();
+
+    setTimeout(function checkFocus() {
+      const isFocused = document.activeElement === urlInput;
+      modal.close();
+      resolve(isFocused);
+    }, FOCUS_DELAY_MS);
+  });
+}
+
+/**
+ * Browser-side helper: Check focus trap elements exist
+ * @returns {boolean} True if focusable elements exist
+ */
+function browserCheckFocusTrap() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return false;
+
+  modal.showModal();
+
+  const focusableElements = modal.querySelectorAll(
+    'input:not([disabled]), button:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
+  );
+
+  const hasFocusableElements = focusableElements.length > 0;
+  modal.close();
+  return hasFocusableElements;
+}
+
+/**
+ * Browser-side helper: Check error display structure
+ * @returns {boolean} True if error display is properly configured
+ */
+function browserCheckErrorDisplay() {
+  const errorDiv = document.getElementById('urlModalError');
+  if (!errorDiv) return false;
+
+  const hasAlertRole = errorDiv.getAttribute('role') === 'alert';
+  const hasLiveRegion = errorDiv.getAttribute('aria-live') === 'polite';
+  const canSetText = typeof errorDiv.textContent === 'string';
+
+  return hasAlertRole && hasLiveRegion && canSetText;
+}
+
+/**
+ * Browser-side helper: Check error cleared on modal close
+ * @returns {Promise<boolean>} True if error cleared
+ */
+function browserCheckErrorCleared() {
+  const CHECK_DELAY_MS = 100;
+  return new Promise(function resolveErrorTest(resolve) {
+    const modal = document.getElementById('urlModal');
+    const urlInput = document.getElementById('urlInput');
+    const loadBtn = document.getElementById('urlModalLoad');
+    const errorDiv = document.getElementById('urlModalError');
+
+    if (!modal || !urlInput || !loadBtn || !errorDiv) {
+      resolve(false);
+      return;
+    }
+
+    modal.showModal();
+    urlInput.value = '';
+    loadBtn.click();
+
+    setTimeout(function closeAndCheck() {
+      modal.close();
+
+      setTimeout(function verifyCleared() {
+        const isCleared = errorDiv.style.display === 'none' ||
+                        errorDiv.textContent === '';
+        resolve(isCleared);
+      }, CHECK_DELAY_MS);
+    }, CHECK_DELAY_MS);
+  });
+}
+
+/**
+ * Browser-side helper: Check cancel button structure
+ * @returns {boolean} True if cancel button is properly configured
+ */
+function browserCheckCancelButton() {
+  const modal = document.getElementById('urlModal');
+  const cancelBtn = document.getElementById('urlModalCancel');
+  if (!modal || !cancelBtn) return false;
+
+  return cancelBtn.tagName === 'BUTTON' &&
+         cancelBtn.getAttribute('type') === 'button' &&
+         typeof cancelBtn.click === 'function';
+}
+
+/**
+ * Browser-side helper: Check cancel button is inside modal
+ * @returns {boolean} True if cancel button is in modal
+ */
+function browserCheckCancelInModal() {
+  const modal = document.getElementById('urlModal');
+  const cancelBtn = document.getElementById('urlModalCancel');
+  if (!modal || !cancelBtn) return false;
+
+  return modal.contains(cancelBtn);
+}
+
+/**
+ * Browser-side helper: Check error region ARIA attributes
+ * @returns {boolean} True if ARIA attributes are correct
+ */
+function browserCheckErrorAria() {
+  const errorDiv = document.getElementById('urlModalError');
+  if (!errorDiv) return false;
+  return errorDiv.getAttribute('role') === 'alert' &&
+         errorDiv.getAttribute('aria-live') === 'polite';
+}
+
+/**
+ * Browser-side helper: Check display when modal is open
+ * @returns {string} Display value when modal is open
+ */
+function browserCheckOpenDisplay() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return '';
+
+  modal.showModal();
+  const display = getComputedStyle(modal).display;
+  modal.close();
+  return display;
+}
+
+/**
+ * Browser-side helper: Check modal state cleanup
+ * @returns {boolean} True if state is cleaned up properly
+ */
+function browserCheckStateCleanup() {
+  const modal = document.getElementById('urlModal');
+  if (!modal) return false;
+
+  modal.showModal();
+  const wasOpen = modal.open;
+
+  modal.close();
+  const isClosed = !modal.open;
+
+  modal.showModal();
+  const canReopenAfterClose = modal.open;
+  modal.close();
+
+  return wasOpen && isClosed && canReopenAfterClose;
+}
+
+/**
+ * Browser-side helper: Check optgroups contain options
+ * @param {string} selectorId - The selector ID
+ * @returns {boolean} True if all optgroups have options
+ */
+function browserCheckOptgroupOptions(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return false;
+
+  const optgroups = select.querySelectorAll('optgroup');
+  for (const optgroup of optgroups) {
+    if (optgroup.querySelectorAll('option').length === 0) {
+      return false;
+    }
+  }
+  return optgroups.length > 0;
+}
+
+/**
+ * Browser-side helper: Check Import group has Load from URL
+ * @param {string} selectorId - The selector ID
+ * @returns {boolean} True if Import group has Load from URL option
+ */
+function browserCheckImportUrlOption(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return false;
+
+  const importGroup = Array.from(select.querySelectorAll('optgroup'))
+    .find(function findImport(g) { return g.label === 'Import'; });
+
+  if (!importGroup) return false;
+
+  const options = importGroup.querySelectorAll('option');
+  return Array.from(options).some(function hasUrlText(opt) {
+    return opt.textContent.includes('Load from URL');
+  });
+}
+
+/**
+ * Browser-side helper: Check Import group has Load from file
+ * @param {string} selectorId - The selector ID
+ * @returns {boolean} True if Import group has Load from file option
+ */
+function browserCheckImportFileOption(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return false;
+
+  const importGroup = Array.from(select.querySelectorAll('optgroup'))
+    .find(function findImport(g) { return g.label === 'Import'; });
+
+  if (!importGroup) return false;
+
+  const options = importGroup.querySelectorAll('option');
+  return Array.from(options).some(function hasFileText(opt) {
+    return opt.textContent.includes('Load from file');
+  });
+}
+
+/**
+ * Browser-side helper: Check Themes optgroup has options
+ * @param {string} selectorId - The selector ID
+ * @returns {boolean} True if Themes group has options
+ */
+function browserCheckThemesGroup(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return false;
+
+  const themesGroup = Array.from(select.querySelectorAll('optgroup'))
+    .find(function findThemes(g) { return g.label === 'Themes'; });
+
+  return themesGroup && themesGroup.querySelectorAll('option').length > 0;
+}
+
+/**
+ * Browser-side helper: Check Options optgroup exists
+ * @returns {boolean} True if Options group exists
+ */
+function browserCheckOptionsGroup() {
+  const select = document.getElementById('styleSelector');
+  if (!select) return false;
+
+  const optgroups = Array.from(select.querySelectorAll('optgroup'));
+  return optgroups.some(function hasOptions(g) { return g.label === 'Options'; });
+}
+
+/**
+ * Browser-side helper: Check Options group has Respect Style Layout
+ * @returns {boolean} True if Respect Style Layout exists
+ */
+function browserCheckRespectStyleLayout() {
+  const select = document.getElementById('styleSelector');
+  if (!select) return false;
+
+  const optionsGroup = Array.from(select.querySelectorAll('optgroup'))
+    .find(function findOptions(g) { return g.label === 'Options'; });
+
+  if (!optionsGroup) return false;
+
+  const options = optionsGroup.querySelectorAll('option');
+  return Array.from(options).some(function hasRespect(opt) {
+    return opt.textContent.includes('Respect Style Layout');
+  });
+}
+
+/**
+ * Browser-side helper: Test Load from URL opens modal
+ * @param {string} selectorId - The selector ID
+ * @returns {Promise<boolean>} True if modal opens
+ */
+function browserTestLoadFromUrl(selectorId) {
+  const MODAL_OPEN_DELAY_MS = 300;
+  return new Promise(function resolveModalTest(resolve) {
+    const select = document.getElementById(selectorId);
+    const modal = document.getElementById('urlModal');
+
+    if (!select || !modal) {
+      resolve(false);
+      return;
+    }
+
+    const options = Array.from(select.querySelectorAll('option'));
+    const urlOption = options.find(function hasUrlText(opt) {
+      return opt.textContent.includes('Load from URL');
+    });
+
+    if (!urlOption) {
+      resolve(false);
+      return;
+    }
+
+    select.value = urlOption.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    setTimeout(function checkModalOpen() {
+      const isOpen = modal.open;
+      if (modal.open) modal.close();
+      resolve(isOpen);
+    }, MODAL_OPEN_DELAY_MS);
+  });
+}
+
+/**
+ * Browser-side helper: Test cancel reverts selector
+ * @param {string} selectorId - The selector ID
+ * @returns {Promise<boolean>} True if selector reverts
+ */
+function browserTestCancelReverts(selectorId) {
+  const MODAL_DELAY_MS = 300;
+  const REVERT_CHECK_DELAY_MS = 200;
+  return new Promise(function resolveRevertTest(resolve) {
+    const select = document.getElementById(selectorId);
+    const modal = document.getElementById('urlModal');
+    const cancelBtn = document.getElementById('urlModalCancel');
+
+    if (!select || !modal || !cancelBtn) {
+      resolve(false);
+      return;
+    }
+
+    const initialValue = select.value;
+
+    const options = Array.from(select.querySelectorAll('option'));
+    const urlOption = options.find(function hasUrlText(opt) {
+      return opt.textContent.includes('Load from URL');
+    });
+
+    if (!urlOption) {
+      resolve(false);
+      return;
+    }
+
+    select.value = urlOption.value;
+    select.dispatchEvent(new Event('change', { bubbles: true }));
+
+    setTimeout(function waitForModal() {
+      if (!modal.open) {
+        resolve(false);
+        return;
+      }
+
+      cancelBtn.click();
+
+      setTimeout(function checkReverted() {
+        const finalValue = select.value;
+        resolve(finalValue === initialValue);
+      }, REVERT_CHECK_DELAY_MS);
+    }, MODAL_DELAY_MS);
+  });
+}
+
+// ============================================================================
+// Configuration
+// ============================================================================
 
 /**
  * Configuration for modal content elements
@@ -56,25 +503,34 @@ const MODAL_CONTENT_ELEMENTS = [
  * Configuration for modal buttons
  */
 const MODAL_BUTTONS = [
-  {
-    selector: '#urlModalCancel',
-    text: 'Cancel',
-    type: 'button'
-  },
-  {
-    selector: '#urlModalLoad',
-    text: 'Load',
-    type: 'button'
-  }
+  { selector: '#urlModalCancel', text: 'Cancel', type: 'button' },
+  { selector: '#urlModalLoad', text: 'Load', type: 'button' }
 ];
 
 /**
- * Tests for URL Input Modal functionality
- *
- * These tests ensure the URL input modal exists, displays correctly,
- * and handles user interactions properly. The modal provides accessible
- * URL input for loading external CSS/content from allowed domains.
+ * Configuration for selectors that should have optgroups
  */
+const SELECTORS_WITH_OPTGROUPS = [
+  { id: 'styleSelector', name: 'Style', expectedGroups: ['Themes', 'Options', 'Import'] },
+  { id: 'syntaxThemeSelector', name: 'Syntax Theme', expectedGroups: ['Themes', 'Import'] },
+  { id: 'editorThemeSelector', name: 'Editor Theme', expectedGroups: ['Themes', 'Import'] },
+  { id: 'mermaidThemeSelector', name: 'Mermaid Theme', expectedGroups: ['Themes', 'Import'] }
+];
+
+/**
+ * Configuration for selectors with import actions
+ */
+const SELECTORS_WITH_IMPORT = [
+  { id: 'styleSelector', name: 'Style' },
+  { id: 'syntaxThemeSelector', name: 'Syntax Theme' },
+  { id: 'editorThemeSelector', name: 'Editor Theme' },
+  { id: 'mermaidThemeSelector', name: 'Mermaid Theme' }
+];
+
+// ============================================================================
+// Tests for URL Input Modal functionality
+// ============================================================================
+
 test.describe('URL Input Modal', () => {
   test.beforeEach(async ({ page }) => {
     await waitForPageReady(page);
@@ -117,7 +573,6 @@ test.describe('URL Input Modal', () => {
   });
 
   test.describe('Modal Content', () => {
-    // Data-driven tests for modal content elements
     for (const element of MODAL_CONTENT_ELEMENTS) {
       test(`modal should contain ${element.description}`, async ({ page }) => {
         const exists = await elementExists(page, element.selector);
@@ -202,13 +657,10 @@ test.describe('URL Input Modal', () => {
       const hasEventListeners = await page.evaluate(() => {
         const modal = document.getElementById('urlModal');
         if (!modal) return false;
-
         const cancelBtn = document.getElementById('urlModalCancel');
         const loadBtn = document.getElementById('urlModalLoad');
-
         return cancelBtn !== null && loadBtn !== null;
       });
-
       expect(hasEventListeners).toBe(true);
     });
   });
@@ -235,175 +687,43 @@ test.describe('URL Input Modal', () => {
     });
 
     test('modal open property changes when opened', async ({ page }) => {
-      const openStateChanges = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return false;
-
-        const wasClosedBefore = !modal.open;
-        modal.showModal();
-        const isOpenAfter = modal.open;
-        modal.close();
-
-        return wasClosedBefore && isOpenAfter;
-      });
-
+      const openStateChanges = await page.evaluate(browserCheckModalStateChange);
       expect(openStateChanges).toBe(true);
     });
 
     test('modal can be closed after opening', async ({ page }) => {
-      const canClose = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return false;
-
-        try {
-          modal.showModal();
-          modal.close();
-          return !modal.open;
-        } catch (error) {
-          console.debug('Modal close operation failed:', error.message);
-          return false;
-        }
-      });
-
+      const canClose = await page.evaluate(browserCheckModalClose);
       expect(canClose).toBe(true);
     });
   });
 
   test.describe('Keyboard Navigation', () => {
     test('Escape key should close modal', async ({ page }) => {
-      // Native dialog behavior - Escape key closes dialogs by default
-      // and triggers the 'close' event which our handlers listen to
-      const escapeClosed = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return false;
-
-        try {
-          modal.showModal();
-          if (!modal.open) return false;
-
-          // Pressing Escape on a native dialog closes it
-          // We just need to verify the dialog supports this
-          const supportsClose = typeof modal.close === 'function';
-          modal.close();
-          return supportsClose && !modal.open;
-        } catch (error) {
-          console.debug('Modal operation failed:', error.message);
-          return false;
-        }
-      });
+      const escapeClosed = await page.evaluate(browserCheckEscapeSupport);
       expect(escapeClosed).toBe(true);
     });
 
     test('Enter key in input should trigger Load button', async ({ page }) => {
-      const enterTriggersLoad = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const modal = document.getElementById('urlModal');
-          const urlInput = document.getElementById('urlInput');
-          const loadBtn = document.getElementById('urlModalLoad');
-          if (!modal || !urlInput || !loadBtn) {
-            resolve(false);
-            return;
-          }
-
-          let loadClicked = false;
-          const originalClick = loadBtn.click.bind(loadBtn);
-          loadBtn.click = () => {
-            loadClicked = true;
-            originalClick();
-          };
-
-          try {
-            modal.showModal();
-            urlInput.value = 'https://example.com';
-
-            const enterEvent = new KeyboardEvent('keydown', {
-              key: 'Enter',
-              code: 'Enter',
-              bubbles: true,
-              cancelable: true
-            });
-
-            urlInput.dispatchEvent(enterEvent);
-
-            setTimeout(() => {
-              modal.close();
-              resolve(loadClicked);
-            }, 100);
-          } catch (error) {
-            resolve(false);
-          }
-        });
-      });
-
+      const enterTriggersLoad = await page.evaluate(browserTestEnterKey);
       expect(enterTriggersLoad).toBe(true);
     });
   });
 
   test.describe('Focus Management', () => {
     test('modal should focus URL input when opened via showURLModal', async ({ page }) => {
-      const inputIsFocused = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const modal = document.getElementById('urlModal');
-          const urlInput = document.getElementById('urlInput');
-          if (!modal || !urlInput) {
-            resolve(false);
-            return;
-          }
-
-          // Open the modal directly (simulating showURLModal)
-          modal.showModal();
-
-          // The showURLModal function has a 100ms delay before focusing
-          setTimeout(() => {
-            const isFocused = document.activeElement === urlInput;
-            modal.close();
-            resolve(isFocused);
-          }, 200);
-        });
-      });
-
-      // Note: Direct showModal may not focus, but the test verifies the setup
+      const inputIsFocused = await page.evaluate(browserCheckFocusInput);
       expect(typeof inputIsFocused).toBe('boolean');
     });
 
     test('focus trap should contain Tab navigation within modal', async ({ page }) => {
-      const focusTrapWorks = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return false;
-
-        try {
-          modal.showModal();
-
-          const focusableElements = modal.querySelectorAll(
-            'input:not([disabled]), button:not([disabled]), textarea:not([disabled]), select:not([disabled]), a[href], [tabindex]:not([tabindex="-1"])'
-          );
-
-          const hasFocusableElements = focusableElements.length > 0;
-          modal.close();
-          return hasFocusableElements;
-        } catch (error) {
-          return false;
-        }
-      });
-
+      const focusTrapWorks = await page.evaluate(browserCheckFocusTrap);
       expect(focusTrapWorks).toBe(true);
     });
   });
 
   test.describe('URL Validation', () => {
     test('error display element should exist and be capable of showing messages', async ({ page }) => {
-      const canShowError = await page.evaluate(() => {
-        const errorDiv = document.getElementById('urlModalError');
-        if (!errorDiv) return false;
-
-        // Verify it has the right structure
-        const hasAlertRole = errorDiv.getAttribute('role') === 'alert';
-        const hasLiveRegion = errorDiv.getAttribute('aria-live') === 'polite';
-        const canSetText = typeof errorDiv.textContent === 'string';
-
-        return hasAlertRole && hasLiveRegion && canSetText;
-      });
-
+      const canShowError = await page.evaluate(browserCheckErrorDisplay);
       expect(canShowError).toBe(true);
     });
 
@@ -411,7 +731,6 @@ test.describe('URL Input Modal', () => {
       const isAvailable = await page.evaluate(() => {
         return typeof globalThis.isAllowedCSSURL === 'function';
       });
-
       expect(isAvailable).toBe(true);
     });
 
@@ -419,70 +738,23 @@ test.describe('URL Input Modal', () => {
       const isAvailable = await page.evaluate(() => {
         return typeof globalThis.normalizeGistUrl === 'function';
       });
-
       expect(isAvailable).toBe(true);
     });
 
     test('error should be cleared when modal closes', async ({ page }) => {
-      const errorCleared = await page.evaluate(() => {
-        return new Promise((resolve) => {
-          const modal = document.getElementById('urlModal');
-          const urlInput = document.getElementById('urlInput');
-          const loadBtn = document.getElementById('urlModalLoad');
-          const errorDiv = document.getElementById('urlModalError');
-          if (!modal || !urlInput || !loadBtn || !errorDiv) {
-            resolve(false);
-            return;
-          }
-
-          // First show error
-          modal.showModal();
-          urlInput.value = '';
-          loadBtn.click();
-
-          setTimeout(() => {
-            // Then close modal
-            modal.close();
-
-            setTimeout(() => {
-              // Check if error is cleared
-              const isCleared = errorDiv.style.display === 'none' ||
-                              errorDiv.textContent === '';
-              resolve(isCleared);
-            }, 100);
-          }, 100);
-        });
-      });
-
+      const errorCleared = await page.evaluate(browserCheckErrorCleared);
       expect(errorCleared).toBe(true);
     });
   });
 
   test.describe('Cancel Button', () => {
     test('Cancel button should exist and have click handler capability', async ({ page }) => {
-      const hasButton = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        const cancelBtn = document.getElementById('urlModalCancel');
-        if (!modal || !cancelBtn) return false;
-
-        // Verify button exists and can be clicked
-        return cancelBtn.tagName === 'BUTTON' &&
-               cancelBtn.getAttribute('type') === 'button' &&
-               typeof cancelBtn.click === 'function';
-      });
-
+      const hasButton = await page.evaluate(browserCheckCancelButton);
       expect(hasButton).toBe(true);
     });
 
     test('Cancel button should be inside modal', async ({ page }) => {
-      const isInsideModal = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        const cancelBtn = document.getElementById('urlModalCancel');
-        if (!modal || !cancelBtn) return false;
-
-        return modal.contains(cancelBtn);
-      });
-
+      const isInsideModal = await page.evaluate(browserCheckCancelInModal);
       expect(isInsideModal).toBe(true);
     });
   });
@@ -506,12 +778,7 @@ test.describe('URL Input Modal', () => {
     });
 
     test('error region should announce changes', async ({ page }) => {
-      const hasLiveRegion = await page.evaluate(() => {
-        const errorDiv = document.getElementById('urlModalError');
-        if (!errorDiv) return false;
-        return errorDiv.getAttribute('role') === 'alert' &&
-               errorDiv.getAttribute('aria-live') === 'polite';
-      });
+      const hasLiveRegion = await page.evaluate(browserCheckErrorAria);
       expect(hasLiveRegion).toBe(true);
     });
   });
@@ -526,87 +793,27 @@ test.describe('URL Input Modal', () => {
     });
 
     test('modal overlay should have flex display when open', async ({ page }) => {
-      const displayWhenOpen = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return '';
-
-        try {
-          modal.showModal();
-          const display = getComputedStyle(modal).display;
-          modal.close();
-          return display;
-        } catch (error) {
-          console.debug('getComputedStyle operation failed:', error.message);
-          return '';
-        }
-      });
-
+      const displayWhenOpen = await page.evaluate(browserCheckOpenDisplay);
       expect(displayWhenOpen).toBe('flex');
     });
   });
 
   test.describe('Modal State Management', () => {
     test('modal state should be cleaned up after closing', async ({ page }) => {
-      const stateIsClean = await page.evaluate(() => {
-        const modal = document.getElementById('urlModal');
-        if (!modal) return false;
-
-        try {
-          modal.showModal();
-          const wasOpen = modal.open;
-
-          modal.close();
-          const isClosed = !modal.open;
-
-          modal.showModal();
-          const canReopenAfterClose = modal.open;
-          modal.close();
-
-          return wasOpen && isClosed && canReopenAfterClose;
-        } catch (error) {
-          console.debug('Modal state manipulation failed:', error.message);
-          return false;
-        }
-      });
-
+      const stateIsClean = await page.evaluate(browserCheckStateCleanup);
       expect(stateIsClean).toBe(true);
     });
   });
 });
 
-/**
- * Tests for Optgroup rendering in theme selectors
- */
+// ============================================================================
+// Tests for Optgroup rendering in theme selectors
+// ============================================================================
+
 test.describe('Theme Selector Optgroups', () => {
   test.beforeEach(async ({ page }) => {
     await waitForPageReady(page);
   });
-
-  /**
-   * Configuration for selectors that should have optgroups
-   */
-  const SELECTORS_WITH_OPTGROUPS = [
-    {
-      id: 'styleSelector',
-      name: 'Style',
-      expectedGroups: ['Themes', 'Options', 'Import']
-    },
-    {
-      id: 'syntaxThemeSelector',
-      name: 'Syntax Theme',
-      expectedGroups: ['Themes', 'Import']
-    },
-    {
-      id: 'editorThemeSelector',
-      name: 'Editor Theme',
-      expectedGroups: ['Themes', 'Import']
-    },
-    {
-      id: 'mermaidThemeSelector',
-      name: 'Mermaid Theme',
-      expectedGroups: ['Themes', 'Import']
-    }
-  ];
 
   for (const selector of SELECTORS_WITH_OPTGROUPS) {
     test.describe(`${selector.name} Selector (#${selector.id})`, () => {
@@ -630,71 +837,22 @@ test.describe('Theme Selector Optgroups', () => {
       });
 
       test('optgroups should contain options', async ({ page }) => {
-        const optgroupsHaveOptions = await page.evaluate((selectorId) => {
-          const select = document.getElementById(selectorId);
-          if (!select) return false;
-
-          const optgroups = select.querySelectorAll('optgroup');
-          for (const optgroup of optgroups) {
-            if (optgroup.querySelectorAll('option').length === 0) {
-              return false;
-            }
-          }
-          return optgroups.length > 0;
-        }, selector.id);
-
+        const optgroupsHaveOptions = await page.evaluate(browserCheckOptgroupOptions, selector.id);
         expect(optgroupsHaveOptions).toBe(true);
       });
 
       test('should have Import group with Load from URL option', async ({ page }) => {
-        const hasLoadFromUrl = await page.evaluate((selectorId) => {
-          const select = document.getElementById(selectorId);
-          if (!select) return false;
-
-          const importGroup = Array.from(select.querySelectorAll('optgroup'))
-            .find(g => g.label === 'Import');
-
-          if (!importGroup) return false;
-
-          const options = importGroup.querySelectorAll('option');
-          return Array.from(options).some(opt =>
-            opt.textContent.includes('Load from URL')
-          );
-        }, selector.id);
-
+        const hasLoadFromUrl = await page.evaluate(browserCheckImportUrlOption, selector.id);
         expect(hasLoadFromUrl).toBe(true);
       });
 
       test('should have Import group with Load from file option', async ({ page }) => {
-        const hasLoadFromFile = await page.evaluate((selectorId) => {
-          const select = document.getElementById(selectorId);
-          if (!select) return false;
-
-          const importGroup = Array.from(select.querySelectorAll('optgroup'))
-            .find(g => g.label === 'Import');
-
-          if (!importGroup) return false;
-
-          const options = importGroup.querySelectorAll('option');
-          return Array.from(options).some(opt =>
-            opt.textContent.includes('Load from file')
-          );
-        }, selector.id);
-
+        const hasLoadFromFile = await page.evaluate(browserCheckImportFileOption, selector.id);
         expect(hasLoadFromFile).toBe(true);
       });
 
       test('themes should be in Themes optgroup', async ({ page }) => {
-        const themesInGroup = await page.evaluate((selectorId) => {
-          const select = document.getElementById(selectorId);
-          if (!select) return false;
-
-          const themesGroup = Array.from(select.querySelectorAll('optgroup'))
-            .find(g => g.label === 'Themes');
-
-          return themesGroup && themesGroup.querySelectorAll('option').length > 0;
-        }, selector.id);
-
+        const themesInGroup = await page.evaluate(browserCheckThemesGroup, selector.id);
         expect(themesInGroup).toBe(true);
       });
     });
@@ -702,139 +860,35 @@ test.describe('Theme Selector Optgroups', () => {
 
   test.describe('Style Selector Special Options', () => {
     test('should have Options optgroup', async ({ page }) => {
-      const hasOptionsGroup = await page.evaluate(() => {
-        const select = document.getElementById('styleSelector');
-        if (!select) return false;
-
-        const optgroups = Array.from(select.querySelectorAll('optgroup'));
-        return optgroups.some(g => g.label === 'Options');
-      });
-
+      const hasOptionsGroup = await page.evaluate(browserCheckOptionsGroup);
       expect(hasOptionsGroup).toBe(true);
     });
 
     test('Options group should contain Respect Style Layout', async ({ page }) => {
-      const hasRespectStyleLayout = await page.evaluate(() => {
-        const select = document.getElementById('styleSelector');
-        if (!select) return false;
-
-        const optionsGroup = Array.from(select.querySelectorAll('optgroup'))
-          .find(g => g.label === 'Options');
-
-        if (!optionsGroup) return false;
-
-        const options = optionsGroup.querySelectorAll('option');
-        return Array.from(options).some(opt =>
-          opt.textContent.includes('Respect Style Layout')
-        );
-      });
-
+      const hasRespectStyleLayout = await page.evaluate(browserCheckRespectStyleLayout);
       expect(hasRespectStyleLayout).toBe(true);
     });
   });
 });
 
-/**
- * Tests for Load from URL/file selector interactions
- */
+// ============================================================================
+// Tests for Load from URL/file selector interactions
+// ============================================================================
+
 test.describe('Theme Selector Import Actions', () => {
   test.beforeEach(async ({ page }) => {
     await waitForPageReady(page);
   });
 
-  const SELECTORS_WITH_IMPORT = [
-    { id: 'styleSelector', name: 'Style' },
-    { id: 'syntaxThemeSelector', name: 'Syntax Theme' },
-    { id: 'editorThemeSelector', name: 'Editor Theme' },
-    { id: 'mermaidThemeSelector', name: 'Mermaid Theme' }
-  ];
-
   for (const selector of SELECTORS_WITH_IMPORT) {
     test.describe(`${selector.name} Selector Import Actions`, () => {
       test('selecting Load from URL should open URL modal', async ({ page }) => {
-        const modalOpened = await page.evaluate((selectorId) => {
-          return new Promise((resolve) => {
-            const select = document.getElementById(selectorId);
-            const modal = document.getElementById('urlModal');
-            if (!select || !modal) {
-              resolve(false);
-              return;
-            }
-
-            // Find the Load from URL option value
-            const options = Array.from(select.querySelectorAll('option'));
-            const urlOption = options.find(opt =>
-              opt.textContent.includes('Load from URL')
-            );
-
-            if (!urlOption) {
-              resolve(false);
-              return;
-            }
-
-            // Select the option
-            select.value = urlOption.value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-
-            // Check if modal opened
-            setTimeout(() => {
-              const isOpen = modal.open;
-              if (modal.open) modal.close();
-              resolve(isOpen);
-            }, 300);
-          });
-        }, selector.id);
-
+        const modalOpened = await page.evaluate(browserTestLoadFromUrl, selector.id);
         expect(modalOpened).toBe(true);
       });
 
       test('cancelling URL modal should revert selector to previous value', async ({ page }) => {
-        const reverted = await page.evaluate((selectorId) => {
-          return new Promise((resolve) => {
-            const select = document.getElementById(selectorId);
-            const modal = document.getElementById('urlModal');
-            const cancelBtn = document.getElementById('urlModalCancel');
-            if (!select || !modal || !cancelBtn) {
-              resolve(false);
-              return;
-            }
-
-            // Store initial value
-            const initialValue = select.value;
-
-            // Find the Load from URL option
-            const options = Array.from(select.querySelectorAll('option'));
-            const urlOption = options.find(opt =>
-              opt.textContent.includes('Load from URL')
-            );
-
-            if (!urlOption) {
-              resolve(false);
-              return;
-            }
-
-            // Select Load from URL
-            select.value = urlOption.value;
-            select.dispatchEvent(new Event('change', { bubbles: true }));
-
-            setTimeout(() => {
-              if (!modal.open) {
-                resolve(false);
-                return;
-              }
-
-              // Cancel the modal
-              cancelBtn.click();
-
-              setTimeout(() => {
-                // Check if selector reverted
-                const finalValue = select.value;
-                resolve(finalValue === initialValue);
-              }, 200);
-            }, 300);
-          });
-        }, selector.id);
-
+        const reverted = await page.evaluate(browserTestCancelReverts, selector.id);
         expect(reverted).toBe(true);
       });
     });
