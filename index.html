@@ -997,6 +997,29 @@
         </div>
     </dialog>
 
+    <!-- URL Input Modal -->
+    <dialog class="gist-modal-overlay" id="urlModal" aria-labelledby="urlModalTitle" aria-describedby="urlModalDesc">
+        <div class="gist-modal">
+            <h2 id="urlModalTitle">Load from URL</h2>
+            <p id="urlModalDesc">Enter the URL of the file to load:</p>
+            <input type="url"
+                   id="urlInput"
+                   placeholder="https://raw.githubusercontent.com/user/repo/main/style.css"
+                   style="width: 100%; padding: 10px; border-radius: 4px; border: 1px solid #4a6278; background: #1a252f; color: white; font-size: 14px; margin: 0 0 8px 0; box-sizing: border-box;">
+            <div id="urlModalError" role="alert" aria-live="polite" style="display: none; color: #e74c3c; font-size: 13px; margin: 0 0 12px 0;"></div>
+            <div style="margin: 0 0 16px 0;">
+                <p style="font-size: 13px; color: #95a5a6; margin: 0 0 8px 0;">Allowed sources:</p>
+                <ul id="urlModalDomains" style="list-style: disc; padding: 0 0 0 20px; margin: 0; font-size: 12px; color: #7f8c8d;">
+                    <!-- Populated dynamically -->
+                </ul>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn" id="urlModalCancel" type="button">Cancel</button>
+                <button class="btn btn-success" id="urlModalLoad" type="button">Load</button>
+            </div>
+        </div>
+    </dialog>
+
     <div class="container">
         <div class="editor-panel">
             <div class="panel-header">

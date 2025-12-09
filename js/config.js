@@ -30,20 +30,23 @@ export const syntaxThemeSRI = {
 
 /**
  * Available syntax highlighting themes for PREVIEW code blocks (highlight.js).
+ * Themes are grouped using optgroup for better organization.
  */
 export const syntaxThemes = [
-    { name: 'GitHub Dark', file: 'github-dark', default: true },
-    { name: 'GitHub Light', file: 'github' },
-    { name: 'VS Code Dark+', file: 'vs2015' },
-    { name: 'Monokai', file: 'monokai' },
-    { name: 'Atom One Dark', file: 'atom-one-dark' },
-    { name: 'Atom One Light', file: 'atom-one-light' },
-    { name: 'Nord', file: 'nord' },
-    { name: 'Tokyo Night Dark', file: 'tokyo-night-dark' },
-    { name: 'Tokyo Night Light', file: 'tokyo-night-light' },
-    { name: 'Night Owl', file: 'night-owl' },
-    { name: 'Obsidian', file: 'obsidian' },
-    { name: 'Agate', file: 'agate' }
+    { name: 'GitHub Dark', file: 'github-dark', default: true, group: 'Themes' },
+    { name: 'GitHub Light', file: 'github', group: 'Themes' },
+    { name: 'VS Code Dark+', file: 'vs2015', group: 'Themes' },
+    { name: 'Monokai', file: 'monokai', group: 'Themes' },
+    { name: 'Atom One Dark', file: 'atom-one-dark', group: 'Themes' },
+    { name: 'Atom One Light', file: 'atom-one-light', group: 'Themes' },
+    { name: 'Nord', file: 'nord', group: 'Themes' },
+    { name: 'Tokyo Night Dark', file: 'tokyo-night-dark', group: 'Themes' },
+    { name: 'Tokyo Night Light', file: 'tokyo-night-light', group: 'Themes' },
+    { name: 'Night Owl', file: 'night-owl', group: 'Themes' },
+    { name: 'Obsidian', file: 'obsidian', group: 'Themes' },
+    { name: 'Agate', file: 'agate', group: 'Themes' },
+    { name: 'Load from file...', source: 'file', group: 'Import' },
+    { name: 'Load from URL...', source: 'url', group: 'Import' }
 ];
 
 // ==========================================
@@ -52,14 +55,17 @@ export const syntaxThemes = [
 
 /**
  * Available EDITOR themes (CodeMirror - local CSS files you can customize).
+ * Themes are grouped using optgroup for better organization.
  */
 export const editorThemes = [
-    { name: 'Material Darker', file: 'material-darker', default: true },
-    { name: 'GitHub Dark', file: 'github-dark' },
-    { name: 'Monokai', file: 'monokai' },
-    { name: 'Dracula', file: 'dracula' },
-    { name: 'Solarized Dark', file: 'solarized-dark' },
-    { name: 'Solarized Light', file: 'solarized-light' }
+    { name: 'Material Darker', file: 'material-darker', default: true, group: 'Themes' },
+    { name: 'GitHub Dark', file: 'github-dark', group: 'Themes' },
+    { name: 'Monokai', file: 'monokai', group: 'Themes' },
+    { name: 'Dracula', file: 'dracula', group: 'Themes' },
+    { name: 'Solarized Dark', file: 'solarized-dark', group: 'Themes' },
+    { name: 'Solarized Light', file: 'solarized-light', group: 'Themes' },
+    { name: 'Load from file...', source: 'file', group: 'Import' },
+    { name: 'Load from URL...', source: 'url', group: 'Import' }
 ];
 
 // ==========================================
@@ -69,14 +75,17 @@ export const editorThemes = [
 /**
  * Available Mermaid diagram themes.
  * 'Auto' mode automatically switches between 'default' (light) and 'dark' based on preview background.
+ * Themes are grouped using optgroup for better organization.
  */
 export const mermaidThemes = [
-    { name: 'Auto', value: 'auto', default: true, description: 'Auto-detect based on preview background' },
-    { name: 'Default', value: 'default', description: 'Blue/gray tones (light)' },
-    { name: 'Forest', value: 'forest', description: 'Green tones' },
-    { name: 'Dark', value: 'dark', description: 'Dark background' },
-    { name: 'Neutral', value: 'neutral', description: 'Grayscale' },
-    { name: 'Base', value: 'base', description: 'Minimal, customizable' }
+    { name: 'Auto', value: 'auto', default: true, description: 'Auto-detect based on preview background', group: 'Themes' },
+    { name: 'Default', value: 'default', description: 'Blue/gray tones (light)', group: 'Themes' },
+    { name: 'Forest', value: 'forest', description: 'Green tones', group: 'Themes' },
+    { name: 'Dark', value: 'dark', description: 'Dark background', group: 'Themes' },
+    { name: 'Neutral', value: 'neutral', description: 'Grayscale', group: 'Themes' },
+    { name: 'Base', value: 'base', description: 'Minimal, customizable', group: 'Themes' },
+    { name: 'Load from file...', source: 'file', group: 'Import' },
+    { name: 'Load from URL...', source: 'url', group: 'Import' }
 ];
 
 // ==========================================
@@ -85,25 +94,23 @@ export const mermaidThemes = [
 
 /**
  * Built-in custom styles (MIT licensed - created by us).
+ * Styles are grouped using optgroup for better organization.
+ * Separators are no longer needed as optgroups provide visual separation.
  */
 export const availableStyles = [
-    { name: 'None (No CSS)', file: '', source: 'none' },
-    { name: '---', file: '', source: 'separator' }, // Separator
-    { name: 'Clean', file: 'styles/clean.css', source: 'local', default: true },
-    { name: 'Academic', file: 'styles/academic.css', source: 'local' },
-    { name: 'GitHub', file: 'styles/github.css', source: 'local' },
-    { name: 'Dark Mode', file: 'styles/dark.css', source: 'local' },
-    { name: 'Monospace', file: 'styles/monospace.css', source: 'local' },
-    { name: 'Newspaper', file: 'styles/newspaper.css', source: 'local' },
-    { name: '---', file: '', source: 'separator' }, // Separator
-    { name: 'Respect Style Layout', file: '', source: 'toggle' },
-    { name: '---', file: '', source: 'separator' }, // Separator
-    { name: 'Load from file...', file: '', source: 'file' },
-    { name: 'Load from URL...', file: '', source: 'url' },
-    { name: '---', file: '', source: 'separator' }, // Separator
+    { name: 'None (No CSS)', file: '', source: 'none', group: 'Themes' },
+    { name: 'Clean', file: 'styles/clean.css', source: 'local', default: true, group: 'Themes' },
+    { name: 'Academic', file: 'styles/academic.css', source: 'local', group: 'Themes' },
+    { name: 'GitHub', file: 'styles/github.css', source: 'local', group: 'Themes' },
+    { name: 'Dark Mode', file: 'styles/dark.css', source: 'local', group: 'Themes' },
+    { name: 'Monospace', file: 'styles/monospace.css', source: 'local', group: 'Themes' },
+    { name: 'Newspaper', file: 'styles/newspaper.css', source: 'local', group: 'Themes' },
+    { name: 'Respect Style Layout', file: '', source: 'toggle', group: 'Options' },
+    { name: 'Load from file...', file: '', source: 'file', group: 'Import' },
+    { name: 'Load from URL...', file: '', source: 'url', group: 'Import' },
     { name: 'MarkedCustomStyles (external)', file: '', source: 'repository',
       url: 'https://cdn.jsdelivr.net/gh/ttscoff/MarkedCustomStyles@master/',
-      note: 'Third-party styles (license unclear)' }
+      note: 'Third-party styles (license unclear)', group: 'Import' }
 ];
 
 // ==========================================

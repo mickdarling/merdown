@@ -7,7 +7,7 @@
 import { state } from './state.js';
 import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js';
 import { renderMarkdown, scheduleRender } from './renderer.js';
-import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground } from './themes.js';
+import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, initURLModalHandlers, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground } from './themes.js';
 import { loadMarkdownFromURL, loadSample, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, exportToPDFDirect, initFileInputHandlers } from './file-ops.js';
 import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUrl, disconnectGitHub } from './gist.js';
 import { toggleLintPanel, validateCode } from './validation.js';
@@ -277,6 +277,9 @@ function initializeApp() {
 
     // Initialize private URL modal handlers
     initPrivateUrlModalHandlers();
+
+    // Initialize URL input modal handlers (for theme/content loading)
+    initURLModalHandlers();
 
     // Initialize mermaid fullscreen handlers (exposes global functions)
     initMermaidFullscreen();
