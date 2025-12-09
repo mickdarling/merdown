@@ -293,6 +293,33 @@ function browserCheckStateCleanup() {
 }
 
 /**
+ * Browser-side helper: Count optgroups in a selector
+ * @param {string} selectorId - The selector ID
+ * @returns {number} Number of optgroups
+ */
+function browserCountOptgroups(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return 0;
+  return select.querySelectorAll('optgroup').length;
+}
+
+/**
+ * Browser-side helper: Get optgroup labels from a selector
+ * @param {string} selectorId - The selector ID
+ * @returns {Array<string>} Array of optgroup labels
+ */
+function browserGetOptgroupLabels(selectorId) {
+  const select = document.getElementById(selectorId);
+  if (!select) return [];
+  const optgroups = select.querySelectorAll('optgroup');
+  const labels = [];
+  for (let i = 0; i < optgroups.length; i++) {
+    labels.push(optgroups[i].label);
+  }
+  return labels;
+}
+
+/**
  * Browser-side helper: Check optgroups contain options
  * @param {string} selectorId - The selector ID
  * @returns {boolean} True if all optgroups have options
@@ -818,18 +845,12 @@ test.describe('Theme Selector Optgroups', () => {
   for (const selector of SELECTORS_WITH_OPTGROUPS) {
     test.describe(`${selector.name} Selector (#${selector.id})`, () => {
       test('should have optgroup elements', async ({ page }) => {
-        const optgroupCount = await page.$$eval(
-          `#${selector.id} optgroup`,
-          function countGroups(groups) { return groups.length; }
-        );
+        const optgroupCount = await page.evaluate(browserCountOptgroups, selector.id);
         expect(optgroupCount).toBeGreaterThan(0);
       });
 
       test('should have correct optgroup labels', async ({ page }) => {
-        const labels = await page.$$eval(
-          `#${selector.id} optgroup`,
-          function getLabels(groups) { return groups.map(function extractLabel(g) { return g.label; }); }
-        );
+        const labels = await page.evaluate(browserGetOptgroupLabels, selector.id);
 
         for (const expectedGroup of selector.expectedGroups) {
           expect(labels).toContain(expectedGroup);
