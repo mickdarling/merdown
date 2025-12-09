@@ -5,7 +5,7 @@
 const { test, expect } = require('@playwright/test');
 
 /**
- * Browser-side helper: Check if clicking Open File menu item triggers file input click
+ * Browser-side helper: Check if selecting "Load from file" triggers file input click
  * Extracted to avoid deep function nesting (SonarCloud S2004)
  * @returns {Promise<boolean>} True if file input was clicked
  */
@@ -18,15 +18,10 @@ function browserCheckOpenButtonClick() {
       resolve(true);
     }, { once: true });
 
-    // Open the dropdown first
-    const dropdownBtn = document.getElementById('openDropdownBtn');
-    if (dropdownBtn) dropdownBtn.click();
-
-    // Wait a moment for dropdown to open, then click Open File
-    setTimeout(function clickOpenFile() {
-      const openFileBtn = document.querySelector('button[data-action="open-file"]');
-      if (openFileBtn) openFileBtn.click();
-    }, 100);
+    // Use the changeDocument function to trigger file picker
+    if (typeof globalThis.changeDocument === 'function') {
+      globalThis.changeDocument('__load_file__');
+    }
 
     setTimeout(function fallbackTimeout() { resolve(false); }, 2000);
   });
@@ -81,20 +76,15 @@ test.describe('Open Functionality', () => {
     });
   });
 
-  test.describe('Open Dropdown', () => {
-    test('Open dropdown should exist in toolbar', async ({ page }) => {
-      const openDropdown = await page.$('#openDropdown');
-      expect(openDropdown).not.toBeNull();
+  test.describe('Document Selector', () => {
+    test('Document selector should exist in editor panel', async ({ page }) => {
+      const docSelector = await page.$('#documentSelector');
+      expect(docSelector).not.toBeNull();
     });
 
-    test('Open dropdown button should exist', async ({ page }) => {
-      const dropdownBtn = await page.$('#openDropdownBtn');
-      expect(dropdownBtn).not.toBeNull();
-    });
-
-    test('Open dropdown should have aria-haspopup attribute', async ({ page }) => {
-      const hasPopup = await page.$eval('#openDropdownBtn', el => el.getAttribute('aria-haspopup'));
-      expect(hasPopup).toBe('menu');
+    test('Document selector should be a select element', async ({ page }) => {
+      const tagName = await page.$eval('#documentSelector', el => el.tagName.toLowerCase());
+      expect(tagName).toBe('select');
     });
 
     test('openFile function should be globally available', async ({ page }) => {
@@ -102,8 +92,8 @@ test.describe('Open Functionality', () => {
       expect(isFunction).toBe(true);
     });
 
-    test('openFromURL function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.openFromURL === 'function');
+    test('changeDocument function should be globally available', async ({ page }) => {
+      const isFunction = await page.evaluate(() => typeof globalThis.changeDocument === 'function');
       expect(isFunction).toBe(true);
     });
 
@@ -112,22 +102,28 @@ test.describe('Open Functionality', () => {
       expect(isFunction).toBe(true);
     });
 
-    test('clicking dropdown should show menu items', async ({ page }) => {
-      // Click dropdown button
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Check menu items are visible
-      const openFileBtn = page.locator('button[data-action="open-file"]');
-      const openUrlBtn = page.locator('button[data-action="open-url"]');
-      const newDocBtn = page.locator('button[data-action="new-document"]');
-
-      await expect(openFileBtn).toBeVisible();
-      await expect(openUrlBtn).toBeVisible();
-      await expect(newDocBtn).toBeVisible();
+    test('Document selector should have Import optgroup', async ({ page }) => {
+      const optgroups = await page.$$eval('#documentSelector optgroup', groups =>
+        groups.map(g => g.label)
+      );
+      expect(optgroups).toContain('Import');
     });
 
-    test('clicking Open File menu item should trigger file input click', async ({ page }) => {
+    test('Document selector should have Load from file option', async ({ page }) => {
+      const options = await page.$$eval('#documentSelector option', opts =>
+        opts.map(o => o.textContent)
+      );
+      expect(options).toContain('Load from file...');
+    });
+
+    test('Document selector should have Load from URL option', async ({ page }) => {
+      const options = await page.$$eval('#documentSelector option', opts =>
+        opts.map(o => o.textContent)
+      );
+      expect(options).toContain('Load from URL...');
+    });
+
+    test('selecting Load from file should trigger file input click', async ({ page }) => {
       // Track if file input was clicked by listening for the click event
       // Uses extracted helper to avoid deep nesting (SonarCloud S2004)
       const wasClicked = await page.evaluate(browserCheckOpenButtonClick);
@@ -156,72 +152,42 @@ test.describe('Open Functionality', () => {
     });
   });
 
-  test.describe('Document Name Display', () => {
-    test('document name element should exist', async ({ page }) => {
-      const docName = await page.$('#documentName');
-      expect(docName).not.toBeNull();
-    });
-
-    test('document name should show "Untitled" for new documents', async ({ page }) => {
-      // Clear content to ensure we have an untitled document
-      await page.evaluate(() => {
-        globalThis.state.currentFilename = null;
-        globalThis.state.loadedFromURL = null;
-        globalThis.updateDocumentNameDisplay();
-      });
-
-      const docNameText = await page.$eval('#documentName', el => el.textContent);
-      expect(docNameText).toBe('Untitled');
-    });
-
-    test('document name should update when filename is set', async ({ page }) => {
+  test.describe('Document Name in Selector', () => {
+    test('Document selector should show current document name', async ({ page }) => {
+      // Set a filename and update selector
       await page.evaluate(() => {
         globalThis.state.currentFilename = 'test-document.md';
         globalThis.state.loadedFromURL = null;
-        globalThis.updateDocumentNameDisplay();
+        globalThis.updateDocumentSelector();
       });
 
-      const docNameText = await page.$eval('#documentName', el => el.textContent);
-      expect(docNameText).toBe('test-document.md');
+      // The current document should be shown in the selector
+      const selectedText = await page.$eval('#documentSelector', el => {
+        const selected = el.querySelector('option:checked');
+        return selected ? selected.textContent : '';
+      });
+      expect(selectedText).toBe('test-document.md');
     });
 
-    test('updateDocumentNameDisplay function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.updateDocumentNameDisplay === 'function');
+    test('Document selector should show Untitled for new documents', async ({ page }) => {
+      // Clear filename and update selector
+      await page.evaluate(() => {
+        globalThis.state.currentFilename = null;
+        globalThis.state.loadedFromURL = null;
+        globalThis.updateDocumentSelector();
+      });
+
+      // The selector should show "Untitled"
+      const selectedText = await page.$eval('#documentSelector', el => {
+        const selected = el.querySelector('option:checked');
+        return selected ? selected.textContent : '';
+      });
+      expect(selectedText).toBe('Untitled');
+    });
+
+    test('updateDocumentSelector function should be globally available', async ({ page }) => {
+      const isFunction = await page.evaluate(() => typeof globalThis.updateDocumentSelector === 'function');
       expect(isFunction).toBe(true);
-    });
-  });
-
-  test.describe('Dropdown Keyboard Navigation', () => {
-    test('Escape key should close dropdown', async ({ page }) => {
-      // Open dropdown
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Verify dropdown is open
-      const isOpen = await page.$eval('#openDropdownBtn', el => el.getAttribute('aria-expanded'));
-      expect(isOpen).toBe('true');
-
-      // Press Escape
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(200);
-
-      // Verify dropdown is closed
-      const isClosed = await page.$eval('#openDropdownBtn', el => el.getAttribute('aria-expanded'));
-      expect(isClosed).toBe('false');
-    });
-
-    test('clicking outside dropdown should close it', async ({ page }) => {
-      // Open dropdown
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Click outside (on the editor)
-      await page.click('.CodeMirror');
-      await page.waitForTimeout(200);
-
-      // Verify dropdown is closed
-      const isClosed = await page.$eval('#openDropdownBtn', el => el.getAttribute('aria-expanded'));
-      expect(isClosed).toBe('false');
     });
   });
 
@@ -259,31 +225,32 @@ test.describe('Open Functionality', () => {
       expect(filename).toBeNull();
     });
 
-    test('newDocument should update document name display to Untitled', async ({ page }) => {
+    test('newDocument should update document selector to Untitled', async ({ page }) => {
       // Set a filename first
       await page.evaluate(() => {
         globalThis.state.currentFilename = 'existing-file.md';
-        globalThis.updateDocumentNameDisplay();
+        globalThis.updateDocumentSelector();
       });
 
       // Call newDocument
       await page.evaluate(() => globalThis.newDocument());
       await page.waitForTimeout(100);
 
-      // Verify document name shows Untitled
-      const docNameText = await page.$eval('#documentName', el => el.textContent);
-      expect(docNameText).toBe('Untitled');
+      // Verify document selector shows Untitled
+      const selectedText = await page.$eval('#documentSelector', el => {
+        const selected = el.querySelector('option:checked');
+        return selected ? selected.textContent : '';
+      });
+      expect(selectedText).toBe('Untitled');
     });
   });
 
   test.describe('Open from URL', () => {
-    test('clicking Open from URL should open URL modal', async ({ page }) => {
-      // Open dropdown
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Click Open from URL
-      await page.click('button[data-action="open-url"]');
+    test('selecting Load from URL should open URL modal', async ({ page }) => {
+      // Use changeDocument to trigger URL modal
+      await page.evaluate(() => {
+        globalThis.changeDocument('__load_url__');
+      });
       await page.waitForTimeout(300);
 
       // Verify URL modal is visible
@@ -292,12 +259,10 @@ test.describe('Open Functionality', () => {
     });
 
     test('URL modal should show correct title for markdown loading', async ({ page }) => {
-      // Open dropdown
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Click Open from URL
-      await page.click('button[data-action="open-url"]');
+      // Use changeDocument to trigger URL modal
+      await page.evaluate(() => {
+        globalThis.changeDocument('__load_url__');
+      });
       await page.waitForTimeout(300);
 
       // Check modal title
@@ -306,12 +271,10 @@ test.describe('Open Functionality', () => {
     });
 
     test('URL modal should list allowed markdown domains', async ({ page }) => {
-      // Open dropdown
-      await page.click('#openDropdownBtn');
-      await page.waitForTimeout(200);
-
-      // Click Open from URL
-      await page.click('button[data-action="open-url"]');
+      // Use changeDocument to trigger URL modal
+      await page.evaluate(() => {
+        globalThis.changeDocument('__load_url__');
+      });
       await page.waitForTimeout(300);
 
       // Check domain list contains markdown domains

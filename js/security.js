@@ -144,6 +144,77 @@ export function normalizeGistUrl(url) {
 }
 
 /**
+ * Normalize github.com blob URLs to raw.githubusercontent.com URLs
+ *
+ * Handles the following transformations:
+ * - github.com/{user}/{repo}/blob/{branch}/{path} → raw.githubusercontent.com/{user}/{repo}/{branch}/{path}
+ * - Returns original URL unchanged if not a github.com blob URL
+ *
+ * Examples:
+ * - Input:  https://github.com/DollhouseMCP/mcp-server/blob/main/README.md
+ *   Output: https://raw.githubusercontent.com/DollhouseMCP/mcp-server/main/README.md
+ *
+ * - Input:  https://github.com/user/repo/blob/develop/docs/guide.md
+ *   Output: https://raw.githubusercontent.com/user/repo/develop/docs/guide.md
+ *
+ * @param {string} url - The URL to normalize
+ * @returns {string} The normalized URL or original URL if not a github blob URL
+ */
+export function normalizeGitHubUrl(url) {
+    try {
+        const parsed = new URL(url);
+
+        // Only process github.com URLs
+        if (parsed.hostname !== 'github.com') {
+            return url;
+        }
+
+        // Parse pathname: /{user}/{repo}/blob/{branch}/{...path}
+        const pathParts = parsed.pathname.slice(1).split('/').filter(p => p.length > 0);
+
+        // Need at least user, repo, "blob", branch, and at least one path segment
+        if (pathParts.length < 5 || pathParts[2] !== 'blob') {
+            return url;
+        }
+
+        const user = pathParts[0];
+        const repo = pathParts[1];
+        // pathParts[2] is 'blob' - skip it
+        const branch = pathParts[3];
+        const filePath = pathParts.slice(4).join('/');
+
+        // Build raw URL
+        const rawUrl = new URL(`https://raw.githubusercontent.com/${user}/${repo}/${branch}/${filePath}`);
+
+        // Preserve query parameters (but not fragment - raw URLs don't use them)
+        rawUrl.search = parsed.search;
+
+        return rawUrl.toString();
+    } catch {
+        // Invalid URL - return unchanged
+        return url;
+    }
+}
+
+/**
+ * Normalize any GitHub-related URL to its raw content URL
+ * Combines normalizeGistUrl and normalizeGitHubUrl for convenience
+ *
+ * @param {string} url - The URL to normalize
+ * @returns {string} The normalized URL or original URL if not a GitHub URL
+ */
+export function normalizeGitHubContentUrl(url) {
+    // First try gist normalization
+    let normalized = normalizeGistUrl(url);
+    if (normalized !== url) {
+        return normalized;
+    }
+
+    // Then try github.com blob normalization
+    return normalizeGitHubUrl(url);
+}
+
+/**
  * Validate markdown URL against allowlist with security edge case protections
  *
  * Security checks performed:

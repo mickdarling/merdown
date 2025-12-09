@@ -13,7 +13,7 @@
 import { state } from './state.js';
 import { getElements } from './dom.js';
 import { showStatus } from './utils.js';
-import { isAllowedMarkdownURL, normalizeGistUrl } from './security.js';
+import { isAllowedMarkdownURL, normalizeGitHubContentUrl } from './security.js';
 import { renderMarkdown } from './renderer.js';
 
 /**
@@ -52,7 +52,12 @@ export async function loadMarkdownFile(file) {
 
         state.currentFilename = file.name;
         state.loadedFromURL = null; // Clear URL source when loading from file
-        updateDocumentNameDisplay();
+
+        // Update document selector to show the new name
+        if (typeof globalThis.updateDocumentSelector === 'function') {
+            globalThis.updateDocumentSelector();
+        }
+
         await renderMarkdown();
         showStatus(`Loaded: ${file.name}`);
         return true;
@@ -140,8 +145,8 @@ export function isValidMarkdownContentType(contentType) {
  * @returns {Promise<boolean>} True if successful, false on error
  */
 export async function loadMarkdownFromURL(url) {
-    // Normalize gist.github.com URLs to raw URLs (Issue #107)
-    const normalizedUrl = normalizeGistUrl(url);
+    // Normalize GitHub URLs (gist.github.com and github.com/blob) to raw URLs
+    const normalizedUrl = normalizeGitHubContentUrl(url);
 
     if (!isAllowedMarkdownURL(normalizedUrl)) {
         const { ALLOWED_MARKDOWN_DOMAINS } = await import('./config.js');
@@ -192,7 +197,11 @@ export async function loadMarkdownFromURL(url) {
         const urlPath = new URL(normalizedUrl).pathname;
         state.currentFilename = urlPath.split('/').pop() || 'remote.md';
         state.loadedFromURL = normalizedUrl; // Track URL source
-        updateDocumentNameDisplay();
+
+        // Update document selector to show the new name
+        if (typeof globalThis.updateDocumentSelector === 'function') {
+            globalThis.updateDocumentSelector();
+        }
 
         await renderMarkdown();
         showStatus(`Loaded: ${state.currentFilename}`);
@@ -654,6 +663,16 @@ Merview is free and open source under the AGPL-3.0 license.
     if (cmEditor) {
         cmEditor.setValue(sample);
     }
+
+    // Set document name for the sample
+    state.currentFilename = 'Welcome.md';
+    state.loadedFromURL = null;
+
+    // Update document selector to show the new name
+    if (typeof globalThis.updateDocumentSelector === 'function') {
+        globalThis.updateDocumentSelector();
+    }
+
     renderMarkdown();
 }
 
@@ -693,67 +712,3 @@ export function initFileInputHandlers() {
     });
 }
 
-/**
- * Open markdown from URL via modal dialog
- * Uses the URL modal component to get a URL from the user,
- * then loads the markdown content from that URL.
- * @returns {Promise<boolean>} True if content was loaded, false if cancelled or error
- */
-export async function openFromURL() {
-    const { showURLModal } = await import('./components/url-modal.js');
-    const { ALLOWED_MARKDOWN_DOMAINS } = await import('./config.js');
-
-    const url = await showURLModal({
-        title: 'Open from URL',
-        placeholder: 'https://raw.githubusercontent.com/user/repo/main/README.md',
-        allowedDomains: ALLOWED_MARKDOWN_DOMAINS
-    });
-
-    if (url) {
-        return await loadMarkdownFromURL(url);
-    }
-
-    return false;
-}
-
-/**
- * Create a new document by clearing the editor
- * Resets the editor content, filename, and URL source.
- * Optionally loads sample content instead of leaving blank.
- */
-export function newDocument() {
-    const { cmEditor } = state;
-
-    if (cmEditor) {
-        cmEditor.setValue('');
-    }
-
-    state.currentFilename = null;
-    state.loadedFromURL = null;
-    updateDocumentNameDisplay();
-    renderMarkdown();
-    showStatus('New document created');
-}
-
-/**
- * Update the document name display in the Open dropdown
- * Shows the current filename, URL hostname, or "Untitled" for new documents
- */
-export function updateDocumentNameDisplay() {
-    const displayEl = document.getElementById('documentName');
-    if (!displayEl) return;
-
-    if (state.currentFilename) {
-        displayEl.textContent = state.currentFilename;
-        displayEl.title = state.loadedFromURL
-            ? `${state.currentFilename} (from ${new URL(state.loadedFromURL).hostname})`
-            : state.currentFilename;
-    } else if (state.loadedFromURL) {
-        const hostname = new URL(state.loadedFromURL).hostname;
-        displayEl.textContent = `URL: ${hostname}`;
-        displayEl.title = state.loadedFromURL;
-    } else {
-        displayEl.textContent = 'Untitled';
-        displayEl.title = 'No document loaded';
-    }
-}

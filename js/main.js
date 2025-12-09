@@ -8,11 +8,12 @@ import { state } from './state.js';
 import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js';
 import { renderMarkdown, scheduleRender } from './renderer.js';
 import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, initURLModalHandlers, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground } from './themes.js';
-import { loadMarkdownFromURL, loadSample, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, exportToPDFDirect, initFileInputHandlers, openFromURL, newDocument, updateDocumentNameDisplay } from './file-ops.js';
+import { loadMarkdownFromURL, loadSample, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, exportToPDFDirect, initFileInputHandlers } from './file-ops.js';
+import { initDocumentSelector, changeDocument, newDocument, updateDocumentSelector } from './documents.js';
 import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUrl, disconnectGitHub } from './gist.js';
 import { toggleLintPanel, validateCode } from './validation.js';
 import { initMermaidFullscreen } from './mermaid-fullscreen.js';
-import { isAllowedMarkdownURL, isAllowedCSSURL, stripGitHubToken, showPrivateUrlModal, initPrivateUrlModalHandlers, normalizeGistUrl } from './security.js';
+import { isAllowedMarkdownURL, isAllowedCSSURL, stripGitHubToken, showPrivateUrlModal, initPrivateUrlModalHandlers, normalizeGistUrl, normalizeGitHubContentUrl } from './security.js';
 import { isRelativeDocPath, resolveDocUrl } from './config.js';
 import { getMarkdownContent, isFreshVisit, markSessionInitialized } from './storage.js';
 import { showStatus } from './utils.js';
@@ -28,7 +29,7 @@ function clearEditor() {
         }
         state.currentFilename = null;
         state.loadedFromURL = null;
-        updateDocumentNameDisplay();
+        updateDocumentSelector();
         renderMarkdown();
         showStatus('Editor cleared');
     }
@@ -61,15 +62,17 @@ function exposeGlobalFunctions() {
 
     // File operation functions
     globalThis.openFile = openFile;
-    globalThis.openFromURL = openFromURL;
-    globalThis.newDocument = newDocument;
-    globalThis.updateDocumentNameDisplay = updateDocumentNameDisplay;
     globalThis.saveFile = saveFile;
     globalThis.saveFileAs = saveFileAs;
     globalThis.isValidMarkdownFile = isValidMarkdownFile;
     globalThis.isValidMarkdownContentType = isValidMarkdownContentType;
     globalThis.exportToPDF = exportToPDF;
     globalThis.exportToPDFDirect = exportToPDFDirect;
+
+    // Document management functions
+    globalThis.changeDocument = changeDocument;
+    globalThis.newDocument = newDocument;
+    globalThis.updateDocumentSelector = updateDocumentSelector;
 
     // Validation functions
     globalThis.toggleLintPanel = toggleLintPanel;
@@ -80,6 +83,7 @@ function exposeGlobalFunctions() {
     globalThis.isAllowedCSSURL = isAllowedCSSURL;
     globalThis.stripGitHubToken = stripGitHubToken;
     globalThis.normalizeGistUrl = normalizeGistUrl;
+    globalThis.normalizeGitHubContentUrl = normalizeGitHubContentUrl;
 
     // Utility functions
     globalThis.showStatus = showStatus;
@@ -110,7 +114,7 @@ function setupKeyboardShortcuts() {
         // Ctrl/Cmd + Shift + O to open from URL
         if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'O') {
             e.preventDefault();
-            openFromURL();
+            changeDocument('__load_url__');
         }
 
         // Ctrl/Cmd + P to print/export PDF
@@ -125,130 +129,6 @@ function setupKeyboardShortcuts() {
             exportToPDFDirect();
         }
     });
-}
-
-/**
- * Initialize the Open dropdown menu
- * Sets up click handlers for dropdown toggle and menu items
- */
-function initOpenDropdown() {
-    const dropdown = document.getElementById('openDropdown');
-    const toggleBtn = document.getElementById('openDropdownBtn');
-    const menu = document.getElementById('openDropdownMenu');
-
-    if (!dropdown || !toggleBtn || !menu) {
-        console.warn('Open dropdown elements not found');
-        return;
-    }
-
-    /**
-     * Close the dropdown menu
-     */
-    function closeDropdown() {
-        dropdown.classList.remove('open');
-        toggleBtn.setAttribute('aria-expanded', 'false');
-        menu.setAttribute('aria-hidden', 'true');
-    }
-
-    /**
-     * Open the dropdown menu
-     */
-    function openDropdown() {
-        dropdown.classList.add('open');
-        toggleBtn.setAttribute('aria-expanded', 'true');
-        menu.setAttribute('aria-hidden', 'false');
-        // Focus first menu item
-        const firstItem = menu.querySelector('button');
-        if (firstItem) {
-            firstItem.focus();
-        }
-    }
-
-    /**
-     * Toggle dropdown state
-     */
-    function toggleDropdown() {
-        if (dropdown.classList.contains('open')) {
-            closeDropdown();
-        } else {
-            openDropdown();
-        }
-    }
-
-    // Toggle dropdown on button click
-    toggleBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        toggleDropdown();
-    });
-
-    // Handle menu item clicks
-    menu.addEventListener('click', async (e) => {
-        const button = e.target.closest('button[data-action]');
-        if (!button) return;
-
-        const action = button.dataset.action;
-        closeDropdown();
-
-        switch (action) {
-            case 'open-file':
-                openFile();
-                break;
-            case 'open-url':
-                await openFromURL();
-                break;
-            case 'new-document':
-                newDocument();
-                break;
-        }
-    });
-
-    // Keyboard navigation within dropdown
-    menu.addEventListener('keydown', (e) => {
-        const items = Array.from(menu.querySelectorAll('button'));
-        const currentIndex = items.indexOf(document.activeElement);
-
-        switch (e.key) {
-            case 'ArrowDown':
-                e.preventDefault();
-                if (currentIndex < items.length - 1) {
-                    items[currentIndex + 1].focus();
-                }
-                break;
-            case 'ArrowUp':
-                e.preventDefault();
-                if (currentIndex > 0) {
-                    items[currentIndex - 1].focus();
-                }
-                break;
-            case 'Escape':
-                e.preventDefault();
-                closeDropdown();
-                toggleBtn.focus();
-                break;
-            case 'Tab':
-                // Close dropdown when tabbing out
-                closeDropdown();
-                break;
-        }
-    });
-
-    // Close dropdown when clicking outside
-    document.addEventListener('click', (e) => {
-        if (!dropdown.contains(e.target)) {
-            closeDropdown();
-        }
-    });
-
-    // Close dropdown on Escape key (global)
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape' && dropdown.classList.contains('open')) {
-            closeDropdown();
-            toggleBtn.focus();
-        }
-    });
-
-    // Initialize ARIA attributes
-    menu.setAttribute('aria-hidden', 'true');
 }
 
 /**
@@ -410,8 +290,8 @@ function initializeApp() {
     // Initialize file input handlers
     initFileInputHandlers();
 
-    // Initialize Open dropdown menu
-    initOpenDropdown();
+    // Initialize document selector
+    initDocumentSelector();
 
     // Initialize private URL modal handlers
     initPrivateUrlModalHandlers();

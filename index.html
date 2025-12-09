@@ -220,85 +220,6 @@
             background: #c0392b;
         }
 
-        /* Dropdown component */
-        .dropdown {
-            position: relative;
-            display: inline-block;
-        }
-
-        .dropdown-toggle {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-        }
-
-        .dropdown-icon {
-            font-size: 14px;
-        }
-
-        .document-name {
-            max-width: 150px;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .dropdown-arrow {
-            font-size: 10px;
-            opacity: 0.8;
-        }
-
-        .dropdown-menu {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            z-index: 1000;
-            display: none;
-            min-width: 180px;
-            margin: 4px 0 0 0;
-            padding: 4px 0;
-            list-style: none;
-            background: #2c3e50;
-            border-radius: 6px;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-        }
-
-        .dropdown-menu[aria-hidden="false"],
-        .dropdown.open .dropdown-menu {
-            display: block;
-        }
-
-        .dropdown-menu li[role="separator"] {
-            height: 1px;
-            margin: 4px 8px;
-            background: #3d566e;
-        }
-
-        .dropdown-menu button {
-            display: block;
-            width: 100%;
-            padding: 10px 16px;
-            border: none;
-            background: none;
-            color: #ecf0f1;
-            font-size: 14px;
-            text-align: left;
-            cursor: pointer;
-            transition: background 0.15s;
-        }
-
-        .dropdown-menu button:hover,
-        .dropdown-menu button:focus {
-            background: #3498db;
-            outline: none;
-        }
-
-        .dropdown-menu button:focus-visible {
-            outline: 2px solid #ffffff;
-            outline-offset: -2px;
-        }
-
         /* Share to Gist Modal */
         .gist-modal-overlay {
             position: fixed;
@@ -545,6 +466,12 @@
         .panel-selectors {
             display: flex;
             gap: 8px;
+        }
+
+        .panel-title-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
         }
 
         .panel-selector {
@@ -1026,20 +953,6 @@
             </a>
         </header>
         <div class="toolbar-buttons">
-            <!-- Open dropdown with document name indicator -->
-            <div class="dropdown" id="openDropdown">
-                <button class="btn dropdown-toggle" id="openDropdownBtn" aria-haspopup="menu" aria-expanded="false" aria-controls="openDropdownMenu">
-                    <span class="dropdown-icon">📂</span>
-                    <span class="document-name" id="documentName">Untitled</span>
-                    <span class="dropdown-arrow" aria-hidden="true">▾</span>
-                </button>
-                <ul class="dropdown-menu" id="openDropdownMenu" role="menu" aria-label="Open document options">
-                    <li role="none"><button role="menuitem" data-action="open-file">📄 Open File...</button></li>
-                    <li role="none"><button role="menuitem" data-action="open-url">🔗 Open from URL...</button></li>
-                    <li role="separator" aria-hidden="true"></li>
-                    <li role="none"><button role="menuitem" data-action="new-document">📝 New Document</button></li>
-                </ul>
-            </div>
             <button class="btn btn-success" onclick="saveFile()">💾 Save</button>
             <button class="btn btn-success" onclick="saveFileAs()">📥 Save As</button>
             <button class="btn btn-success" onclick="shareToGist()" id="shareGistBtn" title="Share document as a GitHub Gist">🔗 Share to Gist</button>
@@ -1115,7 +1028,12 @@
     <div class="container">
         <div class="editor-panel">
             <div class="panel-header">
-                <span>Editor</span>
+                <div class="panel-title-group">
+                    <span>Editor</span>
+                    <select class="panel-selector" id="documentSelector" onchange="changeDocument(this.value)" title="Current document">
+                        <option value="">Document...</option>
+                    </select>
+                </div>
                 <select class="panel-selector" id="editorThemeSelector" onchange="changeEditorTheme(this.value)" title="Editor syntax highlighting">
                     <option value="">Theme...</option>
                 </select>

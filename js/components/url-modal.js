@@ -11,7 +11,7 @@
  */
 
 import { ALLOWED_CSS_DOMAINS } from '../config.js';
-import { normalizeGistUrl } from '../security.js';
+import { normalizeGitHubContentUrl } from '../security.js';
 
 /**
  * Validate URL against an array of allowed domains
@@ -195,8 +195,8 @@ export function initURLModalHandlers() {
                     return;
                 }
 
-                // Normalize gist URLs and validate against allowed domains
-                const normalizedUrl = normalizeGistUrl(url);
+                // Normalize GitHub URLs and validate against allowed domains
+                const normalizedUrl = normalizeGitHubContentUrl(url);
                 if (!isAllowedURL(normalizedUrl, currentAllowedDomains)) {
                     showModalError(`URL not allowed. Use: ${currentAllowedDomains.join(', ')}`);
                     urlInput.focus();

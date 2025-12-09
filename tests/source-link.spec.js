@@ -177,10 +177,10 @@ test.describe('Source Link Functionality (AGPL-3.0 Compliance)', () => {
 
   test.describe('Integration with Application', () => {
     test('should not interfere with other toolbar functionality', async ({ page }) => {
-      const openDropdownBtn = page.locator('#openDropdownBtn');
+      const documentSelector = page.locator('#documentSelector');
       const clearBtn = page.locator('button[onclick="clearEditor()"]');
       await expect(sourceLink).toBeVisible();
-      await expect(openDropdownBtn).toBeVisible();
+      await expect(documentSelector).toBeVisible();
       await expect(clearBtn).toBeVisible();
     });
 
