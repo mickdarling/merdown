@@ -315,6 +315,24 @@ test.describe('Open Functionality', () => {
   });
 
   test.describe('Open from URL', () => {
+    test('Ctrl+Shift+O keyboard shortcut should open URL modal', async ({ page }) => {
+      // Check if running on macOS for correct modifier key
+      const isMac = process.platform === 'darwin';
+
+      // Press the keyboard shortcut (Meta on Mac, Control on others)
+      if (isMac) {
+        await page.keyboard.press('Meta+Shift+O');
+      } else {
+        await page.keyboard.press('Control+Shift+O');
+      }
+
+      await page.waitForTimeout(300);
+
+      // Verify URL modal is visible
+      const modal = page.locator('#urlModal');
+      await expect(modal).toBeVisible();
+    });
+
     test('selecting Load from URL should open URL modal', async ({ page }) => {
       // Use changeDocument to trigger URL modal
       await page.evaluate(() => {
