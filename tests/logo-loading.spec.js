@@ -61,18 +61,21 @@ test.describe('Logo Loading and Display', () => {
   test('logo has appropriate alt text for accessibility', async ({ page }) => {
     const logo = getLogo(page);
 
-    // Get alt text
+    // The logo is inside a link with aria-label, so it should have empty alt
+    // and aria-hidden="true" to avoid redundant announcements.
+    // The parent link provides the accessible name.
     const altText = await logo.getAttribute('alt');
+    const ariaHidden = await logo.getAttribute('aria-hidden');
 
-    // Verify alt text exists and is meaningful
-    expect(altText).toBeTruthy();
-    expect(altText).toBe('Merview - Mermaid diagram and Markdown editor');
+    // For decorative images in labeled links, alt should be empty
+    expect(altText).toBe('');
+    expect(ariaHidden).toBe('true');
 
-    // Verify it's descriptive (not just empty or 'logo')
-    expect(altText.length).toBeGreaterThan(5);
-
-    // Verify it includes the app name
-    expect(altText).toContain('Merview');
+    // Verify the parent link has proper aria-label
+    const parentLink = page.locator('.brand-home-link');
+    const linkAriaLabel = await parentLink.getAttribute('aria-label');
+    expect(linkAriaLabel).toBeTruthy();
+    expect(linkAriaLabel).toContain('Merview');
   });
 
   test('logo actually loads (naturalWidth > 0)', async ({ page }) => {
@@ -182,21 +185,19 @@ test.describe('Logo Loading and Display', () => {
       expect(errorHandled).toBe(true);
     });
 
-    test('logo alt text provides meaningful fallback', async ({ page }) => {
-      const logo = getLogo(page);
+    test('logo parent link provides meaningful fallback via aria-label', async ({ page }) => {
+      // The logo has empty alt and is decorative (aria-hidden="true")
+      // The parent link provides the accessible name via aria-label
+      const parentLink = page.locator('.brand-home-link');
+      const ariaLabel = await parentLink.getAttribute('aria-label');
 
-      const altText = await logo.getAttribute('alt');
+      // aria-label should provide meaningful description
+      expect(ariaLabel).toBeTruthy();
+      expect(ariaLabel.toLowerCase()).toContain('merview');
 
-      // Alt text should be descriptive enough to convey meaning if image fails
-      expect(altText).toBeTruthy();
-      expect(altText.toLowerCase()).toContain('merview');
-
-      // Verify it's meaningful and descriptive for screen readers
-      expect(altText).toContain('Mermaid');
-      expect(altText).toContain('Markdown');
-
-      // Verify it's long enough to be descriptive
-      expect(altText.length).toBeGreaterThan(20);
+      // Verify the h1 inside the link provides visible text
+      const h1Text = await page.locator('.brand-home-link h1').textContent();
+      expect(h1Text).toContain('Merview');
     });
   });
 
@@ -204,13 +205,20 @@ test.describe('Logo Loading and Display', () => {
     test('logo has proper ARIA attributes for accessibility', async ({ page }) => {
       const logo = getLogo(page);
 
-      // Logo should have alt text (which we already test)
+      // Logo is decorative (inside a labeled link), so it should be hidden from screen readers
+      // The parent link provides the accessible name via aria-label
       const altText = await logo.getAttribute('alt');
-      expect(altText).toBeTruthy();
-
-      // Check that it's not hidden from screen readers
       const ariaHidden = await logo.getAttribute('aria-hidden');
-      expect(ariaHidden).not.toBe('true');
+
+      // Decorative image pattern: empty alt + aria-hidden="true"
+      expect(altText).toBe('');
+      expect(ariaHidden).toBe('true');
+
+      // Verify parent link is accessible
+      const parentLink = page.locator('.brand-home-link');
+      const linkAriaLabel = await parentLink.getAttribute('aria-label');
+      expect(linkAriaLabel).toBeTruthy();
+      expect(linkAriaLabel).toContain('Merview');
     });
 
     test('logo is keyboard navigable as part of toolbar', async ({ page }) => {
