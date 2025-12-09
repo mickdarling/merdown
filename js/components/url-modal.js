@@ -10,51 +10,8 @@
  * - Returns focus to trigger element on close
  */
 
-import { ALLOWED_CSS_DOMAINS } from '../config.js';
-import { normalizeGitHubContentUrl } from '../security.js';
-
-// Maximum URL length to prevent DoS attacks (matches security.js)
-const MAX_URL_LENGTH = 2048;
-
-/**
- * Validate URL against an array of allowed domains
- * @param {string} url - The URL to validate
- * @param {Array<string>} allowedDomains - List of allowed domain names
- * @returns {boolean} True if URL is from an allowed domain (HTTPS only)
- */
-function isAllowedURL(url, allowedDomains) {
-    try {
-        // Check URL length before parsing (defense against DoS)
-        if (url.length > MAX_URL_LENGTH) {
-            console.warn('URL blocked: URL too long (' + url.length + ' chars, max ' + MAX_URL_LENGTH + ')');
-            return false;
-        }
-
-        const parsed = new URL(url);
-
-        // Require HTTPS
-        if (parsed.protocol !== 'https:') {
-            console.warn('URL blocked: HTTPS required, got', parsed.protocol);
-            return false;
-        }
-
-        // Check if hostname is in allowed domains
-        const hostname = parsed.hostname.toLowerCase();
-        const isAllowed = allowedDomains.some(domain =>
-            hostname === domain.toLowerCase() ||
-            hostname.endsWith('.' + domain.toLowerCase())
-        );
-
-        if (!isAllowed) {
-            console.warn('URL blocked: domain not in allowlist', hostname);
-        }
-
-        return isAllowed;
-    } catch {
-        console.warn('URL blocked: invalid URL format');
-        return false;
-    }
-}
+import { ALLOWED_CSS_DOMAINS, ALLOWED_MARKDOWN_DOMAINS } from '../config.js';
+import { normalizeGitHubContentUrl, isAllowedMarkdownURL, isAllowedCSSURL } from '../security.js';
 
 // Modal state
 let currentResolve = null;
@@ -206,7 +163,9 @@ export function initURLModalHandlers() {
 
                 // Normalize GitHub URLs and validate against allowed domains
                 const normalizedUrl = normalizeGitHubContentUrl(url);
-                if (!isAllowedURL(normalizedUrl, currentAllowedDomains)) {
+                const isCSS = currentAllowedDomains === ALLOWED_CSS_DOMAINS;
+                const isValid = isCSS ? isAllowedCSSURL(normalizedUrl) : isAllowedMarkdownURL(normalizedUrl);
+                if (!isValid) {
                     showModalError(`URL not allowed. Use: ${currentAllowedDomains.join(', ')}`);
                     urlInput.focus();
                     return;
@@ -217,7 +176,7 @@ export function initURLModalHandlers() {
                 const resolve = currentResolve;
                 currentResolve = null;
                 hideURLModal();
-                resolve(url);
+                resolve(normalizedUrl);
             }
         });
     }

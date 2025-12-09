@@ -19,11 +19,6 @@ import { ALLOWED_MARKDOWN_DOMAINS } from './config.js';
 import { renderMarkdown } from './renderer.js';
 
 /**
- * Sample/Welcome document name constant
- */
-export const WELCOME_DOCUMENT_NAME = 'Welcome.md';
-
-/**
  * Get the document selector element
  * @returns {HTMLSelectElement|null}
  */
@@ -165,16 +160,5 @@ export function initDocumentSelector() {
     });
 
     // Initial population
-    updateDocumentSelector();
-}
-
-/**
- * Set the current document name and update selector
- * @param {string} name - The document name
- * @param {string|null} sourceUrl - Optional source URL
- */
-export function setCurrentDocument(name, sourceUrl = null) {
-    state.currentFilename = name;
-    state.loadedFromURL = sourceUrl;
     updateDocumentSelector();
 }

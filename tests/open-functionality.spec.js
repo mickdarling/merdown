@@ -48,6 +48,25 @@ function browserCheckOpenButtonClick() {
 }
 
 /**
+ * Browser-side helper: Setup mock for loadMarkdownFromURL to simulate failure
+ * Extracted to avoid deep function nesting (SonarCloud S2004)
+ */
+function setupMockLoadMarkdownFromURL() {
+  // Store original function
+  const originalLoadMarkdownFromURL = globalThis.loadMarkdownFromURL;
+
+  // Mock to simulate failure
+  globalThis.loadMarkdownFromURL = async function mockFailedLoad() {
+    // Simulate the error handling that happens in the real function
+    globalThis.showStatus('Error loading URL: Network error');
+    return false; // Return false to indicate failure
+  };
+
+  // Store original for cleanup (optional, but good practice)
+  globalThis._originalLoadMarkdownFromURL = originalLoadMarkdownFromURL;
+}
+
+/**
  * Tests for Open button functionality
  *
  * These tests ensure the Open button and file input infrastructure exists
@@ -311,20 +330,8 @@ test.describe('Open Functionality', () => {
       expect(initialSelectedText).toBe('initial-document.md');
 
       // Mock loadMarkdownFromURL to simulate a failure (e.g., network error)
-      await page.evaluate(() => {
-        // Store original function
-        const originalLoadMarkdownFromURL = globalThis.loadMarkdownFromURL;
-
-        // Mock to simulate failure
-        globalThis.loadMarkdownFromURL = async function mockFailedLoad() {
-          // Simulate the error handling that happens in the real function
-          globalThis.showStatus('Error loading URL: Network error');
-          return false; // Return false to indicate failure
-        };
-
-        // Store original for cleanup (optional, but good practice)
-        globalThis._originalLoadMarkdownFromURL = originalLoadMarkdownFromURL;
-      });
+      // Uses extracted helper to avoid deep nesting (SonarCloud S2004)
+      await page.evaluate(setupMockLoadMarkdownFromURL);
 
       // Attempt to load from URL (this will fail with our mock)
       await page.evaluate(async () => {
