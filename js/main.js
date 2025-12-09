@@ -13,6 +13,7 @@ import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUr
 import { toggleLintPanel, validateCode } from './validation.js';
 import { initMermaidFullscreen } from './mermaid-fullscreen.js';
 import { isAllowedMarkdownURL, isAllowedCSSURL, stripGitHubToken, showPrivateUrlModal, initPrivateUrlModalHandlers, normalizeGistUrl } from './security.js';
+import { isRelativeDocPath, resolveDocUrl } from './config.js';
 import { getMarkdownContent, isFreshVisit, markSessionInitialized } from './storage.js';
 import { showStatus } from './utils.js';
 import { initResizeHandle } from './resize.js';
@@ -116,6 +117,54 @@ function setupKeyboardShortcuts() {
 }
 
 /**
+ * Handle loading content from a remote URL parameter.
+ * Resolves relative doc paths and handles private repo tokens.
+ * @param {string} remoteURL - The URL to load
+ */
+function handleRemoteURLParam(remoteURL) {
+    let resolvedURL = remoteURL;
+
+    // Resolve relative doc paths (e.g., "docs/about.md") to full URLs
+    if (isRelativeDocPath(remoteURL)) {
+        try {
+            resolvedURL = resolveDocUrl(remoteURL);
+        } catch (error) {
+            console.error('Error resolving doc URL:', error);
+            showStatus('Error loading documentation', 'warning');
+            loadSavedContentOrSample();
+            return;
+        }
+    }
+
+    // Security: Check for GitHub private repo tokens
+    const { hadToken } = stripGitHubToken(resolvedURL);
+
+    if (hadToken) {
+        // Show modal for private repo content
+        showPrivateUrlModal(resolvedURL);
+    } else {
+        // Load normally with shareable URL
+        loadMarkdownFromURL(resolvedURL);
+    }
+}
+
+/**
+ * Handle loading content from inline markdown parameter.
+ * @param {string} inlineMarkdown - The URL-encoded markdown
+ */
+function handleInlineMarkdownParam(inlineMarkdown) {
+    try {
+        const decoded = decodeURIComponent(inlineMarkdown);
+        setEditorContent(decoded);
+        renderMarkdown();
+    } catch (error) {
+        console.error('Error decoding inline markdown:', error);
+        showStatus('Error loading markdown from URL', 'warning');
+        loadSavedContentOrSample();
+    }
+}
+
+/**
  * Handle URL parameters to load content or apply styles
  *
  * URL parameters (?url=, ?md=) intentionally override the "fresh visit = sample document"
@@ -123,61 +172,52 @@ function setupKeyboardShortcuts() {
  * to load regardless of whether it's a fresh visit or not.
  *
  * Priority order:
- * 1. ?url= parameter - loads from remote URL
- * 2. ?md= parameter - loads inline markdown
- * 3. No parameters - uses fresh visit detection (sample or localStorage)
+ * 1. ?sample - loads sample/welcome document
+ * 2. ?url= parameter - loads from remote URL
+ * 3. ?md= parameter - loads inline markdown
+ * 4. No parameters - uses fresh visit detection (sample or localStorage)
  */
 function handleURLParameters() {
     const urlParams = new URLSearchParams(globalThis.location.search);
 
-    // Check for remote URL parameter
-    const remoteURL = urlParams.get('url');
-
-    if (remoteURL) {
-        // Security: Check for GitHub private repo tokens
-        const { hadToken } = stripGitHubToken(remoteURL);
-
-        if (hadToken) {
-            // Show modal to let user choose how to handle private repo content.
-            // Note: Session is marked immediately rather than after modal interaction
-            // because the user explicitly navigated here with a URL parameter - this
-            // is intentional content loading, not a "fresh visit" scenario.
-            showPrivateUrlModal(remoteURL);
-            // Modal handlers will load the content and update URL
-        } else {
-            // No token - load normally with shareable URL
-            loadMarkdownFromURL(remoteURL);
-        }
-    } else {
-        // Check for inline markdown parameter
-        const inlineMarkdown = urlParams.get('md');
-
-        if (inlineMarkdown) {
-            // Decode and load the inline markdown
-            try {
-                const decoded = decodeURIComponent(inlineMarkdown);
-                setEditorContent(decoded);
-                renderMarkdown();
-            } catch (error) {
-                console.error('Error decoding inline markdown:', error);
-                showStatus('Error loading markdown from URL', 'warning');
-                loadSavedContentOrSample();
-            }
-        } else {
-            // No URL parameters - use fresh visit detection to decide content
-            loadSavedContentOrSample();
-        }
+    // Check for sample parameter - explicitly load the sample/welcome document
+    if (urlParams.has('sample')) {
+        loadSample();
+        markSessionInitialized();
+        return;
     }
 
-    // Mark session as initialized after any content loading path completes.
-    // This is called once at the end rather than in each branch for simplicity.
-    // Subsequent calls are idempotent (sessionStorage.setItem with same value is fine).
-    markSessionInitialized();
+    // Check for remote URL parameter
+    const remoteURL = urlParams.get('url');
+    if (remoteURL) {
+        handleRemoteURLParam(remoteURL);
+        markSessionInitialized();
+        applyStyleParam(urlParams);
+        return;
+    }
 
-    // Check for style parameter
+    // Check for inline markdown parameter
+    const inlineMarkdown = urlParams.get('md');
+    if (inlineMarkdown) {
+        handleInlineMarkdownParam(inlineMarkdown);
+        markSessionInitialized();
+        applyStyleParam(urlParams);
+        return;
+    }
+
+    // No URL parameters - use fresh visit detection to decide content
+    loadSavedContentOrSample();
+    markSessionInitialized();
+    applyStyleParam(urlParams);
+}
+
+/**
+ * Apply style parameter if present
+ * @param {URLSearchParams} urlParams - The URL parameters
+ */
+function applyStyleParam(urlParams) {
     const styleParam = urlParams.get('style');
     if (styleParam) {
-        // Apply the style if it's valid
         changeStyle(styleParam);
     }
 }

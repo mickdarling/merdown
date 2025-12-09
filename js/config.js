@@ -107,6 +107,77 @@ export const availableStyles = [
 ];
 
 // ==========================================
+// DOCUMENTATION URL CONFIGURATION
+// ==========================================
+
+/** Cached docs base URL (computed once on first access) */
+let cachedDocsBaseUrl = null;
+
+/**
+ * Get the base URL for documentation files.
+ * In development (localhost), serves docs from local server.
+ * In production, serves from GitHub raw content.
+ * Result is cached for performance.
+ *
+ * @returns {string} The base URL for docs (no trailing slash)
+ */
+export function getDocsBaseUrl() {
+    if (cachedDocsBaseUrl !== null) {
+        return cachedDocsBaseUrl;
+    }
+
+    const hostname = globalThis.location?.hostname || '';
+    const isLocalDev = hostname === 'localhost' || hostname === '127.0.0.1';
+
+    if (isLocalDev) {
+        // Local development - serve from local server
+        // Port detection: uses actual port from URL if present (e.g., localhost:3000)
+        // When port is empty string (default port), use protocol-appropriate default
+        const port = globalThis.location?.port ||
+                     (globalThis.location?.protocol === 'https:' ? '443' : '80');
+        // Omit port from URL if it's the default for the protocol
+        const protocol = globalThis.location?.protocol || 'http:';
+        const isDefaultPort = (protocol === 'http:' && port === '80') ||
+                              (protocol === 'https:' && port === '443');
+        cachedDocsBaseUrl = isDefaultPort
+            ? `${protocol}//localhost`
+            : `${protocol}//localhost:${port}`;
+    } else {
+        // Production - serve from GitHub raw
+        cachedDocsBaseUrl = 'https://raw.githubusercontent.com/mickdarling/merview/main';
+    }
+
+    return cachedDocsBaseUrl;
+}
+
+/**
+ * Resolve a relative doc path to a full URL.
+ * Handles paths like "docs/about.md" or "/docs/about.md"
+ *
+ * @param {string} docPath - Relative path to a doc file (e.g., "docs/about.md")
+ * @returns {string} Full URL to the doc file
+ */
+export function resolveDocUrl(docPath) {
+    // Normalize path - remove leading slash if present
+    const normalizedPath = docPath.startsWith('/') ? docPath.slice(1) : docPath;
+    return `${getDocsBaseUrl()}/${normalizedPath}`;
+}
+
+/**
+ * Check if a URL parameter is a relative doc path that needs resolution.
+ * Case-sensitive match for "docs/" prefix (lowercase only).
+ * @param {string} url - The URL or path to check
+ * @returns {boolean} True if this is a relative doc path
+ */
+export function isRelativeDocPath(url) {
+    // Match paths like "docs/about.md" or "/docs/about.md"
+    // Case-sensitive: "docs/" must be lowercase, filename allows mixed case
+    // Only allow safe filename characters: alphanumeric, hyphen, underscore
+    // This prevents path traversal and special character attacks
+    return /^\/?(docs\/[\w-]+\.md)$/.test(url);
+}
+
+// ==========================================
 // SECURITY ALLOWLISTS
 // ==========================================
 
@@ -125,6 +196,7 @@ export const ALLOWED_CSS_DOMAINS = [
 /**
  * Allowed domains for loading remote markdown (security allowlist).
  * Only HTTPS URLs from these domains are permitted.
+ * Note: localhost is allowed automatically in dev mode via isAllowedMarkdownURL()
  */
 export const ALLOWED_MARKDOWN_DOMAINS = [
     'raw.githubusercontent.com',

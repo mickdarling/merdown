@@ -63,7 +63,7 @@ async function getSessionMarker(page) {
  * @returns {boolean} True if content is the sample document
  */
 function isSampleContent(content) {
-  return content?.includes('Comprehensive Markdown + Mermaid Feature Demo') ?? false;
+  return content?.includes('Welcome to Merview') ?? false;
 }
 
 test.describe('Fresh Visit Behavior', () => {

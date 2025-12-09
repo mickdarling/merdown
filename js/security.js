@@ -35,7 +35,15 @@ export function isAllowedCSSURL(url) {
     }
 }
 
-/** Maximum allowed URL length (matches common browser limits) */
+/**
+ * Maximum allowed URL length for security validation.
+ * 2048 bytes is the de facto standard limit supported by most browsers and servers:
+ * - Internet Explorer: 2,083 characters
+ * - Chrome, Firefox, Safari: ~32KB but 2KB is safe for compatibility
+ * - Apache default: 8,190 bytes
+ * - IIS default: 4,096 bytes
+ * Using 2048 provides a safe, widely-compatible limit that prevents DoS via extremely long URLs.
+ */
 const MAX_URL_LENGTH = 2048;
 
 /**
@@ -166,8 +174,14 @@ export function isAllowedMarkdownURL(url) {
 
         const parsed = new URL(url);
 
-        // Require HTTPS
-        if (parsed.protocol !== 'https:') {
+        // Check if we're running in local development (prevents DNS rebinding attacks)
+        const currentHost = globalThis.location?.hostname || '';
+        const isLocalDev = currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+        // Require HTTPS (except localhost when running in local dev)
+        const targetHostname = parsed.hostname.toLowerCase();
+        const isLocalhostTarget = targetHostname === 'localhost' || targetHostname === '127.0.0.1';
+        if (parsed.protocol !== 'https:' && !(isLocalDev && isLocalhostTarget)) {
             console.warn('Markdown URL blocked: HTTPS required, got', parsed.protocol);
             return false;
         }
@@ -179,7 +193,9 @@ export function isAllowedMarkdownURL(url) {
         }
 
         // Check against allowlist
-        const isAllowed = ALLOWED_MARKDOWN_DOMAINS.includes(parsed.hostname.toLowerCase());
+        // Localhost is only allowed when BOTH the app AND target are localhost (prevents DNS rebinding)
+        const isAllowed = ALLOWED_MARKDOWN_DOMAINS.includes(targetHostname) ||
+                          (isLocalDev && isLocalhostTarget);
         if (!isAllowed) {
             console.warn('Markdown URL blocked: domain not in allowlist:', parsed.hostname);
         }
