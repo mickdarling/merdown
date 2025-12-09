@@ -711,4 +711,3 @@ export function initFileInputHandlers() {
         mdFileInput.value = '';
     });
 }
-

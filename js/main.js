@@ -9,7 +9,7 @@ import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js'
 import { renderMarkdown, scheduleRender } from './renderer.js';
 import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, initURLModalHandlers, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground } from './themes.js';
 import { loadMarkdownFromURL, loadSample, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, exportToPDFDirect, initFileInputHandlers } from './file-ops.js';
-import { initDocumentSelector, changeDocument, newDocument, updateDocumentSelector } from './documents.js';
+import { initDocumentSelector, changeDocument, updateDocumentSelector } from './documents.js';
 import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUrl, disconnectGitHub } from './gist.js';
 import { toggleLintPanel, validateCode } from './validation.js';
 import { initMermaidFullscreen } from './mermaid-fullscreen.js';
@@ -70,8 +70,10 @@ function exposeGlobalFunctions() {
     globalThis.exportToPDFDirect = exportToPDFDirect;
 
     // Document management functions
+    // Only changeDocument needs to be global (for keyboard shortcuts)
+    // updateDocumentSelector is needed globally due to circular dependency with file-ops.js
+    // newDocument is internal - called via changeDocument('__new__')
     globalThis.changeDocument = changeDocument;
-    globalThis.newDocument = newDocument;
     globalThis.updateDocumentSelector = updateDocumentSelector;
 
     // Validation functions

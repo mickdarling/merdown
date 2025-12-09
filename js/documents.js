@@ -34,6 +34,13 @@ const DOCUMENT_ACTIONS = {
 let initialized = false;
 
 /**
+ * Request ID counter for race condition prevention in async operations.
+ * Each changeDocument() call gets a unique ID; if a newer request starts,
+ * the older one's results are ignored.
+ */
+let currentRequestId = 0;
+
+/**
  * Get the document selector element
  * @returns {HTMLSelectElement|null}
  */
@@ -45,47 +52,52 @@ function getDocumentSelector() {
  * Update the document selector to show current document
  */
 export function updateDocumentSelector() {
-    const selector = getDocumentSelector();
-    if (!selector) return;
+    try {
+        const selector = getDocumentSelector();
+        if (!selector) return;
 
-    // Get current document name
-    const currentName = state.currentFilename || 'Untitled';
+        // Get current document name
+        const currentName = state.currentFilename || 'Untitled';
 
-    // Clear and rebuild selector
-    selector.innerHTML = '';
+        // Clear and rebuild selector
+        selector.innerHTML = '';
 
-    // Current document optgroup
-    const currentGroup = document.createElement('optgroup');
-    currentGroup.label = 'Current';
+        // Current document optgroup
+        const currentGroup = document.createElement('optgroup');
+        currentGroup.label = 'Current';
 
-    const currentOption = document.createElement('option');
-    currentOption.value = DOCUMENT_ACTIONS.CURRENT;
-    currentOption.textContent = currentName;
-    currentOption.selected = true;
-    currentGroup.appendChild(currentOption);
+        const currentOption = document.createElement('option');
+        currentOption.value = DOCUMENT_ACTIONS.CURRENT;
+        currentOption.textContent = currentName;
+        currentOption.selected = true;
+        currentGroup.appendChild(currentOption);
 
-    selector.appendChild(currentGroup);
+        selector.appendChild(currentGroup);
 
-    // Import optgroup
-    const importGroup = document.createElement('optgroup');
-    importGroup.label = 'Import';
+        // Import optgroup
+        const importGroup = document.createElement('optgroup');
+        importGroup.label = 'Import';
 
-    const fileOption = document.createElement('option');
-    fileOption.value = DOCUMENT_ACTIONS.LOAD_FILE;
-    fileOption.textContent = 'Load from file...';
-    importGroup.appendChild(fileOption);
+        const fileOption = document.createElement('option');
+        fileOption.value = DOCUMENT_ACTIONS.LOAD_FILE;
+        fileOption.textContent = 'Load from file...';
+        importGroup.appendChild(fileOption);
 
-    const urlOption = document.createElement('option');
-    urlOption.value = DOCUMENT_ACTIONS.LOAD_URL;
-    urlOption.textContent = 'Load from URL...';
-    importGroup.appendChild(urlOption);
+        const urlOption = document.createElement('option');
+        urlOption.value = DOCUMENT_ACTIONS.LOAD_URL;
+        urlOption.textContent = 'Load from URL...';
+        importGroup.appendChild(urlOption);
 
-    const newOption = document.createElement('option');
-    newOption.value = DOCUMENT_ACTIONS.NEW;
-    newOption.textContent = 'New document';
-    importGroup.appendChild(newOption);
+        const newOption = document.createElement('option');
+        newOption.value = DOCUMENT_ACTIONS.NEW;
+        newOption.textContent = 'New document';
+        importGroup.appendChild(newOption);
 
-    selector.appendChild(importGroup);
+        selector.appendChild(importGroup);
+    } catch (error) {
+        console.error('Error updating document selector:', error);
+        // Selector may be in inconsistent state, but app should continue working
+    }
 }
 
 /**
@@ -117,6 +129,9 @@ function resetSelector(selector) {
 export async function changeDocument(value) {
     const selector = getDocumentSelector();
 
+    // Increment request ID for race condition prevention
+    const requestId = ++currentRequestId;
+
     switch (value) {
         case DOCUMENT_ACTIONS.CURRENT:
             // Already on current document, nothing to do
@@ -141,6 +156,12 @@ export async function changeDocument(value) {
                 placeholder: 'https://github.com/user/repo/blob/main/README.md',
                 allowedDomains: ALLOWED_MARKDOWN_DOMAINS
             });
+
+            // Check if this request is still current (race condition prevention)
+            if (requestId !== currentRequestId) {
+                return; // A newer request has started, abandon this one
+            }
+
             if (url) {
                 // Set loading state while fetching URL
                 setLoading(selector, true);
@@ -148,6 +169,12 @@ export async function changeDocument(value) {
                 // loadMarkdownFromURL returns boolean (doesn't throw)
                 // It handles errors internally via showStatus()
                 const success = await loadMarkdownFromURL(url);
+
+                // Check again after async operation
+                if (requestId !== currentRequestId) {
+                    return; // A newer request has started, abandon this one
+                }
+
                 if (success) {
                     updateDocumentSelector();
                 }

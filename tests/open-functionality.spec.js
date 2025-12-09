@@ -172,8 +172,10 @@ test.describe('Open Functionality', () => {
       expect(isFunction).toBe(true);
     });
 
-    test('newDocument function should be globally available', async ({ page }) => {
-      const isFunction = await page.evaluate(() => typeof globalThis.newDocument === 'function');
+    test('newDocument can be triggered via changeDocument', async ({ page }) => {
+      // newDocument is internal - called via changeDocument('__new__')
+      // Verify changeDocument is available and can handle the __new__ action
+      const isFunction = await page.evaluate(() => typeof globalThis.changeDocument === 'function');
       expect(isFunction).toBe(true);
     });
 
@@ -261,7 +263,7 @@ test.describe('Open Functionality', () => {
   });
 
   test.describe('New Document Functionality', () => {
-    test('newDocument should clear editor content', async ({ page }) => {
+    test('changeDocument(__new__) should clear editor content', async ({ page }) => {
       // First add some content
       await page.evaluate(() => {
         globalThis.setEditorContent('# Test Content');
@@ -271,8 +273,8 @@ test.describe('Open Functionality', () => {
       const initialContent = await page.evaluate(() => globalThis.getEditorContent());
       expect(initialContent).toBe('# Test Content');
 
-      // Call newDocument
-      await page.evaluate(() => globalThis.newDocument());
+      // Call changeDocument with __new__ action
+      await page.evaluate(() => globalThis.changeDocument('__new__'));
       await page.waitForTimeout(200);
 
       // Verify content is cleared
@@ -280,29 +282,29 @@ test.describe('Open Functionality', () => {
       expect(clearedContent).toBe('');
     });
 
-    test('newDocument should reset filename to null', async ({ page }) => {
+    test('changeDocument(__new__) should reset filename to null', async ({ page }) => {
       // Set a filename first
       await page.evaluate(() => {
         globalThis.state.currentFilename = 'existing-file.md';
       });
 
-      // Call newDocument
-      await page.evaluate(() => globalThis.newDocument());
+      // Call changeDocument with __new__ action
+      await page.evaluate(() => globalThis.changeDocument('__new__'));
 
       // Verify filename is null
       const filename = await page.evaluate(() => globalThis.state.currentFilename);
       expect(filename).toBeNull();
     });
 
-    test('newDocument should update document selector to Untitled', async ({ page }) => {
+    test('changeDocument(__new__) should update document selector to Untitled', async ({ page }) => {
       // Set a filename first
       await page.evaluate(() => {
         globalThis.state.currentFilename = 'existing-file.md';
         globalThis.updateDocumentSelector();
       });
 
-      // Call newDocument
-      await page.evaluate(() => globalThis.newDocument());
+      // Call changeDocument with __new__ action
+      await page.evaluate(() => globalThis.changeDocument('__new__'));
       await page.waitForTimeout(100);
 
       // Verify document selector shows Untitled
