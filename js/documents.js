@@ -95,7 +95,7 @@ export async function changeDocument(value) {
             openFile();
             break;
 
-        case '__load_url__':
+        case '__load_url__': {
             // Show URL modal
             const url = await showURLModal({
                 title: 'Open from URL',
@@ -107,6 +107,7 @@ export async function changeDocument(value) {
                 updateDocumentSelector();
             }
             break;
+        }
 
         case '__new__':
             // Create new document

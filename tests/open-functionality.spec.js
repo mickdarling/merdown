@@ -5,6 +5,26 @@
 const { test, expect } = require('@playwright/test');
 
 /**
+ * Browser-side helper: Get labels from optgroups
+ * Extracted to avoid deep function nesting (SonarCloud S2004)
+ * @param {Element[]} groups - Optgroup elements
+ * @returns {string[]} Array of labels
+ */
+function getOptgroupLabels(groups) {
+  return groups.map(function extractLabel(g) { return g.label; });
+}
+
+/**
+ * Browser-side helper: Get text content from options
+ * Extracted to avoid deep function nesting (SonarCloud S2004)
+ * @param {Element[]} opts - Option elements
+ * @returns {string[]} Array of text content
+ */
+function getOptionTextContent(opts) {
+  return opts.map(function extractText(o) { return o.textContent; });
+}
+
+/**
  * Browser-side helper: Check if selecting "Load from file" triggers file input click
  * Extracted to avoid deep function nesting (SonarCloud S2004)
  * @returns {Promise<boolean>} True if file input was clicked
@@ -103,23 +123,17 @@ test.describe('Open Functionality', () => {
     });
 
     test('Document selector should have Import optgroup', async ({ page }) => {
-      const optgroups = await page.$$eval('#documentSelector optgroup', groups =>
-        groups.map(g => g.label)
-      );
+      const optgroups = await page.$$eval('#documentSelector optgroup', getOptgroupLabels);
       expect(optgroups).toContain('Import');
     });
 
     test('Document selector should have Load from file option', async ({ page }) => {
-      const options = await page.$$eval('#documentSelector option', opts =>
-        opts.map(o => o.textContent)
-      );
+      const options = await page.$$eval('#documentSelector option', getOptionTextContent);
       expect(options).toContain('Load from file...');
     });
 
     test('Document selector should have Load from URL option', async ({ page }) => {
-      const options = await page.$$eval('#documentSelector option', opts =>
-        opts.map(o => o.textContent)
-      );
+      const options = await page.$$eval('#documentSelector option', getOptionTextContent);
       expect(options).toContain('Load from URL...');
     });
 
