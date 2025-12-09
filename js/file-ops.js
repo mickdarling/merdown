@@ -51,6 +51,8 @@ export async function loadMarkdownFile(file) {
         }
 
         state.currentFilename = file.name;
+        state.loadedFromURL = null; // Clear URL source when loading from file
+        updateDocumentNameDisplay();
         await renderMarkdown();
         showStatus(`Loaded: ${file.name}`);
         return true;
@@ -189,6 +191,8 @@ export async function loadMarkdownFromURL(url) {
         // Extract filename from normalized URL for display
         const urlPath = new URL(normalizedUrl).pathname;
         state.currentFilename = urlPath.split('/').pop() || 'remote.md';
+        state.loadedFromURL = normalizedUrl; // Track URL source
+        updateDocumentNameDisplay();
 
         await renderMarkdown();
         showStatus(`Loaded: ${state.currentFilename}`);
@@ -687,4 +691,69 @@ export function initFileInputHandlers() {
         // Reset input so the same file can be selected again
         mdFileInput.value = '';
     });
+}
+
+/**
+ * Open markdown from URL via modal dialog
+ * Uses the URL modal component to get a URL from the user,
+ * then loads the markdown content from that URL.
+ * @returns {Promise<boolean>} True if content was loaded, false if cancelled or error
+ */
+export async function openFromURL() {
+    const { showURLModal } = await import('./components/url-modal.js');
+    const { ALLOWED_MARKDOWN_DOMAINS } = await import('./config.js');
+
+    const url = await showURLModal({
+        title: 'Open from URL',
+        placeholder: 'https://raw.githubusercontent.com/user/repo/main/README.md',
+        allowedDomains: ALLOWED_MARKDOWN_DOMAINS
+    });
+
+    if (url) {
+        return await loadMarkdownFromURL(url);
+    }
+
+    return false;
+}
+
+/**
+ * Create a new document by clearing the editor
+ * Resets the editor content, filename, and URL source.
+ * Optionally loads sample content instead of leaving blank.
+ */
+export function newDocument() {
+    const { cmEditor } = state;
+
+    if (cmEditor) {
+        cmEditor.setValue('');
+    }
+
+    state.currentFilename = null;
+    state.loadedFromURL = null;
+    updateDocumentNameDisplay();
+    renderMarkdown();
+    showStatus('New document created');
+}
+
+/**
+ * Update the document name display in the Open dropdown
+ * Shows the current filename, URL hostname, or "Untitled" for new documents
+ */
+export function updateDocumentNameDisplay() {
+    const displayEl = document.getElementById('documentName');
+    if (!displayEl) return;
+
+    if (state.currentFilename) {
+        displayEl.textContent = state.currentFilename;
+        displayEl.title = state.loadedFromURL
+            ? `${state.currentFilename} (from ${new URL(state.loadedFromURL).hostname})`
+            : state.currentFilename;
+    } else if (state.loadedFromURL) {
+        const hostname = new URL(state.loadedFromURL).hostname;
+        displayEl.textContent = `URL: ${hostname}`;
+        displayEl.title = state.loadedFromURL;
+    } else {
+        displayEl.textContent = 'Untitled';
+        displayEl.title = 'No document loaded';
+    }
 }

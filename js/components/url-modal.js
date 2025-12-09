@@ -11,7 +11,41 @@
  */
 
 import { ALLOWED_CSS_DOMAINS } from '../config.js';
-import { isAllowedCSSURL, normalizeGistUrl } from '../security.js';
+import { normalizeGistUrl } from '../security.js';
+
+/**
+ * Validate URL against an array of allowed domains
+ * @param {string} url - The URL to validate
+ * @param {Array<string>} allowedDomains - List of allowed domain names
+ * @returns {boolean} True if URL is from an allowed domain (HTTPS only)
+ */
+function isAllowedURL(url, allowedDomains) {
+    try {
+        const parsed = new URL(url);
+
+        // Require HTTPS
+        if (parsed.protocol !== 'https:') {
+            console.warn('URL blocked: HTTPS required, got', parsed.protocol);
+            return false;
+        }
+
+        // Check if hostname is in allowed domains
+        const hostname = parsed.hostname.toLowerCase();
+        const isAllowed = allowedDomains.some(domain =>
+            hostname === domain.toLowerCase() ||
+            hostname.endsWith('.' + domain.toLowerCase())
+        );
+
+        if (!isAllowed) {
+            console.warn('URL blocked: domain not in allowlist', hostname);
+        }
+
+        return isAllowed;
+    } catch {
+        console.warn('URL blocked: invalid URL format');
+        return false;
+    }
+}
 
 // Modal state
 let currentResolve = null;
@@ -163,7 +197,7 @@ export function initURLModalHandlers() {
 
                 // Normalize gist URLs and validate against allowed domains
                 const normalizedUrl = normalizeGistUrl(url);
-                if (!isAllowedCSSURL(normalizedUrl)) {
+                if (!isAllowedURL(normalizedUrl, currentAllowedDomains)) {
                     showModalError(`URL not allowed. Use: ${currentAllowedDomains.join(', ')}`);
                     urlInput.focus();
                     return;
