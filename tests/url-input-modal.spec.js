@@ -313,8 +313,8 @@ function browserGetOptgroupLabels(selectorId) {
   if (!select) return [];
   const optgroups = select.querySelectorAll('optgroup');
   const labels = [];
-  for (let i = 0; i < optgroups.length; i++) {
-    labels.push(optgroups[i].label);
+  for (const optgroup of optgroups) {
+    labels.push(optgroup.label);
   }
   return labels;
 }
