@@ -209,10 +209,6 @@ export const ALLOWED_CSS_DOMAINS = [
  * - No embedded credentials
  * - ASCII-only hostnames (prevents homograph attacks)
  */
-// export const ALLOWED_MARKDOWN_DOMAINS = [
-//     'raw.githubusercontent.com',
-//     'gist.githubusercontent.com'
-// ];
 
 // ==========================================
 // OAUTH CONFIGURATION
