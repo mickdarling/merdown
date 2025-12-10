@@ -104,10 +104,10 @@ function createSessionItem(session, isActive) {
         actions.appendChild(openBtn);
     }
 
-    // Delete button
+    // Delete button with trash icon
     const deleteBtn = document.createElement('button');
     deleteBtn.className = 'btn btn-sm btn-danger';
-    deleteBtn.textContent = 'Delete';
+    deleteBtn.textContent = '🗑️';
     deleteBtn.title = 'Delete this session';
     deleteBtn.setAttribute('aria-label', `Delete ${session.name}`);
     deleteBtn.dataset.action = 'delete';
