@@ -495,7 +495,6 @@ test.describe('Session Management', () => {
     test('should have proper error handling for storage operations', async ({ page }) => {
       // Verify that the session storage functions have try-catch error handling
       // by checking that saving content doesn't crash the app
-      const initialContent = await page.evaluate(getEditorValue);
 
       // Set some content
       await page.evaluate(setEditorValue, '# Test content for quota handling');
