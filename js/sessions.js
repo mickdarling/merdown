@@ -156,6 +156,7 @@ function saveSessionsIndex(index) {
 
 /**
  * Load session content from localStorage
+ * If data is corrupted, automatically cleans up the orphaned entry
  * @param {string} sessionId - Session ID
  * @returns {Object|null} Session data with content
  */
@@ -166,6 +167,9 @@ function loadSessionData(sessionId) {
         return JSON.parse(raw);
     } catch (error) {
         console.error(`Failed to load session ${sessionId}:`, error);
+        // Clean up corrupted data to prevent orphaned localStorage entries
+        deleteSessionData(sessionId);
+        showStatus('A corrupted session was removed', 'warning');
         return null;
     }
 }
