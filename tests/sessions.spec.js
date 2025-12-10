@@ -44,6 +44,26 @@ function getSessionNames() {
   return index.sessions.map(s => s.name);
 }
 
+function getEditorValue() {
+  return globalThis.state.cmEditor.getValue();
+}
+
+function setEditorValue(content) {
+  globalThis.state.cmEditor.setValue(content);
+}
+
+function getSessionsCount() {
+  const raw = localStorage.getItem('merview-sessions-index');
+  const index = JSON.parse(raw);
+  return index.sessions.length;
+}
+
+function getActiveSessionId() {
+  const raw = localStorage.getItem('merview-sessions-index');
+  const index = JSON.parse(raw);
+  return index.activeSessionId;
+}
+
 test.describe('Session Management', () => {
 
   test.beforeEach(async ({ page }) => {
@@ -475,42 +495,28 @@ test.describe('Session Management', () => {
     test('should have proper error handling for storage operations', async ({ page }) => {
       // Verify that the session storage functions have try-catch error handling
       // by checking that saving content doesn't crash the app
-      const initialContent = await page.evaluate(() => {
-        return globalThis.state.cmEditor.getValue();
-      });
+      const initialContent = await page.evaluate(getEditorValue);
 
       // Set some content
-      await page.evaluate(() => {
-        globalThis.state.cmEditor.setValue('# Test content for quota handling');
-      });
+      await page.evaluate(setEditorValue, '# Test content for quota handling');
       await page.waitForTimeout(500);
 
       // Verify app is still functional
-      const newContent = await page.evaluate(() => {
-        return globalThis.state.cmEditor.getValue();
-      });
+      const newContent = await page.evaluate(getEditorValue);
 
       expect(newContent).toContain('Test content for quota handling');
     });
 
     test('should gracefully handle storage errors without crashing', async ({ page }) => {
       // Verify the app handles storage gracefully by checking session operations work
-      const sessionsBefore = await page.evaluate(() => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        return index.sessions.length;
-      });
+      const sessionsBefore = await page.evaluate(getSessionsCount);
 
       // Create a new session
       await page.selectOption('#documentSelector', '__new__');
       await page.waitForTimeout(500);
 
       // Verify app still works
-      const sessionsAfter = await page.evaluate(() => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        return index.sessions.length;
-      });
+      const sessionsAfter = await page.evaluate(getSessionsCount);
 
       expect(sessionsAfter).toBeGreaterThanOrEqual(sessionsBefore);
     });
@@ -522,11 +528,7 @@ test.describe('Session Management', () => {
     test('should enforce MAX_SESSIONS limit', async ({ page }) => {
       // Verify MAX_SESSIONS constant is 20 by checking storage behavior
       // We test this by checking session count after multiple creates
-      const initialCount = await page.evaluate(() => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        return index.sessions.length;
-      });
+      const initialCount = await page.evaluate(getSessionsCount);
 
       // MAX_SESSIONS should be 20 (defined in sessions.js)
       expect(initialCount).toBeLessThanOrEqual(20);
@@ -535,11 +537,7 @@ test.describe('Session Management', () => {
     test('should have autoCleanup function that respects active session', async ({ page }) => {
       // Verify the autoCleanup logic exists and protects active session
       // by checking that active session ID is preserved after session operations
-      const activeSessionBefore = await page.evaluate(() => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        return index.activeSessionId;
-      });
+      const activeSessionBefore = await page.evaluate(getActiveSessionId);
 
       // Create a new session
       await page.selectOption('#documentSelector', '__new__');
