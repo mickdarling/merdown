@@ -23,6 +23,7 @@ import {
     switchSession,
     deleteSession,
     clearAllSessions,
+    createSession,
     formatSessionName,
     formatRelativeTime,
     formatFileSize
@@ -304,12 +305,20 @@ function handleClearAll() {
     if (confirm(`Delete all ${sessions.length} session(s)? This cannot be undone.`)) {
         clearAllSessions();
 
-        // Clear editor
+        // Create a new empty session FIRST so we never have zero sessions
+        // This must happen before clearing editor to avoid updateSessionContent creating a duplicate
+        createSession({
+            name: 'Untitled',
+            content: '',
+            source: 'new'
+        });
+
+        // Now clear editor - this will update the newly created session
         const { cmEditor } = state;
         if (cmEditor) {
             cmEditor.setValue('');
         }
-        state.currentFilename = null;
+        state.currentFilename = 'Untitled';
         renderMarkdown();
 
         // Update displays

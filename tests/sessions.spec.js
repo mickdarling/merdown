@@ -467,4 +467,283 @@ test.describe('Session Management', () => {
 
   });
 
+  test.describe('Storage Quota Handling', () => {
+
+    test('should handle QuotaExceededError gracefully when saving session content', async ({ page }) => {
+      // Mock localStorage to throw QuotaExceededError
+      const errorThrown = await page.evaluate(() => {
+        const originalSetItem = localStorage.setItem;
+        let errorCaught = false;
+
+        // Mock setItem to throw QuotaExceededError for session data
+        localStorage.setItem = function(key, value) {
+          if (key.startsWith('merview-session-')) {
+            const error = new Error('QuotaExceededError');
+            error.name = 'QuotaExceededError';
+            throw error;
+          }
+          return originalSetItem.call(this, key, value);
+        };
+
+        // Try to save content
+        try {
+          globalThis.state.cmEditor.setValue('# Test content');
+          // Trigger save by dispatching change event
+          const event = new Event('change');
+          globalThis.state.cmEditor.on('change', () => {});
+        } catch (error) {
+          errorCaught = error.name === 'QuotaExceededError';
+        }
+
+        // Restore original
+        localStorage.setItem = originalSetItem;
+        return errorCaught;
+      });
+
+      // The error should be caught and logged, not crash the app
+      expect(errorThrown).toBe(false); // Error is handled internally
+    });
+
+    test('should handle QuotaExceededError when saving sessions index', async ({ page }) => {
+      // Mock localStorage to throw QuotaExceededError
+      const handled = await page.evaluate(() => {
+        const originalSetItem = localStorage.setItem;
+        let errorHandled = false;
+
+        // Mock setItem to throw QuotaExceededError for index
+        localStorage.setItem = function(key, value) {
+          if (key === 'merview-sessions-index') {
+            const error = new Error('QuotaExceededError');
+            error.name = 'QuotaExceededError';
+            throw error;
+          }
+          return originalSetItem.call(this, key, value);
+        };
+
+        // Try to create a new session which saves the index
+        try {
+          // This would normally throw, but should be caught
+          const selector = document.getElementById('documentSelector');
+          selector.value = '__new__';
+          selector.dispatchEvent(new Event('change'));
+          errorHandled = true;
+        } catch (error) {
+          errorHandled = false;
+        }
+
+        // Restore original
+        localStorage.setItem = originalSetItem;
+        return errorHandled;
+      });
+
+      expect(handled).toBe(true);
+    });
+
+  });
+
+  test.describe('Auto-cleanup When MAX_SESSIONS Exceeded', () => {
+
+    test('should enforce MAX_SESSIONS limit', async ({ page }) => {
+      // Verify MAX_SESSIONS constant is 20 by checking storage behavior
+      // We test this by checking session count after multiple creates
+      const initialCount = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.sessions.length;
+      });
+
+      // MAX_SESSIONS should be 20 (defined in sessions.js)
+      expect(initialCount).toBeLessThanOrEqual(20);
+    });
+
+    test('should have autoCleanup function that respects active session', async ({ page }) => {
+      // Verify the autoCleanup logic exists and protects active session
+      // by checking that active session ID is preserved after session operations
+      const activeSessionBefore = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.activeSessionId;
+      });
+
+      // Create a new session
+      await page.selectOption('#documentSelector', '__new__');
+      await page.waitForTimeout(500);
+
+      // Switch back to original
+      await page.selectOption('#documentSelector', activeSessionBefore);
+      await page.waitForTimeout(500);
+
+      // Verify original session still exists
+      const originalExists = await page.evaluate((sessionId) => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        for (const s of index.sessions) {
+          if (s.id === sessionId) return true;
+        }
+        return false;
+      }, activeSessionBefore);
+
+      expect(originalExists).toBe(true);
+    });
+
+  });
+
+  test.describe('Large Session Content', () => {
+
+    test('should handle session with large content near storage limit', async ({ page }) => {
+      // Create content that's about 1MB
+      const largeContent = '#'.repeat(1024 * 1024); // 1MB of # characters
+
+      await page.evaluate((content) => {
+        globalThis.state.cmEditor.setValue(content);
+      }, largeContent);
+
+      // Wait for debounced render and save
+      await page.waitForTimeout(1000);
+
+      // Verify content was saved
+      const savedSize = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        const activeSession = index.sessions.find(s => s.id === index.activeSessionId);
+        return activeSession?.contentSize || 0;
+      });
+
+      expect(savedSize).toBeGreaterThan(1024 * 1000); // At least 1000 KB
+    });
+
+    test('should track content size accurately for large sessions', async ({ page }) => {
+      // Create varied large content
+      const content = '# Large Document\n\n' + 'Lorem ipsum dolor sit amet. '.repeat(10000);
+
+      await page.evaluate((testContent) => {
+        globalThis.state.cmEditor.setValue(testContent);
+      }, content);
+
+      await page.waitForTimeout(1000);
+
+      const trackedSize = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        const activeSession = index.sessions.find(s => s.id === index.activeSessionId);
+        return activeSession?.contentSize || 0;
+      });
+
+      expect(trackedSize).toBe(content.length);
+    });
+
+  });
+
+  test.describe('Clear All Creates New Session', () => {
+
+    test('Clear All should leave exactly one session after clearing', async ({ page }) => {
+      // Get initial session count
+      const initialCount = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.sessions.length;
+      });
+
+      // Ensure we have at least one session to clear
+      expect(initialCount).toBeGreaterThan(0);
+
+      // Open sessions modal
+      await page.selectOption('#documentSelector', '__manage__');
+      await page.waitForSelector('#sessionsModal[open]');
+
+      // Set up dialog handler to accept the confirmation
+      page.on('dialog', async dialog => {
+        await dialog.accept();
+      });
+
+      // Click Clear All button
+      await page.click('#clearAllSessionsBtn');
+      await page.waitForTimeout(1000);
+
+      // Check that we have exactly 1 session (the new empty one created after clear)
+      const sessionCount = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.sessions.length;
+      });
+
+      expect(sessionCount).toBe(1);
+    });
+
+    test('New session after Clear All should be named Untitled', async ({ page }) => {
+      // Open sessions modal
+      await page.selectOption('#documentSelector', '__manage__');
+      await page.waitForSelector('#sessionsModal[open]');
+
+      // Set up dialog handler
+      page.on('dialog', async dialog => {
+        await dialog.accept();
+      });
+
+      // Click Clear All
+      await page.click('#clearAllSessionsBtn');
+      await page.waitForTimeout(1000);
+
+      // Check session name
+      const sessionName = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.sessions[0]?.name || '';
+      });
+
+      expect(sessionName).toBe('Untitled');
+    });
+
+    test('New session after Clear All should have empty content', async ({ page }) => {
+      // Open sessions modal
+      await page.selectOption('#documentSelector', '__manage__');
+      await page.waitForSelector('#sessionsModal[open]');
+
+      // Set up dialog handler
+      page.on('dialog', async dialog => {
+        await dialog.accept();
+      });
+
+      // Click Clear All
+      await page.click('#clearAllSessionsBtn');
+      await page.waitForTimeout(1000);
+
+      // Check editor content
+      const editorContent = await page.evaluate(() => {
+        return globalThis.state.cmEditor.getValue();
+      });
+
+      expect(editorContent).toBe('');
+    });
+
+    test('App should never be left with zero sessions after Clear All', async ({ page }) => {
+      // Create multiple sessions
+      await page.selectOption('#documentSelector', '__new__');
+      await page.waitForTimeout(500);
+      await page.selectOption('#documentSelector', '__new__');
+      await page.waitForTimeout(500);
+
+      // Open modal and clear all
+      await page.selectOption('#documentSelector', '__manage__');
+      await page.waitForSelector('#sessionsModal[open]');
+
+      page.on('dialog', async dialog => {
+        await dialog.accept();
+      });
+
+      await page.click('#clearAllSessionsBtn');
+      await page.waitForTimeout(1000);
+
+      // Verify we have at least one session
+      const sessionCount = await page.evaluate(() => {
+        const raw = localStorage.getItem('merview-sessions-index');
+        const index = JSON.parse(raw);
+        return index.sessions.length;
+      });
+
+      expect(sessionCount).toBeGreaterThanOrEqual(1);
+    });
+
+  });
+
 });

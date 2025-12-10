@@ -20,7 +20,6 @@ const SESSIONS_INDEX_KEY = 'merview-sessions-index';
 const SESSION_KEY_PREFIX = 'merview-session-';
 const MAX_SESSIONS = 20;
 const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB soft limit
-const MAX_SESSION_BYTES = 1 * 1024 * 1024; // 1MB per session
 const SCHEMA_VERSION = 1;
 
 /**
