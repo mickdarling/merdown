@@ -84,6 +84,26 @@ function validateIndexSchema(index) {
 }
 
 /**
+ * Switch active session to the most recent one in the index
+ * Used when the current active session is deleted or corrupted
+ * @param {Object} index - Sessions index (will be modified)
+ */
+function switchToMostRecentSession(index) {
+    if (index.sessions.length > 0) {
+        const mostRecent = [...index.sessions].sort(
+            (a, b) => (b.lastModified || 0) - (a.lastModified || 0)
+        )[0];
+        index.activeSessionId = mostRecent.id;
+        state.activeSessionId = mostRecent.id;
+        state.currentFilename = mostRecent.name;
+    } else {
+        index.activeSessionId = null;
+        state.activeSessionId = null;
+        state.currentFilename = null;
+    }
+}
+
+/**
  * Load sessions index from localStorage with caching
  * Uses in-memory cache to avoid repeated JSON parsing
  * @returns {Object} Sessions index
@@ -179,18 +199,7 @@ function loadSessionData(sessionId) {
 
             // If it was the active session, switch to another one
             if (index.activeSessionId === sessionId) {
-                if (index.sessions.length > 0) {
-                    const mostRecent = [...index.sessions].sort(
-                        (a, b) => (b.lastModified || 0) - (a.lastModified || 0)
-                    )[0];
-                    index.activeSessionId = mostRecent.id;
-                    state.activeSessionId = mostRecent.id;
-                    state.currentFilename = mostRecent.name;
-                } else {
-                    index.activeSessionId = null;
-                    state.activeSessionId = null;
-                    state.currentFilename = null;
-                }
+                switchToMostRecentSession(index);
             }
 
             saveSessionsIndex(index);
@@ -691,19 +700,7 @@ export function deleteSession(sessionId) {
 
     // If this was the active session, switch to most recent or null
     if (index.activeSessionId === sessionId) {
-        if (index.sessions.length > 0) {
-            // Sort by lastModified and pick most recent
-            const mostRecent = [...index.sessions].sort(
-                (a, b) => (b.lastModified || 0) - (a.lastModified || 0)
-            )[0];
-            index.activeSessionId = mostRecent.id;
-            state.activeSessionId = mostRecent.id;
-            state.currentFilename = mostRecent.name;
-        } else {
-            index.activeSessionId = null;
-            state.activeSessionId = null;
-            state.currentFilename = null;
-        }
+        switchToMostRecentSession(index);
     }
 
     saveSessionsIndex(index);
