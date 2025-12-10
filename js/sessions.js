@@ -14,6 +14,7 @@
 
 import { state } from './state.js';
 import { getMarkdownContent } from './storage.js';
+import { showStatus } from './utils.js';
 
 // Constants
 const SESSIONS_INDEX_KEY = 'merview-sessions-index';
@@ -22,14 +23,37 @@ const MAX_SESSIONS = 20;
 const MAX_STORAGE_BYTES = 5 * 1024 * 1024; // 5MB soft limit
 const SCHEMA_VERSION = 1;
 
+// In-memory cache for sessions index to avoid repeated JSON parsing
+let cachedIndex = null;
+let cacheValid = false;
+
 /**
- * Generate a unique session ID
+ * Generate a unique session ID with collision check
+ * Uses timestamp + random suffix, with a loop to ensure uniqueness
  * @returns {string} Unique ID (e.g., "session-abc123xyz")
  */
 function generateSessionId() {
-    const timestamp = Date.now().toString(36);
-    const random = Math.random().toString(36).substring(2, 10);
-    return `session-${timestamp}${random}`;
+    const maxAttempts = 10;
+    const index = loadSessionsIndex();
+    const existingIds = new Set(index.sessions.map(s => s.id));
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const timestamp = Date.now().toString(36);
+        const random = Math.random().toString(36).substring(2, 10);
+        const id = `session-${timestamp}${random}`;
+
+        if (!existingIds.has(id) && !localStorage.getItem(`${SESSION_KEY_PREFIX}${id}`)) {
+            return id;
+        }
+    }
+
+    // Fallback with crypto if available for guaranteed uniqueness
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return `session-${crypto.randomUUID()}`;
+    }
+
+    // Ultimate fallback: timestamp with high-resolution time
+    return `session-${Date.now()}-${performance.now().toString(36)}`;
 }
 
 /**
@@ -60,36 +84,70 @@ function validateIndexSchema(index) {
 }
 
 /**
- * Load sessions index from localStorage
+ * Load sessions index from localStorage with caching
+ * Uses in-memory cache to avoid repeated JSON parsing
  * @returns {Object} Sessions index
  */
 function loadSessionsIndex() {
+    // Return cached index if valid
+    if (cacheValid && cachedIndex) {
+        return cachedIndex;
+    }
+
     try {
         const raw = localStorage.getItem(SESSIONS_INDEX_KEY);
-        if (!raw) return createEmptyIndex();
+        if (!raw) {
+            cachedIndex = createEmptyIndex();
+            cacheValid = true;
+            return cachedIndex;
+        }
 
         const parsed = JSON.parse(raw);
         if (!validateIndexSchema(parsed)) {
             console.error('Invalid sessions index schema, resetting');
-            return createEmptyIndex();
+            cachedIndex = createEmptyIndex();
+            cacheValid = true;
+            return cachedIndex;
         }
-        return parsed;
+        cachedIndex = parsed;
+        cacheValid = true;
+        return cachedIndex;
     } catch (error) {
         console.error('Failed to parse sessions index:', error);
-        return createEmptyIndex();
+        cachedIndex = createEmptyIndex();
+        cacheValid = true;
+        return cachedIndex;
     }
 }
 
 /**
  * Save sessions index to localStorage
+ * Invalidates cache after save and shows user-facing errors for quota issues
  * @param {Object} index - Sessions index
  */
 function saveSessionsIndex(index) {
     try {
         localStorage.setItem(SESSIONS_INDEX_KEY, JSON.stringify(index));
+        // Update cache after successful save
+        cachedIndex = index;
+        cacheValid = true;
     } catch (error) {
         if (error.name === 'QuotaExceededError') {
             console.error('Storage quota exceeded while saving sessions index');
+            // Attempt auto-cleanup and retry once
+            const deletedCount = autoCleanup();
+            if (deletedCount > 0) {
+                try {
+                    localStorage.setItem(SESSIONS_INDEX_KEY, JSON.stringify(index));
+                    cachedIndex = index;
+                    cacheValid = true;
+                    showStatus(`Storage full - cleaned up ${deletedCount} old session(s)`, 'warning');
+                    return;
+                } catch (retryError) {
+                    // Cleanup didn't help enough
+                }
+            }
+            showStatus('Storage quota exceeded. Please delete some sessions to continue.', 'error');
             throw error;
         }
         throw error;
@@ -114,6 +172,7 @@ function loadSessionData(sessionId) {
 
 /**
  * Save session content to localStorage
+ * Shows user-facing errors for quota issues
  * @param {Object} sessionData - Session data with content
  */
 function saveSessionData(sessionData) {
@@ -125,6 +184,21 @@ function saveSessionData(sessionData) {
     } catch (error) {
         if (error.name === 'QuotaExceededError') {
             console.error('Storage quota exceeded while saving session content');
+            // Attempt auto-cleanup and retry once
+            const deletedCount = autoCleanup();
+            if (deletedCount > 0) {
+                try {
+                    localStorage.setItem(
+                        `${SESSION_KEY_PREFIX}${sessionData.id}`,
+                        JSON.stringify(sessionData)
+                    );
+                    showStatus(`Storage full - cleaned up ${deletedCount} old session(s)`, 'warning');
+                    return;
+                } catch (retryError) {
+                    // Cleanup didn't help enough
+                }
+            }
+            showStatus('Storage quota exceeded. Please delete some sessions to continue.', 'error');
             throw error;
         }
         throw error;
@@ -276,6 +350,8 @@ export function initSessions() {
     // Listen for storage changes from other tabs
     globalThis.addEventListener('storage', (event) => {
         if (event.key === SESSIONS_INDEX_KEY) {
+            // Invalidate cache when another tab modifies sessions
+            cacheValid = false;
             // Dispatch custom event for UI updates
             globalThis.dispatchEvent(new CustomEvent('sessions-changed'));
         }
@@ -440,15 +516,19 @@ export function switchSession(sessionId) {
 }
 
 /**
- * Update current session content
- * Called from renderer.js when content changes
+ * Update current session content (internal implementation)
+ * Guards are checked by the caller (updateSessionContent)
  * @param {string} content - New content
  * @returns {boolean} True if updated successfully
  */
-export function updateSessionContent(content) {
+function updateSessionContentInternal(content) {
     const index = loadSessionsIndex();
 
-    if (!index.activeSessionId) {
+    // Guard: Check both index and state for active session ID
+    // This prevents race conditions during initialization
+    const activeId = index.activeSessionId || state.activeSessionId;
+
+    if (!activeId) {
         // No active session, create one
         createSession({
             name: state.currentFilename || 'Untitled',
@@ -459,7 +539,12 @@ export function updateSessionContent(content) {
         return true;
     }
 
-    const meta = index.sessions.find(s => s.id === index.activeSessionId);
+    // Ensure state is in sync with index
+    if (!state.activeSessionId && index.activeSessionId) {
+        state.activeSessionId = index.activeSessionId;
+    }
+
+    const meta = index.sessions.find(s => s.id === activeId);
     if (!meta) {
         console.error('Active session not found in index');
         return false;
@@ -478,11 +563,33 @@ export function updateSessionContent(content) {
 
     // Update content
     saveSessionData({
-        id: index.activeSessionId,
+        id: activeId,
         content
     });
 
     return true;
+}
+
+/**
+ * Update current session content
+ * Called from renderer.js when content changes
+ * Note: renderMarkdown() is already debounced at 300ms, so no additional
+ * debouncing is needed here to reduce localStorage writes.
+ * @param {string} content - New content
+ * @returns {boolean} True if updated successfully
+ */
+export function updateSessionContent(content) {
+    // Guard: Don't update during clearing operation
+    if (state.clearingAllSessions) {
+        return false;
+    }
+
+    // Guard: Ensure sessions are initialized
+    if (!state.sessionsLoaded) {
+        return false;
+    }
+
+    return updateSessionContentInternal(content);
 }
 
 /**
@@ -581,22 +688,39 @@ export function deleteSession(sessionId) {
  * @returns {boolean} True if cleared
  */
 export function clearAllSessions() {
-    const index = loadSessionsIndex();
+    // Set flag to prevent race conditions with updateSessionContent
+    state.clearingAllSessions = true;
 
-    // Delete all session data
-    index.sessions.forEach(session => {
-        deleteSessionData(session.id);
-    });
+    try {
+        const index = loadSessionsIndex();
 
-    // Reset index
-    const emptyIndex = createEmptyIndex();
-    saveSessionsIndex(emptyIndex);
+        // Delete all session data
+        index.sessions.forEach(session => {
+            deleteSessionData(session.id);
+        });
 
-    // Update state
-    state.activeSessionId = null;
-    state.currentFilename = null;
+        // Reset index
+        const emptyIndex = createEmptyIndex();
+        saveSessionsIndex(emptyIndex);
 
-    return true;
+        // Update state
+        state.activeSessionId = null;
+        state.currentFilename = null;
+
+        return true;
+    } finally {
+        // Clear the flag after operation completes
+        // Note: The caller should set clearingAllSessions = false after createSession()
+        // to ensure the full clear+create operation is atomic
+    }
+}
+
+/**
+ * Signal that the clear all operation is complete
+ * Called after createSession() in the Clear All flow
+ */
+export function finishClearingAllSessions() {
+    state.clearingAllSessions = false;
 }
 
 /**

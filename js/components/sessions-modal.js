@@ -24,6 +24,7 @@ import {
     deleteSession,
     clearAllSessions,
     createSession,
+    finishClearingAllSessions,
     formatSessionName,
     formatRelativeTime,
     formatFileSize
@@ -97,6 +98,7 @@ function createSessionItem(session, isActive) {
         openBtn.className = 'btn btn-sm';
         openBtn.textContent = 'Open';
         openBtn.title = 'Switch to this document';
+        openBtn.setAttribute('aria-label', `Open ${session.name}`);
         openBtn.dataset.action = 'switch';
         openBtn.dataset.sessionId = session.id;
         actions.appendChild(openBtn);
@@ -107,6 +109,7 @@ function createSessionItem(session, isActive) {
     deleteBtn.className = 'btn btn-sm btn-danger';
     deleteBtn.textContent = 'Delete';
     deleteBtn.title = 'Delete this session';
+    deleteBtn.setAttribute('aria-label', `Delete ${session.name}`);
     deleteBtn.dataset.action = 'delete';
     deleteBtn.dataset.sessionId = session.id;
     actions.appendChild(deleteBtn);
@@ -312,6 +315,9 @@ function handleClearAll() {
             content: '',
             source: 'new'
         });
+
+        // Signal that the clear operation is complete
+        finishClearingAllSessions();
 
         // Now clear editor - this will update the newly created session
         const { cmEditor } = state;
