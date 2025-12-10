@@ -15,6 +15,32 @@ const { test, expect } = require('@playwright/test');
  * - Storage migration and limits
  */
 
+// Helper functions defined at module level to avoid deep nesting
+function getOptgroupLabels(groups) {
+  return groups.map(g => g.label);
+}
+
+function getOptionTexts(opts) {
+  return opts.map(o => o.textContent);
+}
+
+function findUntitledSession(sessions) {
+  return sessions.find(s => s.name.startsWith('Untitled'));
+}
+
+function getActiveSessionSize() {
+  const raw = localStorage.getItem('merview-sessions-index');
+  const index = JSON.parse(raw);
+  const activeSession = index.sessions.find(s => s.id === index.activeSessionId);
+  return activeSession?.contentSize || 0;
+}
+
+function getSessionNames() {
+  const raw = localStorage.getItem('merview-sessions-index');
+  const index = JSON.parse(raw);
+  return index.sessions.map(s => s.name);
+}
+
 test.describe('Session Management', () => {
 
   test.beforeEach(async ({ page }) => {
@@ -76,19 +102,16 @@ test.describe('Session Management', () => {
   test.describe('Document Selector with Sessions', () => {
 
     test('document selector should have Current optgroup', async ({ page }) => {
-      const getOptgroupLabels = (groups) => groups.map(g => g.label);
       const optgroups = await page.$$eval('#documentSelector optgroup', getOptgroupLabels);
       expect(optgroups).toContain('Current');
     });
 
     test('document selector should have Actions optgroup', async ({ page }) => {
-      const getOptgroupLabels = (groups) => groups.map(g => g.label);
       const optgroups = await page.$$eval('#documentSelector optgroup', getOptgroupLabels);
       expect(optgroups).toContain('Actions');
     });
 
     test('document selector should have Manage sessions option', async ({ page }) => {
-      const getOptionTexts = (opts) => opts.map(o => o.textContent);
       const options = await page.$$eval('#documentSelector option', getOptionTexts);
       expect(options).toContain('Manage sessions...');
     });
@@ -141,9 +164,7 @@ test.describe('Session Management', () => {
       await page.selectOption('#documentSelector', '__new__');
       await page.waitForTimeout(500);
 
-      const findUntitledSession = (sessions) => sessions.find(s => s.name.startsWith('Untitled'));
-
-      const session = await page.evaluate((finder) => {
+      const session = await page.evaluate(() => {
         const raw = localStorage.getItem('merview-sessions-index');
         if (!raw) return null;
         const index = JSON.parse(raw);
@@ -194,13 +215,6 @@ test.describe('Session Management', () => {
 
       // Wait for debounced render
       await page.waitForTimeout(500);
-
-      const getActiveSessionSize = () => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        const activeSession = index.sessions.find(s => s.id === index.activeSessionId);
-        return activeSession?.contentSize || 0;
-      };
 
       const newSize = await page.evaluate(getActiveSessionSize);
 
@@ -369,7 +383,6 @@ test.describe('Session Management', () => {
       await page.waitForTimeout(500);
 
       // Check for Recent optgroup
-      const getOptgroupLabels = (groups) => groups.map(g => g.label);
       const optgroups = await page.$$eval('#documentSelector optgroup', getOptgroupLabels);
 
       // Should have Recent when there are non-active sessions
@@ -438,12 +451,6 @@ test.describe('Session Management', () => {
       await page.waitForTimeout(500);
       await page.selectOption('#documentSelector', '__new__');
       await page.waitForTimeout(500);
-
-      const getSessionNames = () => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        return index.sessions.map(s => s.name);
-      };
 
       const sessions = await page.evaluate(getSessionNames);
 
