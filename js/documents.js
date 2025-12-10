@@ -351,7 +351,7 @@ export function initDocumentSelector() {
     });
 
     // Listen for sessions changes (from other tabs or modal updates)
-    window.addEventListener('sessions-changed', () => {
+    globalThis.addEventListener('sessions-changed', () => {
         updateDocumentSelector();
     });
 

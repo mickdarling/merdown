@@ -49,7 +49,7 @@ function renderStorageStats() {
     const sizeDisplay = formatFileSize(stats.totalSize);
     const maxDisplay = formatFileSize(stats.maxSize);
 
-    return `${stats.totalSessions} session${stats.totalSessions !== 1 ? 's' : ''} (${sizeDisplay} of ${maxDisplay})`;
+    return `${stats.totalSessions} session${stats.totalSessions === 1 ? '' : 's'} (${sizeDisplay} of ${maxDisplay})`;
 }
 
 /**
@@ -188,80 +188,106 @@ export function hideSessionsModal() {
 }
 
 /**
+ * Load session content into editor
+ * @param {Object} session - Session data with content
+ */
+function loadSessionIntoEditor(session) {
+    const { cmEditor } = state;
+    if (cmEditor) {
+        cmEditor.setValue(session.content);
+    }
+    renderMarkdown();
+}
+
+/**
+ * Clear editor content
+ */
+function clearEditor() {
+    const { cmEditor } = state;
+    if (cmEditor) {
+        cmEditor.setValue('');
+    }
+    state.currentFilename = null;
+    renderMarkdown();
+}
+
+/**
+ * Handle switching to a different session
+ * @param {string} sessionId - Session ID
+ */
+function handleSwitchSession(sessionId) {
+    const session = switchSession(sessionId);
+    if (session) {
+        loadSessionIntoEditor(session);
+        updateDocumentSelector();
+        showStatus(`Opened: ${session.name}`);
+        hideSessionsModal();
+    } else {
+        showStatus('Failed to switch session', 'error');
+    }
+}
+
+/**
+ * Handle reloading after active session deletion
+ * @param {boolean} isActive - Whether deleted session was active
+ */
+function handlePostDeletion(isActive) {
+    if (isActive) {
+        const newActive = getActiveSessionMeta();
+        if (newActive) {
+            const newSession = switchSession(newActive.id);
+            if (newSession) {
+                loadSessionIntoEditor(newSession);
+            }
+        } else {
+            clearEditor();
+        }
+    }
+
+    updateDocumentSelector();
+    updateStorageDisplay();
+    renderSessionsList();
+    showStatus('Session deleted');
+}
+
+/**
+ * Handle deleting a session
+ * @param {string} sessionId - Session ID
+ */
+function handleDeleteSession(sessionId) {
+    const activeSession = getActiveSessionMeta();
+    const isActive = activeSession && sessionId === activeSession.id;
+
+    // Confirm deletion
+    const sessions = getAllSessions();
+    const session = sessions.find(s => s.id === sessionId);
+    const sessionName = session?.name ?? 'this session';
+
+    if (isActive && sessions.length === 1) {
+        showStatus('Cannot delete the only session', 'warning');
+        return;
+    }
+
+    if (confirm(`Delete "${sessionName}"?`)) {
+        const success = deleteSession(sessionId);
+        if (success) {
+            handlePostDeletion(isActive);
+        } else {
+            showStatus('Failed to delete session', 'error');
+        }
+    }
+}
+
+/**
  * Handle session action (switch, delete)
  * @param {string} sessionId - Session ID
  * @param {string} action - Action type ('switch' or 'delete')
  */
 function handleSessionAction(sessionId, action) {
     if (action === 'switch') {
-        const session = switchSession(sessionId);
-        if (session) {
-            // Load content into editor
-            const { cmEditor } = state;
-            if (cmEditor) {
-                cmEditor.setValue(session.content);
-            }
-
-            // Render and update UI
-            renderMarkdown();
-            updateDocumentSelector();
-            showStatus(`Opened: ${session.name}`);
-
-            // Close modal after switching
-            hideSessionsModal();
-        } else {
-            showStatus('Failed to switch session', 'error');
-        }
+        handleSwitchSession(sessionId);
     } else if (action === 'delete') {
-        const activeSession = getActiveSessionMeta();
-        const isActive = activeSession && sessionId === activeSession.id;
-
-        // Confirm deletion
-        const sessions = getAllSessions();
-        const session = sessions.find(s => s.id === sessionId);
-        const sessionName = session ? formatSessionName(session) : 'this session';
-
-        if (isActive && sessions.length === 1) {
-            // Don't allow deleting the only session
-            showStatus('Cannot delete the only session', 'warning');
-            return;
-        }
-
-        if (confirm(`Delete "${sessionName}"?`)) {
-            const success = deleteSession(sessionId);
-            if (success) {
-                // If we deleted the active session, load the new active session
-                if (isActive) {
-                    const newActive = getActiveSessionMeta();
-                    if (newActive) {
-                        const newSession = switchSession(newActive.id);
-                        if (newSession) {
-                            const { cmEditor } = state;
-                            if (cmEditor) {
-                                cmEditor.setValue(newSession.content);
-                            }
-                            renderMarkdown();
-                        }
-                    } else {
-                        // No more sessions, clear editor
-                        const { cmEditor } = state;
-                        if (cmEditor) {
-                            cmEditor.setValue('');
-                        }
-                        state.currentFilename = null;
-                        renderMarkdown();
-                    }
-                }
-
-                // Update displays
-                updateDocumentSelector();
-                updateStorageDisplay();
-                renderSessionsList();
-                showStatus('Session deleted');
-            } else {
-                showStatus('Failed to delete session', 'error');
-            }
-        }
+        handleDeleteSession(sessionId);
     }
 }
 

@@ -33,7 +33,7 @@ test.describe('Session Management', () => {
 
     test('sessions system should be initialized on page load', async ({ page }) => {
       const isInitialized = await page.evaluate(() => {
-        return globalThis.state && globalThis.state.sessionsLoaded === true;
+        return globalThis.state?.sessionsLoaded === true;
       });
       expect(isInitialized).toBe(true);
     });
@@ -59,7 +59,7 @@ test.describe('Session Management', () => {
       // Wait for content to load
       await page.waitForFunction(() => {
         const cm = globalThis.state?.cmEditor;
-        return cm && cm.getValue().includes('Welcome');
+        return cm?.getValue().includes('Welcome');
       }, { timeout: 10000 });
 
       const index = await page.evaluate(() => {
@@ -76,23 +76,20 @@ test.describe('Session Management', () => {
   test.describe('Document Selector with Sessions', () => {
 
     test('document selector should have Current optgroup', async ({ page }) => {
-      const optgroups = await page.$$eval('#documentSelector optgroup', groups =>
-        groups.map(g => g.label)
-      );
+      const optgroups = await page.$$eval('#documentSelector optgroup',
+        groups => groups.map(g => g.label));
       expect(optgroups).toContain('Current');
     });
 
     test('document selector should have Actions optgroup', async ({ page }) => {
-      const optgroups = await page.$$eval('#documentSelector optgroup', groups =>
-        groups.map(g => g.label)
-      );
+      const optgroups = await page.$$eval('#documentSelector optgroup',
+        groups => groups.map(g => g.label));
       expect(optgroups).toContain('Actions');
     });
 
     test('document selector should have Manage sessions option', async ({ page }) => {
-      const options = await page.$$eval('#documentSelector option', opts =>
-        opts.map(o => o.textContent)
-      );
+      const options = await page.$$eval('#documentSelector option',
+        opts => opts.map(o => o.textContent));
       expect(options).toContain('Manage sessions...');
     });
 
@@ -146,9 +143,11 @@ test.describe('Session Management', () => {
 
       const session = await page.evaluate(() => {
         const raw = localStorage.getItem('merview-sessions-index');
+        if (!raw) return null;
         const index = JSON.parse(raw);
         // Get most recent session (should be Untitled)
-        return index.sessions.find(s => s.name.startsWith('Untitled'));
+        const untitledSession = index.sessions.find(s => s.name.startsWith('Untitled'));
+        return untitledSession;
       });
 
       expect(session).not.toBeNull();
@@ -186,14 +185,6 @@ test.describe('Session Management', () => {
     });
 
     test('session content size should be tracked', async ({ page }) => {
-      // Get initial content size
-      const initialSize = await page.evaluate(() => {
-        const raw = localStorage.getItem('merview-sessions-index');
-        const index = JSON.parse(raw);
-        const activeSession = index.sessions.find(s => s.id === index.activeSessionId);
-        return activeSession?.contentSize || 0;
-      });
-
       // Clear and add new content
       await page.evaluate(() => {
         globalThis.state.cmEditor.setValue('# Short Content');

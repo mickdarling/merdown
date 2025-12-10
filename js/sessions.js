@@ -197,15 +197,15 @@ function autoCleanup() {
  */
 function resolveNameConflict(baseName) {
     const index = loadSessionsIndex();
-    const existing = index.sessions.map(s => s.name.toLowerCase());
+    const existing = new Set(index.sessions.map(s => s.name.toLowerCase()));
 
-    if (!existing.includes(baseName.toLowerCase())) {
+    if (!existing.has(baseName.toLowerCase())) {
         return baseName;
     }
 
     let counter = 1;
     let newName = `${baseName} (${counter})`;
-    while (existing.includes(newName.toLowerCase())) {
+    while (existing.has(newName.toLowerCase())) {
         counter++;
         newName = `${baseName} (${counter})`;
     }
@@ -226,7 +226,7 @@ export function migrateToSessions() {
     // Check for existing single-document content
     const legacyContent = getMarkdownContent();
 
-    if (legacyContent && legacyContent.trim()) {
+    if (legacyContent?.trim()) {
         // Create initial session from legacy content
         const sessionId = generateSessionId();
         const session = {
@@ -275,10 +275,10 @@ export function initSessions() {
     state.sessionsLoaded = true;
 
     // Listen for storage changes from other tabs
-    window.addEventListener('storage', (event) => {
+    globalThis.addEventListener('storage', (event) => {
         if (event.key === SESSIONS_INDEX_KEY) {
             // Dispatch custom event for UI updates
-            window.dispatchEvent(new CustomEvent('sessions-changed'));
+            globalThis.dispatchEvent(new CustomEvent('sessions-changed'));
         }
     });
 }
