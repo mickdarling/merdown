@@ -152,6 +152,8 @@ function saveSessionsIndex(index) {
         cachedIndex = index;
         cacheValid = true;
     } catch (error) {
+        // Invalidate cache on any error to prevent stale data
+        cacheValid = false;
         if (error.name === 'QuotaExceededError') {
             console.error('Storage quota exceeded while saving sessions index');
             // Attempt auto-cleanup and retry once
