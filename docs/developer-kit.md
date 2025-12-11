@@ -79,14 +79,10 @@ https://merview.com/?url=YOUR_MARKDOWN_URL
 
 ### Security Note
 
-Merview only allows content from trusted domains for security:
-- `raw.githubusercontent.com` - GitHub raw files
-- `gist.githubusercontent.com` - GitHub Gists
-- `cdn.jsdelivr.net` - jsDelivr CDN
-- `unpkg.com` - unpkg CDN
-- `cdnjs.cloudflare.com` - Cloudflare CDN
-
-**As of PR #202**, Merview supports loading from ANY HTTPS URL, not just the allowlisted domains above. Content is sanitized with DOMPurify for XSS protection.
+Merview supports loading from any HTTPS URL for maximum flexibility:
+- **No Domain Restrictions** - Load content from any HTTPS source
+- **Content Sanitization** - All rendered HTML is sanitized with DOMPurify for XSS protection
+- **Client-Side Processing** - Content is processed entirely in the browser with no server-side storage
 
 ---
 
@@ -384,7 +380,7 @@ For stable links, reference specific versions or tags:
 ### 2. Keep URLs Short
 
 Long URLs can be unwieldy. Consider:
-- Using git.io or other URL shorteners
+- Using URL shorteners like bit.ly or tinyurl.com
 - Hosting on CDNs with shorter paths
 - Using GitHub Gists for standalone documents
 
@@ -499,15 +495,17 @@ https://merview.com/[?parameter]
 | `url` | string | HTTPS URL to markdown file | `?url=https://raw.githubusercontent.com/...` |
 | `sample` | flag | Load welcome document | `?sample` |
 
-### Future Parameters (Not Yet Implemented)
+### Future Parameters
 
-These are planned but not yet available:
+The following parameters are under consideration and may be implemented in future releases:
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
-| `theme` | string | Default theme to apply |
-| `style` | string | Default preview style |
-| `readonly` | flag | Hide editor panel |
+| Parameter | Type | Description | Status |
+|-----------|------|-------------|--------|
+| `theme` | string | Default theme to apply | Under consideration |
+| `style` | string | Default preview style | Under consideration |
+| `readonly` | flag | Hide editor panel | Under consideration |
+
+> **Note**: These features are speculative and may not be implemented. Check the [GitHub Issues](https://github.com/mickdarling/merview/issues) for current development status.
 
 ---
 
