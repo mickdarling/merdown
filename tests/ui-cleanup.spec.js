@@ -12,10 +12,10 @@ test.describe('UI Cleanup - Dropdown Optgroups', () => {
 
   const dropdowns = [
     { id: 'documentSelector', label: 'Current' },
-    { id: 'editorThemeSelector', label: 'Themes' },
-    { id: 'styleSelector', label: 'Themes' },
-    { id: 'syntaxThemeSelector', label: 'Themes' },
-    { id: 'mermaidThemeSelector', label: 'Themes' }
+    { id: 'editorThemeSelector', label: 'Editor Theme' },
+    { id: 'styleSelector', label: 'Preview Style' },
+    { id: 'syntaxThemeSelector', label: 'Code Block Theme' },
+    { id: 'mermaidThemeSelector', label: 'Mermaid Theme' }
   ];
 
   for (const { id, label } of dropdowns) {
@@ -105,9 +105,9 @@ test.describe('UI Cleanup - Button Labels', () => {
     expect(buttonText).toContain('Save');
   });
 
-  test('Save as PDF button should have disk emoji', async ({ page }) => {
+  test('Save as PDF button should have document emoji', async ({ page }) => {
     const buttonText = await page.$eval('button[onclick="exportToPDF()"]', el => el.textContent);
-    expect(buttonText).toContain('💾');
+    expect(buttonText).toContain('📄');
     expect(buttonText).toContain('Save as PDF');
   });
 });
