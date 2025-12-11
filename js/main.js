@@ -31,6 +31,7 @@ function clearEditor() {
         }
         state.currentFilename = null;
         state.loadedFromURL = null;
+
         updateDocumentSelector();
         renderMarkdown();
         showStatus('Editor cleared');

@@ -19,7 +19,7 @@
 
 import { state } from './state.js';
 import { getElements } from './dom.js';
-import { showStatus } from './utils.js';
+import { showStatus, setURLParameter, clearURLParameter } from './utils.js';
 import { isAllowedMarkdownURL, normalizeGitHubContentUrl } from './security.js';
 import { renderMarkdown } from './renderer.js';
 
@@ -59,6 +59,9 @@ export async function loadMarkdownFile(file) {
 
         state.currentFilename = file.name;
         state.loadedFromURL = null; // Clear URL source when loading from file
+
+        // Clear URL parameter from address bar when loading local file (Issue #204)
+        clearURLParameter();
 
         // Update document selector to show the new name
         if (typeof globalThis.updateDocumentSelector === 'function') {
@@ -204,6 +207,10 @@ export async function loadMarkdownFromURL(url) {
         state.currentFilename = urlPath.split('/').pop() || 'remote.md';
         state.loadedFromURL = normalizedUrl; // Track URL source
 
+        // Persist the original URL (not normalized) in address bar for sharing (Issue #204)
+        // Use the original URL parameter so users can copy/share the exact URL they provided
+        setURLParameter(url);
+
         // Update document selector to show the new name
         if (typeof globalThis.updateDocumentSelector === 'function') {
             globalThis.updateDocumentSelector();
@@ -284,6 +291,9 @@ function downloadFile(filename) {
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
+
+    // Clear URL parameter when saving (user is taking ownership of content) (Issue #204)
+    clearURLParameter();
 
     showStatus(`Saved: ${filename}`);
 }
@@ -505,6 +515,9 @@ Merview is free and open source under the AGPL-3.0 license.
     // Set document name for the sample
     state.currentFilename = 'Welcome.md';
     state.loadedFromURL = null;
+
+    // Clear URL parameter when loading sample (Issue #204)
+    clearURLParameter();
 
     // Update document selector to show the new name
     if (typeof globalThis.updateDocumentSelector === 'function') {
