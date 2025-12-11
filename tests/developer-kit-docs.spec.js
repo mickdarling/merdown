@@ -34,6 +34,54 @@ const EXPECTED_CONTENT = {
 };
 
 /**
+ * Helper function to check if main heading exists in the page
+ * Extracted to reduce nesting depth (SonarCloud S2004)
+ */
+function checkMainHeading(heading) {
+  const wrapper = document.getElementById('wrapper');
+  const h1Elements = wrapper?.querySelectorAll('h1');
+  return Array.from(h1Elements || []).some(h1 =>
+    h1.textContent?.includes(heading)
+  );
+}
+
+/**
+ * Helper function to check if JavaScript code example exists
+ * Extracted to reduce nesting depth (SonarCloud S2004)
+ */
+function checkJavaScriptExample() {
+  const wrapper = document.getElementById('wrapper');
+  const codeBlocks = wrapper?.querySelectorAll('pre code');
+  return Array.from(codeBlocks || []).some(code =>
+    code.textContent?.includes('generateMerviewLink')
+  );
+}
+
+/**
+ * Helper function to check if Python code example exists
+ * Extracted to reduce nesting depth (SonarCloud S2004)
+ */
+function checkPythonExample() {
+  const wrapper = document.getElementById('wrapper');
+  const codeBlocks = wrapper?.querySelectorAll('pre code');
+  return Array.from(codeBlocks || []).some(code =>
+    code.textContent?.includes('generate_merview_link')
+  );
+}
+
+/**
+ * Helper function to check if Welcome navigation link exists
+ * Extracted to reduce nesting depth (SonarCloud S2004)
+ */
+function checkWelcomeLink() {
+  const wrapper = document.getElementById('wrapper');
+  const links = wrapper?.querySelectorAll('a[href*="sample"]');
+  return Array.from(links || []).some(link =>
+    link.textContent?.includes('Welcome')
+  );
+}
+
+/**
  * Tests for Developer Kit Documentation
  *
  * These tests ensure the developer-kit.md document can be loaded,
@@ -64,13 +112,7 @@ test.describe('Developer Kit Documentation', () => {
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
       // Check for the main heading in the rendered preview
-      const hasMainHeading = await page.evaluate((heading) => {
-        const wrapper = document.getElementById('wrapper');
-        const h1Elements = wrapper?.querySelectorAll('h1');
-        return Array.from(h1Elements || []).some(h1 =>
-          h1.textContent?.includes(heading)
-        );
-      }, EXPECTED_CONTENT.mainHeading);
+      const hasMainHeading = await page.evaluate(checkMainHeading, EXPECTED_CONTENT.mainHeading);
 
       expect(hasMainHeading).toBe(true);
     });
@@ -134,13 +176,7 @@ test.describe('Developer Kit Documentation', () => {
       await page.goto('/?url=docs/developer-kit.md');
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
-      const hasJavaScriptExample = await page.evaluate(() => {
-        const wrapper = document.getElementById('wrapper');
-        const codeBlocks = wrapper?.querySelectorAll('pre code');
-        return Array.from(codeBlocks || []).some(code =>
-          code.textContent?.includes('generateMerviewLink')
-        );
-      });
+      const hasJavaScriptExample = await page.evaluate(checkJavaScriptExample);
 
       expect(hasJavaScriptExample).toBe(true);
     });
@@ -149,13 +185,7 @@ test.describe('Developer Kit Documentation', () => {
       await page.goto('/?url=docs/developer-kit.md');
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
-      const hasPythonExample = await page.evaluate(() => {
-        const wrapper = document.getElementById('wrapper');
-        const codeBlocks = wrapper?.querySelectorAll('pre code');
-        return Array.from(codeBlocks || []).some(code =>
-          code.textContent?.includes('generate_merview_link')
-        );
-      });
+      const hasPythonExample = await page.evaluate(checkPythonExample);
 
       expect(hasPythonExample).toBe(true);
     });
@@ -167,13 +197,7 @@ test.describe('Developer Kit Documentation', () => {
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
       // Look for the "Back to Welcome" link
-      const welcomeLinkExists = await page.evaluate(() => {
-        const wrapper = document.getElementById('wrapper');
-        const links = wrapper?.querySelectorAll('a[href*="sample"]');
-        return Array.from(links || []).some(link =>
-          link.textContent?.includes('Welcome')
-        );
-      });
+      const welcomeLinkExists = await page.evaluate(checkWelcomeLink);
 
       expect(welcomeLinkExists).toBe(true);
     });
