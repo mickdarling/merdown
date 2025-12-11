@@ -151,7 +151,7 @@ export function setURLParameter(url) {
         // Manually construct search with minimal encoding
         // Characters we KEEP readable: / : . - _ ~ (safe in query values per RFC 3986)
         // Characters we MUST encode: space, &, #, ?, =, %, and other special chars
-        const minimallyEncoded = url.replace(/[^A-Za-z0-9\-._~:/]/g, (char) => {
+        const minimallyEncoded = url.replaceAll(/[^A-Za-z0-9\-._~:/]/g, (char) => {
             return encodeURIComponent(char);
         });
         newUrl.search = `?url=${minimallyEncoded}`;
