@@ -219,3 +219,21 @@ export function isFreshVisit() {
 export function markSessionInitialized() {
     sessionStorage.setItem(SESSION_INITIALIZED_KEY, 'true');
 }
+
+/**
+ * Get cached preview background color
+ * Used to prevent Mermaid theme flash on back navigation (issue #175)
+ * @returns {string|null} Cached background color or null
+ */
+export function getCachedBackgroundColor() {
+    return localStorage.getItem('cached-bg-color');
+}
+
+/**
+ * Save preview background color to cache
+ * Used to prevent Mermaid theme flash on back navigation (issue #175)
+ * @param {string} bgColor - Background color to cache
+ */
+export function saveCachedBackgroundColor(bgColor) {
+    localStorage.setItem('cached-bg-color', bgColor);
+}
