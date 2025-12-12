@@ -33,10 +33,13 @@ export default [
       "no-eval": "error",
       "no-implied-eval": "error",
       "no-new-func": "error",
+      "no-prototype-builtins": "error",
       // Code quality
-      "eqeqeq": ["error", "always"],
+      "eqeqeq": ["error", "always", { "null": "ignore" }],
       "no-var": "warn",
       "prefer-const": "warn",
+      "no-debugger": "warn",
+      "curly": ["warn", "multi-line"],
     },
   },
 ];

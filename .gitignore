@@ -32,6 +32,9 @@ yarn-error.log*
 dist/
 build/
 
+# Lint cache
+.eslintcache
+
 # Test artifacts
 playwright-report/
 test-results/
