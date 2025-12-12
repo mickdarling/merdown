@@ -125,20 +125,22 @@ export function isDarkColor(colorString) {
 /**
  * Show status message to user
  * @param {string} message - Message to display
- * @param {string} type - Message type ('success' or 'warning')
+ * @param {string} type - Message type ('success', 'warning', or 'error')
  */
 export function showStatus(message, type = 'success') {
     const { statusDiv } = getElements();
     statusDiv.textContent = message;
-    statusDiv.classList.remove('warning');
+    statusDiv.classList.remove('warning', 'error');
     if (type === 'warning') {
         statusDiv.classList.add('warning');
+    } else if (type === 'error') {
+        statusDiv.classList.add('error');
     }
     statusDiv.classList.add('show');
-    // Warnings show longer (6s) than success messages (3s)
-    const duration = type === 'warning' ? 6000 : 3000;
+    // Errors and warnings show longer (6s) than success messages (3s)
+    const duration = (type === 'warning' || type === 'error') ? 6000 : 3000;
     setTimeout(() => {
-        statusDiv.classList.remove('show', 'warning');
+        statusDiv.classList.remove('show', 'warning', 'error');
     }, duration);
 }
 
