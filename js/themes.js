@@ -10,7 +10,7 @@ import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles, mermaidThe
 import { showURLModal } from './components/url-modal.js';
 // Re-export initURLModalHandlers for main.js
 export { initURLModalHandlers } from './components/url-modal.js';
-import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, getMermaidTheme, saveMermaidTheme } from './storage.js';
+import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, getMermaidTheme, saveMermaidTheme, getCachedBackgroundColor, saveCachedBackgroundColor } from './storage.js';
 import { showStatus, isDarkColor } from './utils.js';
 import { isAllowedCSSURL, isValidBackgroundColor, normalizeGitHubContentUrl } from './security.js';
 import { updateMermaidTheme, scheduleRender } from './renderer.js';
@@ -21,6 +21,23 @@ import { updateFullscreenBackground } from './mermaid-fullscreen.js';
 // Note: Checked at runtime so changes take effect immediately without page refresh
 function isDebugMermaidTheme() {
     return localStorage.getItem('debug-mermaid-theme') === 'true';
+}
+
+/**
+ * Apply cached background color early to prevent Mermaid theme flash on back navigation
+ * Called during app initialization BEFORE any style loading occurs (fixes #175)
+ * This ensures the Mermaid theme is correct even if the style CSS hasn't loaded yet
+ */
+export function applyCachedBackground() {
+    const cachedBgColor = getCachedBackgroundColor();
+    if (cachedBgColor) {
+        const { preview } = getElements();
+        if (preview) {
+            preview.style.background = cachedBgColor;
+            // Update Mermaid theme based on cached background
+            updateMermaidTheme(isDarkColor(cachedBgColor));
+        }
+    }
 }
 
 // Local state for theme management (module-local)
@@ -108,12 +125,15 @@ function applyPreviewBackground(cssText) {
         preview.style.background = bgColor;
         // Update Mermaid theme based on background brightness (#109 fix)
         updateMermaidTheme(isDarkColor(bgColor));
+        // Cache background color to prevent theme flash on back navigation (#175 fix)
+        saveCachedBackgroundColor(bgColor);
         return bgColor;
     }
 
     // Default to white if no valid background found
     preview.style.background = 'white';
     updateMermaidTheme(false); // White background = light theme
+    saveCachedBackgroundColor('white');
     return 'white';
 }
 
@@ -431,6 +451,8 @@ async function applyCSSCore(cssText) {
             preview.style.background = bgColor;
             // Also update Mermaid theme early (#109 fix)
             updateMermaidTheme(isDarkColor(bgColor));
+            // Cache background color to prevent theme flash on back navigation (#175 fix)
+            saveCachedBackgroundColor(bgColor);
         }
     }
 
@@ -453,6 +475,7 @@ async function applyCSSCore(cssText) {
         if (preview) {
             preview.style.background = 'white';
             updateMermaidTheme(false); // White background = light theme
+            saveCachedBackgroundColor('white');
         }
     }
 
