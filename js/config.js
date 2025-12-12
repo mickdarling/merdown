@@ -106,6 +106,7 @@ export const availableStyles = [
     { name: 'Monospace', file: 'styles/monospace.css', source: 'local', group: 'Preview Style' },
     { name: 'Newspaper', file: 'styles/newspaper.css', source: 'local', group: 'Preview Style' },
     { name: 'Respect Style Layout', file: '', source: 'toggle', group: 'Options' },
+    { name: 'HR as Page Break', file: '', source: 'toggle', group: 'Options' },
     { name: 'Load from file...', file: '', source: 'file', group: 'Import' },
     { name: 'Load from URL...', file: '', source: 'url', group: 'Import' },
     { name: 'MarkedCustomStyles (external)', file: '', source: 'repository',
