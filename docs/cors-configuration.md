@@ -42,20 +42,20 @@ Add to your server block or location block:
 
 ```nginx
 # Allow specific origin (recommended)
-add_header 'Access-Control-Allow-Origin' 'https://merview.app';
-add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS';
-add_header 'Access-Control-Allow-Headers' 'Content-Type';
+add_header 'Access-Control-Allow-Origin' 'https://merview.app' always;
+add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
+add_header 'Access-Control-Allow-Headers' 'Content-Type' always;
 
 # Or allow all origins (use with caution)
-# add_header 'Access-Control-Allow-Origin' '*';
+# add_header 'Access-Control-Allow-Origin' '*' always;
 
 # Handle preflight requests
 if ($request_method = 'OPTIONS') {
-    add_header 'Access-Control-Allow-Origin' 'https://merview.app';
-    add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS';
-    add_header 'Access-Control-Max-Age' 1728000;
-    add_header 'Content-Type' 'text/plain; charset=utf-8';
-    add_header 'Content-Length' 0;
+    add_header 'Access-Control-Allow-Origin' 'https://merview.app' always;
+    add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
+    add_header 'Access-Control-Max-Age' 1728000 always;
+    add_header 'Content-Type' 'text/plain; charset=utf-8' always;
+    add_header 'Content-Length' 0 always;
     return 204;
 }
 ```
@@ -69,9 +69,9 @@ server {
 
     location ~ \.(md|markdown)$ {
         root /var/www/docs;
-        add_header 'Access-Control-Allow-Origin' 'https://merview.app';
-        add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS';
-        add_header 'Content-Type' 'text/markdown; charset=utf-8';
+        add_header 'Access-Control-Allow-Origin' 'https://merview.app' always;
+        add_header 'Access-Control-Allow-Methods' 'GET, OPTIONS' always;
+        add_header 'Content-Type' 'text/markdown; charset=utf-8' always;
     }
 }
 ```
@@ -321,7 +321,7 @@ pip install flask-cors
 **Basic usage:**
 
 ```python
-from flask import Flask
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 
 app = Flask(__name__)
