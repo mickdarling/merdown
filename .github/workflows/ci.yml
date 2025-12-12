@@ -15,7 +15,8 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci --audit
+      - run: npm ci
+      - run: npm audit --audit-level=high
       - run: npm run lint
 
   test:
@@ -23,7 +24,7 @@ jobs:
     # - PRs targeting main (pre-merge gate from develop)
     # - Pushes to main (post-merge verification)
     # PRs to develop skip tests - run locally before pushing.
-    if: github.base_ref == 'main' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: (github.event_name == 'pull_request' && github.base_ref == 'main') || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
