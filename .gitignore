@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # OS files
 .DS_Store
@@ -32,6 +31,9 @@ yarn-error.log*
 # Build outputs
 dist/
 build/
+
+# Lint cache
+.eslintcache
 
 # Test artifacts
 playwright-report/

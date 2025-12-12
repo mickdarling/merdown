@@ -217,7 +217,7 @@ export function normalizeGitHubUrl(url) {
  */
 export function normalizeGitHubContentUrl(url) {
     // First try gist normalization
-    let normalized = normalizeGistUrl(url);
+    const normalized = normalizeGistUrl(url);
     if (normalized !== url) {
         return normalized;
     }

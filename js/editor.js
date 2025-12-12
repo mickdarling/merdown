@@ -24,14 +24,14 @@ export function initCodeMirror(onChangeCallback) {
         dragDrop: false, // Disable drag and drop of selections
         extraKeys: {
             'Enter': 'newlineAndIndentContinueMarkdownList',
-            'Ctrl-S': function(cm) {
+            'Ctrl-S': function(_cm) {
                 // Save functionality will be handled by file-ops module
                 if (globalThis.saveFile) {
                     globalThis.saveFile();
                 }
                 return false;
             },
-            'Cmd-S': function(cm) {
+            'Cmd-S': function(_cm) {
                 // Save functionality will be handled by file-ops module
                 if (globalThis.saveFile) {
                     globalThis.saveFile();
