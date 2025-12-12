@@ -102,6 +102,24 @@ export function saveRespectStyleLayout(respectLayout) {
 }
 
 /**
+ * Get "HR as Page Break" toggle preference
+ * @returns {boolean} True if horizontal rules should trigger page breaks (default: true)
+ */
+export function getHRAsPageBreak() {
+    const stored = localStorage.getItem('hr-page-break');
+    // Default to true if not set (preserves current behavior)
+    return stored === null ? true : stored === 'true';
+}
+
+/**
+ * Save "HR as Page Break" toggle preference
+ * @param {boolean} enabled - Whether horizontal rules should trigger page breaks
+ */
+export function saveHRAsPageBreak(enabled) {
+    localStorage.setItem('hr-page-break', enabled);
+}
+
+/**
  * Get stored GitHub access token for Gist functionality
  * @returns {string|null} Access token or null if expired/invalid
  */

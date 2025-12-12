@@ -10,7 +10,7 @@ import { syntaxThemes, syntaxThemeSRI, editorThemes, availableStyles, mermaidThe
 import { showURLModal } from './components/url-modal.js';
 // Re-export initURLModalHandlers for main.js
 export { initURLModalHandlers } from './components/url-modal.js';
-import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, getMermaidTheme, saveMermaidTheme, getCachedBackgroundColor, saveCachedBackgroundColor } from './storage.js';
+import { getMarkdownStyle, saveMarkdownStyle, getSyntaxTheme, saveSyntaxTheme, getEditorTheme, saveEditorTheme, saveRespectStyleLayout, saveHRAsPageBreak, getMermaidTheme, saveMermaidTheme, getCachedBackgroundColor, saveCachedBackgroundColor } from './storage.js';
 import { showStatus, isDarkColor } from './utils.js';
 import { isAllowedCSSURL, isValidBackgroundColor, normalizeGitHubContentUrl } from './security.js';
 import { updateMermaidTheme, scheduleRender } from './renderer.js';
@@ -46,6 +46,7 @@ export function applyCachedBackground() {
 // - No other modules need to read or write these values
 // - Keeping them local reduces coupling and makes the code easier to reason about
 let layoutToggleOption = null; // Cached reference for performance
+let hrPageBreakToggleOption = null; // Cached reference for performance
 let fileInput = null; // Hidden file input for CSS uploads
 
 /**
@@ -713,6 +714,50 @@ function updateLayoutToggleCheckbox() {
 }
 
 /**
+ * Update just the checkbox state for the HR page break toggle option (uses cached reference)
+ */
+function updateHRPageBreakToggleCheckbox() {
+    if (hrPageBreakToggleOption) {
+        hrPageBreakToggleOption.textContent = (state.hrAsPageBreak ? '✓ ' : '☐ ') + 'HR as Page Break';
+    }
+}
+
+/**
+ * Apply or remove page break CSS for horizontal rules based on the toggle setting
+ */
+function applyHRPageBreakStyle() {
+    // Find or create the dynamic style element for HR page breaks
+    let styleEl = document.getElementById('hr-page-break-style');
+
+    if (state.hrAsPageBreak) {
+        // Add page break CSS if not present
+        if (!styleEl) {
+            styleEl = document.createElement('style');
+            styleEl.id = 'hr-page-break-style';
+            styleEl.textContent = `
+                @media print {
+                    #wrapper hr {
+                        page-break-after: always;
+                        break-after: page;
+                        border: none;
+                        margin: 0;
+                        padding: 0;
+                        visibility: hidden;
+                        height: 0;
+                    }
+                }
+            `;
+            document.head.appendChild(styleEl);
+        }
+    } else {
+        // Remove page break CSS if present
+        if (styleEl) {
+            styleEl.remove();
+        }
+    }
+}
+
+/**
  * Change the current style
  * Reverts dropdown selection if style loading fails or is cancelled (#108 fix)
  * @param {string} styleName - Name of the style to change to
@@ -722,7 +767,7 @@ async function changeStyle(styleName) {
 
     const { styleSelector } = getElements();
 
-    // Handle toggle option
+    // Handle Respect Style Layout toggle option
     if (styleName === 'Respect Style Layout') {
         state.respectStyleLayout = !state.respectStyleLayout;
         saveRespectStyleLayout(state.respectStyleLayout);
@@ -735,6 +780,22 @@ async function changeStyle(styleName) {
             styleSelector.value = currentStyle;
         }
         showStatus(state.respectStyleLayout ? 'Style layout respected' : 'Style layout overridden');
+        return;
+    }
+
+    // Handle HR as Page Break toggle option
+    if (styleName === 'HR as Page Break') {
+        state.hrAsPageBreak = !state.hrAsPageBreak;
+        saveHRAsPageBreak(state.hrAsPageBreak);
+        applyHRPageBreakStyle();
+        // Update just the checkbox without rebuilding the entire dropdown
+        updateHRPageBreakToggleCheckbox();
+        // Restore previous selection
+        const currentStyle = getMarkdownStyle() || 'Clean';
+        if (styleSelector) {
+            styleSelector.value = currentStyle;
+        }
+        showStatus(state.hrAsPageBreak ? 'HR as page break enabled' : 'HR as visual separator enabled');
         return;
     }
 
@@ -1140,10 +1201,15 @@ async function initStyleSelector() {
             option.value = style.name;
             option.textContent = style.name;
 
-            // Handle toggle with checkmark and cache reference for performance
+            // Handle toggles with checkmark and cache reference for performance
             if (style.source === 'toggle') {
-                option.textContent = (state.respectStyleLayout ? '✓ ' : '☐ ') + style.name;
-                layoutToggleOption = option;
+                if (style.name === 'Respect Style Layout') {
+                    option.textContent = (state.respectStyleLayout ? '✓ ' : '☐ ') + style.name;
+                    layoutToggleOption = option;
+                } else if (style.name === 'HR as Page Break') {
+                    option.textContent = (state.hrAsPageBreak ? '✓ ' : '☐ ') + style.name;
+                    hrPageBreakToggleOption = option;
+                }
             }
 
             return option;
@@ -1157,6 +1223,9 @@ async function initStyleSelector() {
 
     styleSelector.value = styleToLoad;
     await loadStyle(styleToLoad);
+
+    // Apply HR page break style based on saved preference
+    applyHRPageBreakStyle();
 }
 
 /**

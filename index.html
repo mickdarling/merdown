@@ -1006,16 +1006,9 @@
             }
 
             /* Page break support for slide decks and paginated documents */
-            /* Horizontal rules (<hr> from ---) trigger new pages */
-            #wrapper hr {
-                page-break-after: always;
-                break-after: page;
-                border: none;
-                margin: 0;
-                padding: 0;
-                visibility: hidden;
-                height: 0;
-            }
+            /* Note: HR page break behavior is now controlled by a toggle in the Options menu.
+               The CSS is dynamically injected by JavaScript in themes.js based on user preference.
+               Default: enabled (preserves backward compatibility with existing documents). */
 
             /* Respect all CSS page-break properties */
             #wrapper [style*="page-break-before: always"],
