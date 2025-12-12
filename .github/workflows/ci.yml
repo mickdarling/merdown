@@ -15,12 +15,14 @@ jobs:
         with:
           node-version: '20'
           cache: 'npm'
-      - run: npm ci
+      - run: npm ci --audit
       - run: npm run lint
 
   test:
-    # Only run full E2E tests on PRs targeting main (pre-merge gate)
-    # and on pushes to main (post-merge verification)
+    # E2E tests are expensive (~10+ min). Only run as gate for releases:
+    # - PRs targeting main (pre-merge gate from develop)
+    # - Pushes to main (post-merge verification)
+    # PRs to develop skip tests - run locally before pushing.
     if: github.base_ref == 'main' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
@@ -32,3 +34,10 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps
       - run: npx playwright test
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-results
+          path: test-results/
+          retention-days: 7

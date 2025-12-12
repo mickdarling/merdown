@@ -22,12 +22,21 @@ export default [
       },
     },
     rules: {
+      // Style rules - intentionally lenient
       "indent": "off",
       "linebreak-style": ["error", "unix"],
       "quotes": "off",
       "semi": "off",
       "no-unused-vars": "warn",
       "no-console": "off",
+      // Security rules
+      "no-eval": "error",
+      "no-implied-eval": "error",
+      "no-new-func": "error",
+      // Code quality
+      "eqeqeq": ["error", "always"],
+      "no-var": "warn",
+      "prefer-const": "warn",
     },
   },
 ];
