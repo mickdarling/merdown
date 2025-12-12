@@ -157,7 +157,7 @@ async function setEditorContent(page, content) {
  */
 async function setValidToken(page) {
   await page.evaluate(() => {
-    localStorage.setItem('github_gist_token', JSON.stringify({
+    localStorage.setItem('github-gist-token', JSON.stringify({
       accessToken: 'valid-test-token',
       expiresAt: Date.now() + 3600000,
       scope: 'gist'
@@ -278,7 +278,7 @@ test.describe('Share to Gist', () => {
 
     test('should store token in localStorage after successful auth', async ({ page }) => {
       await page.evaluate(() => {
-        localStorage.setItem('github_gist_token', JSON.stringify({
+        localStorage.setItem('github-gist-token', JSON.stringify({
           accessToken: 'test-access-token',
           expiresAt: Date.now() + 3600000,
           scope: 'gist'
@@ -286,7 +286,7 @@ test.describe('Share to Gist', () => {
       });
 
       const stored = await page.evaluate(() => {
-        const data = localStorage.getItem('github_gist_token');
+        const data = localStorage.getItem('github-gist-token');
         return data ? JSON.parse(data) : null;
       });
 
@@ -294,10 +294,45 @@ test.describe('Share to Gist', () => {
       expect(stored.accessToken).toBe('test-access-token');
     });
 
+    test('should migrate token from old snake_case key to new kebab-case key', async ({ page }) => {
+      // Set token with old key (github_gist_token)
+      await page.evaluate(() => {
+        localStorage.setItem('github_gist_token', JSON.stringify({
+          accessToken: 'migrated-test-token',
+          expiresAt: Date.now() + 3600000,
+          scope: 'gist'
+        }));
+      });
+
+      // Set up content and mock gist creation
+      await setEditorContent(page, '# Migration Test');
+      await mockGistCreation(page);
+
+      // Click Share to Gist - this triggers getGitHubToken() which performs migration
+      await page.click('button:has-text("Share to Gist")');
+
+      // Wait for gist creation to complete (proves the migrated token worked)
+      await expect(page.locator('#gistModal .gist-modal')).toContainText('Gist Created', { timeout: 10000 });
+
+      // Verify old key was removed and new key exists
+      const oldKey = await page.evaluate(() => localStorage.getItem('github_gist_token'));
+      const newKey = await page.evaluate(() => localStorage.getItem('github-gist-token'));
+
+      expect(oldKey).toBeNull();
+      expect(newKey).not.toBeNull();
+
+      // Verify the token data was preserved correctly
+      const tokenData = await page.evaluate(() => {
+        const data = localStorage.getItem('github-gist-token');
+        return data ? JSON.parse(data) : null;
+      });
+      expect(tokenData.accessToken).toBe('migrated-test-token');
+    });
+
     test('should clear expired tokens', async ({ page }) => {
       // Set an expired token
       await page.evaluate(() => {
-        localStorage.setItem('github_gist_token', JSON.stringify({
+        localStorage.setItem('github-gist-token', JSON.stringify({
           accessToken: 'expired-token',
           expiresAt: Date.now() - 1000,
           scope: 'gist'
@@ -316,7 +351,7 @@ test.describe('Share to Gist', () => {
 
     test('should disconnect GitHub when disconnectGitHub is called', async ({ page }) => {
       await page.evaluate(() => {
-        localStorage.setItem('github_gist_token', JSON.stringify({
+        localStorage.setItem('github-gist-token', JSON.stringify({
           accessToken: 'test-token',
           expiresAt: Date.now() + 3600000,
           scope: 'gist'
@@ -328,7 +363,7 @@ test.describe('Share to Gist', () => {
         globalThis.disconnectGitHub();
       });
 
-      const token = await page.evaluate(() => localStorage.getItem('github_gist_token'));
+      const token = await page.evaluate(() => localStorage.getItem('github-gist-token'));
       expect(token).toBeNull();
     });
   });
@@ -437,7 +472,7 @@ test.describe('Share to Gist', () => {
       const modal = page.locator('#gistModal .gist-modal');
       await expect(modal).toContainText('authorization expired', { timeout: 10000 });
 
-      const token = await page.evaluate(() => localStorage.getItem('github_gist_token'));
+      const token = await page.evaluate(() => localStorage.getItem('github-gist-token'));
       expect(token).toBeNull();
     });
 
