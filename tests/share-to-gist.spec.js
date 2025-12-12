@@ -294,6 +294,41 @@ test.describe('Share to Gist', () => {
       expect(stored.accessToken).toBe('test-access-token');
     });
 
+    test('should migrate token from old snake_case key to new kebab-case key', async ({ page }) => {
+      // Set token with old key (github_gist_token)
+      await page.evaluate(() => {
+        localStorage.setItem('github_gist_token', JSON.stringify({
+          accessToken: 'migrated-test-token',
+          expiresAt: Date.now() + 3600000,
+          scope: 'gist'
+        }));
+      });
+
+      // Set up content and mock gist creation
+      await setEditorContent(page, '# Migration Test');
+      await mockGistCreation(page);
+
+      // Click Share to Gist - this triggers getGitHubToken() which performs migration
+      await page.click('button:has-text("Share to Gist")');
+
+      // Wait for gist creation to complete (proves the migrated token worked)
+      await expect(page.locator('#gistModal .gist-modal')).toContainText('Gist Created', { timeout: 10000 });
+
+      // Verify old key was removed and new key exists
+      const oldKey = await page.evaluate(() => localStorage.getItem('github_gist_token'));
+      const newKey = await page.evaluate(() => localStorage.getItem('github-gist-token'));
+
+      expect(oldKey).toBeNull();
+      expect(newKey).not.toBeNull();
+
+      // Verify the token data was preserved correctly
+      const tokenData = await page.evaluate(() => {
+        const data = localStorage.getItem('github-gist-token');
+        return data ? JSON.parse(data) : null;
+      });
+      expect(tokenData.accessToken).toBe('migrated-test-token');
+    });
+
     test('should clear expired tokens', async ({ page }) => {
       // Set an expired token
       await page.evaluate(() => {

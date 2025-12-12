@@ -38,6 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Gracefully handles missing Content-Type headers
 
 ### Changed
+- Standardized localStorage key naming convention to kebab-case (#237)
+  - Renamed `github_gist_token` to `github-gist-token` for consistency
+  - Automatic migration preserves existing tokens (no re-authentication needed)
+  - All localStorage keys now follow kebab-case convention
 - Fresh visits to merview.com now load the sample document instead of cached content (#137)
   - Opening a new tab/window always shows the sample document for predictable UX
   - Refreshing within the same session preserves your edited content
