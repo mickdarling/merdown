@@ -1,5 +1,9 @@
 # Branch Protection Rules
 
+[← Back to Welcome](/?sample)
+
+---
+
 This document describes the branch protection rules configured for the Merview project to ensure code quality and prevent accidental changes to critical branches.
 
 ## Overview
@@ -77,3 +81,13 @@ These protection rules provide several benefits:
 
 - [GitHub Branch Protection Documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches)
 - [GitHub API Branch Protection Reference](https://docs.github.com/rest/branches/branch-protection)
+
+---
+
+## Navigation
+
+- [← Back to Welcome](/?sample)
+- [About Merview](/?url=docs/about.md)
+- [Security](/?url=docs/security.md)
+- [Contributing](/?url=docs/contributing.md)
+- [Developer Kit](/?url=docs/developer-kit.md)
