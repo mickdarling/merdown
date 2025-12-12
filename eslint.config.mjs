@@ -27,7 +27,7 @@ export default [
       "linebreak-style": ["error", "unix"],
       "quotes": "off",
       "semi": "off",
-      "no-unused-vars": "warn",
+      "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "no-console": "off",
       // Security rules
       "no-eval": "error",

@@ -85,7 +85,7 @@ function validateJSON(code, blockIndex) {
  * @param {string} code - The JavaScript code to validate
  * @param {number} blockIndex - The index of the code block
  */
-function validateJavaScript(code, blockIndex) {
+function validateJavaScript(_code, _blockIndex) {
     // Disabled for security - would require a proper parser library
     // to validate without executing code
     return;

@@ -597,13 +597,6 @@ async function promptForURLWithResult(context = 'Style') {
 }
 
 /**
- * Prompt user for URL to load CSS from (legacy, for backwards compatibility)
- */
-function promptForURL() {
-    promptForURLWithResult();
-}
-
-/**
  * Load CSS from URL (with domain validation and gist URL normalization)
  * @param {string} url - URL to load CSS from
  */
@@ -657,14 +650,6 @@ async function promptForRepositoryStyleWithResult(repoConfig) {
     const fullURL = repoConfig.url + encodeURIComponent(fileName);
     await loadCSSFromURL(fullURL);
     return true;
-}
-
-/**
- * Prompt for repository-based style (legacy, for backwards compatibility)
- * @param {object} repoConfig - Repository configuration
- */
-async function promptForRepositoryStyle(repoConfig) {
-    await promptForRepositoryStyleWithResult(repoConfig);
 }
 
 /**
