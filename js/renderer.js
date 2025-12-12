@@ -205,7 +205,6 @@ function parseYAMLFrontMatter(markdown) {
 function parseSimpleYAML(yamlText) {
     const result = {};
     const lines = yamlText.split('\n');
-    let currentKey = null;
     let currentArray = null;
 
     for (const line of lines) {
@@ -233,12 +232,10 @@ function parseSimpleYAML(yamlText) {
 
             if (value === '') {
                 // Key with no value - might be starting an array or object
-                currentKey = key;
                 currentArray = [];
                 result[key] = currentArray;
             } else {
-                // Key with value
-                currentKey = key;
+                // Key with value - reset array tracking
                 currentArray = null;
 
                 // Remove quotes if present
