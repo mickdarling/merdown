@@ -498,7 +498,7 @@ export async function renderMarkdown() {
         state.mermaidCounter = 0;
 
         // Parse YAML front matter if present
-        const { frontMatter, remainingMarkdown} = parseYAMLFrontMatter(markdown);
+        const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(markdown);
 
         // Render YAML front matter panel
         const frontMatterHTML = renderYAMLFrontMatter(frontMatter);
