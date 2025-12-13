@@ -37,14 +37,16 @@ const INTERNAL_DOC_LINKS = [
  * 1. Load without errors
  * 2. Render content in the preview
  * 3. Do not show error messages
+ *
+ * Note: Uses baseURL from playwright.config.js (default: http://localhost:8081)
  */
 test.describe('Documentation Links Validation', () => {
 
   test.describe('All Internal Links Load Successfully', () => {
     for (const link of INTERNAL_DOC_LINKS) {
       test(`${link.name} (${link.path}) loads correctly`, async ({ page }) => {
-        // Navigate directly to the link
-        await page.goto(`http://localhost:8081${link.path}`);
+        // Navigate using relative path (uses baseURL from config)
+        await page.goto(link.path);
         await waitForPageReady(page);
         await page.waitForTimeout(WAIT_TIMES.LONG);
 
@@ -64,7 +66,7 @@ test.describe('Documentation Links Validation', () => {
 
   test.describe('Documentation Content Integrity', () => {
     test('Welcome page contains expected sections', async ({ page }) => {
-      await page.goto('http://localhost:8081/?sample');
+      await page.goto('/?sample');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -76,7 +78,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('About page contains feature documentation', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/about.md');
+      await page.goto('/?url=docs/about.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -89,7 +91,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('Security page documents protection features', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/security.md');
+      await page.goto('/?url=docs/security.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -101,7 +103,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('Demo index page lists all demos', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/index.md');
+      await page.goto('/?url=docs/demos/index.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -117,7 +119,7 @@ test.describe('Documentation Links Validation', () => {
 
   test.describe('Demo Pages Functionality', () => {
     test('Code validation demo shows lint examples', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/code-validation.md');
+      await page.goto('/?url=docs/demos/code-validation.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -130,7 +132,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('International text demo shows multilingual content', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/international-text.md');
+      await page.goto('/?url=docs/demos/international-text.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -143,7 +145,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('YAML front matter demo shows metadata example', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/yaml-front-matter.md');
+      await page.goto('/?url=docs/demos/yaml-front-matter.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -156,7 +158,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('Error handling demo documents error types', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/error-handling.md');
+      await page.goto('/?url=docs/demos/error-handling.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -169,7 +171,7 @@ test.describe('Documentation Links Validation', () => {
 
   test.describe('Navigation Between Docs', () => {
     test('can navigate from welcome to about via link', async ({ page }) => {
-      await page.goto('http://localhost:8081/?sample');
+      await page.goto('/?sample');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -185,7 +187,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('demo pages have back navigation to welcome', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/code-validation.md');
+      await page.goto('/?url=docs/demos/code-validation.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -197,7 +199,7 @@ test.describe('Documentation Links Validation', () => {
 
   test.describe('Mermaid Diagrams in Docs', () => {
     test('security page renders mermaid diagram', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/security.md');
+      await page.goto('/?url=docs/security.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
@@ -210,7 +212,7 @@ test.describe('Documentation Links Validation', () => {
     });
 
     test('demo index page renders mermaid diagram', async ({ page }) => {
-      await page.goto('http://localhost:8081/?url=docs/demos/index.md');
+      await page.goto('/?url=docs/demos/index.md');
       await waitForPageReady(page);
       await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
 
@@ -229,7 +231,7 @@ test.describe('Documentation Links Validation', () => {
  */
 test.describe('Documentation Cross-References', () => {
   test('about.md references exist and are valid', async ({ page }) => {
-    await page.goto('http://localhost:8081/?url=docs/about.md');
+    await page.goto('/?url=docs/about.md');
     await waitForPageReady(page);
     await page.waitForTimeout(WAIT_TIMES.EXTRA_LONG);
 
@@ -244,8 +246,8 @@ test.describe('Documentation Cross-References', () => {
         // Extract the doc path
         const docPath = link.replace('/?url=', '');
 
-        // Navigate and verify it loads
-        await page.goto(`http://localhost:8081/?url=${docPath}`);
+        // Navigate and verify it loads (uses baseURL from config)
+        await page.goto(`/?url=${docPath}`);
         await page.waitForTimeout(WAIT_TIMES.MEDIUM);
 
         // Verify content loaded (minimum length check)

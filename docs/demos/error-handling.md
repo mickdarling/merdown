@@ -199,7 +199,7 @@ The diagram above has a syntax error (missing closing bracket on "Start"). This 
 If you paste a URL containing authentication tokens:
 
 ```
-https://raw.githubusercontent.com/user/repo/main/file.md?token=ABC123XYZ
+https://raw.githubusercontent.com/user/repo/main/file.md?token=EXAMPLE_DO_NOT_USE
 ```
 
 Merview will:
