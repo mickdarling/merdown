@@ -696,6 +696,15 @@ Hebrew points: שָׁלוֹם
       expect(renderedText).toContain('مَرْحَبًا');
       expect(renderedText).toContain('שָׁלוֹם');
     });
+
+    test('should have correct document encoding', async ({ page }) => {
+      await waitForPageReady(page);
+
+      const charset = await page.evaluate(() =>
+        document.characterSet || document.charset
+      );
+      expect(charset.toUpperCase()).toBe('UTF-8');
+    });
   });
 
   test.describe('Complex Multilingual Scenarios', () => {
