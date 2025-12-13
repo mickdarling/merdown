@@ -700,9 +700,7 @@ Hebrew points: שָׁלוֹם
     test('should have correct document encoding', async ({ page }) => {
       await waitForPageReady(page);
 
-      const charset = await page.evaluate(() =>
-        document.characterSet || document.charset
-      );
+      const charset = await page.evaluate(() => document.characterSet);
       expect(charset.toUpperCase()).toBe('UTF-8');
     });
   });
