@@ -6,52 +6,11 @@ const { test, expect } = require('@playwright/test');
 const {
   waitForPageReady,
   setCodeMirrorContent,
+  setContentAndWait,
+  lineHasSyntaxHighlighting,
+  findLineWithText,
   WAIT_TIMES
 } = require('./helpers/test-utils');
-
-/**
- * Helper to check if a specific line has syntax highlighting
- * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {number} line - Line number (0-indexed)
- * @returns {Promise<boolean>} True if the line has highlighted tokens
- */
-async function lineHasSyntaxHighlighting(page, line) {
-  return page.evaluate((lineNum) => {
-    const cmElement = document.querySelector('.CodeMirror');
-    const cm = cmElement?.CodeMirror;
-    if (!cm) {
-      throw new Error('CodeMirror instance not found');
-    }
-
-    const lineContent = cm.getLine(lineNum);
-    if (!lineContent) {
-      return false;
-    }
-
-    // Check if any token in this line has a type (which means it's highlighted)
-    let pos = 0;
-    while (pos < lineContent.length) {
-      const token = cm.getTokenAt({ line: lineNum, ch: pos + 1 });
-      if (token.type) {
-        return true;
-      }
-      pos = token.end;
-    }
-
-    return false;
-  }, line);
-}
-
-/**
- * Helper to set CodeMirror content and wait for it to be processed
- * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {string} content - Content to set
- * @returns {Promise<void>}
- */
-async function setContentAndWait(page, content) {
-  await setCodeMirrorContent(page, content);
-  await page.waitForTimeout(WAIT_TIMES.SHORT);
-}
 
 test.describe('YAML Complex Structure Visual Highlighting', () => {
   test.beforeEach(async ({ page }) => {
@@ -84,45 +43,68 @@ post_settings:
 
     // Verify syntax highlighting is active for various lines
 
-    // Line 0: Opening delimiter
+    // Opening delimiter (line 0 is always the first line)
     const line0Highlighted = await lineHasSyntaxHighlighting(page, 0);
     expect(line0Highlighted).toBe(true);
 
-    // Line 1: Simple key-value
-    const line1Highlighted = await lineHasSyntaxHighlighting(page, 1);
-    expect(line1Highlighted).toBe(true);
+    // Simple key-value
+    const titleLine = await findLineWithText(page, 'title: My Document');
+    const titleHighlighted = await lineHasSyntaxHighlighting(page, titleLine);
+    expect(titleHighlighted).toBe(true);
 
-    // Line 2: Nested object
-    const line2Highlighted = await lineHasSyntaxHighlighting(page, 2);
-    expect(line2Highlighted).toBe(true);
+    // Nested object
+    const metadataLine = await findLineWithText(page, 'metadata:');
+    const metadataHighlighted = await lineHasSyntaxHighlighting(page, metadataLine);
+    expect(metadataHighlighted).toBe(true);
 
-    // Line 3: Double nested
-    const line3Highlighted = await lineHasSyntaxHighlighting(page, 3);
-    expect(line3Highlighted).toBe(true);
+    // Double nested
+    const authorLine = await findLineWithText(page, 'author:');
+    const authorHighlighted = await lineHasSyntaxHighlighting(page, authorLine);
+    expect(authorHighlighted).toBe(true);
 
-    // Line 7: Array item
-    const line7Highlighted = await lineHasSyntaxHighlighting(page, 7);
-    expect(line7Highlighted).toBe(true);
+    // Array item
+    const arrayItemLine = await findLineWithText(page, '- documentation');
+    const arrayItemHighlighted = await lineHasSyntaxHighlighting(page, arrayItemLine);
+    expect(arrayItemHighlighted).toBe(true);
 
-    // Line 9: Multi-line string indicator
-    const line9Highlighted = await lineHasSyntaxHighlighting(page, 9);
-    expect(line9Highlighted).toBe(true);
+    // Multi-line string indicator
+    const multiLineLine = await findLineWithText(page, 'description: |');
+    const multiLineHighlighted = await lineHasSyntaxHighlighting(page, multiLineLine);
+    expect(multiLineHighlighted).toBe(true);
 
-    // Line 12: Anchor definition
-    const line12Highlighted = await lineHasSyntaxHighlighting(page, 12);
-    expect(line12Highlighted).toBe(true);
+    // Anchor definition
+    const anchorLine = await findLineWithText(page, 'defaults: &defaults');
+    const anchorHighlighted = await lineHasSyntaxHighlighting(page, anchorLine);
+    expect(anchorHighlighted).toBe(true);
 
-    // Line 16: Merge key and alias
-    const line16Highlighted = await lineHasSyntaxHighlighting(page, 16);
-    expect(line16Highlighted).toBe(true);
+    // Merge key and alias
+    const aliasLine = await findLineWithText(page, '<<: *defaults');
+    const aliasHighlighted = await lineHasSyntaxHighlighting(page, aliasLine);
+    expect(aliasHighlighted).toBe(true);
 
-    // Line 18: Closing delimiter
-    const line18Highlighted = await lineHasSyntaxHighlighting(page, 18);
-    expect(line18Highlighted).toBe(true);
+    // Closing delimiter (find the second occurrence of ---)
+    const closingDelimiterLine = await page.evaluate(() => {
+      const cmElement = document.querySelector('.CodeMirror');
+      const cm = cmElement?.CodeMirror;
+      if (!cm) throw new Error('CodeMirror instance not found');
+      const lineCount = cm.lineCount();
+      let foundCount = 0;
+      for (let i = 0; i < lineCount; i++) {
+        const lineContent = cm.getLine(i);
+        if (lineContent === '---') {
+          foundCount++;
+          if (foundCount === 2) return i;
+        }
+      }
+      return -1;
+    });
+    const closingHighlighted = await lineHasSyntaxHighlighting(page, closingDelimiterLine);
+    expect(closingHighlighted).toBe(true);
 
-    // Line 19: Markdown content (after front matter)
-    const line19Highlighted = await lineHasSyntaxHighlighting(page, 19);
-    expect(line19Highlighted).toBe(true);
+    // Markdown content (after front matter)
+    const markdownLine = await findLineWithText(page, '# Markdown content');
+    const markdownHighlighted = await lineHasSyntaxHighlighting(page, markdownLine);
+    expect(markdownHighlighted).toBe(true);
   });
 
   test('nested objects have different token types for keys and values', async ({ page }) => {
@@ -172,13 +154,15 @@ author: John
 ---`;
     await setContentAndWait(page, content);
 
-    // Line 1 should have highlighting (contains comment)
-    const line1Highlighted = await lineHasSyntaxHighlighting(page, 1);
-    expect(line1Highlighted).toBe(true);
+    // Inline comment should have highlighting
+    const inlineCommentLine = await findLineWithText(page, 'title: Test # This is a comment');
+    const inlineCommentHighlighted = await lineHasSyntaxHighlighting(page, inlineCommentLine);
+    expect(inlineCommentHighlighted).toBe(true);
 
-    // Line 2 should have highlighting (full-line comment)
-    const line2Highlighted = await lineHasSyntaxHighlighting(page, 2);
-    expect(line2Highlighted).toBe(true);
+    // Full-line comment should have highlighting
+    const fullLineCommentLine = await findLineWithText(page, '# Full line comment');
+    const fullLineCommentHighlighted = await lineHasSyntaxHighlighting(page, fullLineCommentLine);
+    expect(fullLineCommentHighlighted).toBe(true);
   });
 
   test('multi-line strings maintain highlighting', async ({ page }) => {
@@ -206,13 +190,15 @@ post:
 ---`;
     await setContentAndWait(page, content);
 
-    // Line 1: anchor definition
-    const line1Highlighted = await lineHasSyntaxHighlighting(page, 1);
-    expect(line1Highlighted).toBe(true);
+    // Anchor definition should have highlighting
+    const anchorLine = await findLineWithText(page, 'defaults: &defaults');
+    const anchorHighlighted = await lineHasSyntaxHighlighting(page, anchorLine);
+    expect(anchorHighlighted).toBe(true);
 
-    // Line 4: alias reference
-    const line4Highlighted = await lineHasSyntaxHighlighting(page, 4);
-    expect(line4Highlighted).toBe(true);
+    // Alias reference should have highlighting
+    const aliasLine = await findLineWithText(page, '<<: *defaults');
+    const aliasHighlighted = await lineHasSyntaxHighlighting(page, aliasLine);
+    expect(aliasHighlighted).toBe(true);
   });
 
   test('complex arrays with nested objects are highlighted', async ({ page }) => {
@@ -240,11 +226,13 @@ unquoted: String value
     await setContentAndWait(page, content);
 
     // Both lines should have highlighting
-    const line1Highlighted = await lineHasSyntaxHighlighting(page, 1);
-    const line2Highlighted = await lineHasSyntaxHighlighting(page, 2);
+    const quotedLine = await findLineWithText(page, 'quoted: "String value"');
+    const quotedHighlighted = await lineHasSyntaxHighlighting(page, quotedLine);
+    expect(quotedHighlighted).toBe(true);
 
-    expect(line1Highlighted).toBe(true);
-    expect(line2Highlighted).toBe(true);
+    const unquotedLine = await findLineWithText(page, 'unquoted: String value');
+    const unquotedHighlighted = await lineHasSyntaxHighlighting(page, unquotedLine);
+    expect(unquotedHighlighted).toBe(true);
   });
 
   test('highlighting persists after editing', async ({ page }) => {
@@ -265,8 +253,9 @@ title: Test
     await page.waitForTimeout(WAIT_TIMES.SHORT);
 
     // New line should be highlighted
-    const line2Highlighted = await lineHasSyntaxHighlighting(page, 2);
-    expect(line2Highlighted).toBe(true);
+    const authorLine = await findLineWithText(page, 'author: John');
+    const authorHighlighted = await lineHasSyntaxHighlighting(page, authorLine);
+    expect(authorHighlighted).toBe(true);
   });
 
   test('syntax highlighting switches from YAML to markdown after front matter', async ({ page }) => {
@@ -279,14 +268,17 @@ title: Test
     await setContentAndWait(page, content);
 
     // YAML section should be highlighted
-    const line1YamlHighlighted = await lineHasSyntaxHighlighting(page, 1);
-    expect(line1YamlHighlighted).toBe(true);
+    const yamlLine = await findLineWithText(page, 'title: Test');
+    const yamlHighlighted = await lineHasSyntaxHighlighting(page, yamlLine);
+    expect(yamlHighlighted).toBe(true);
 
     // Markdown section should also be highlighted (but with different mode)
-    const line3MdHighlighted = await lineHasSyntaxHighlighting(page, 3);
-    expect(line3MdHighlighted).toBe(true);
+    const headingLine = await findLineWithText(page, '# Markdown Heading');
+    const headingHighlighted = await lineHasSyntaxHighlighting(page, headingLine);
+    expect(headingHighlighted).toBe(true);
 
-    const line4MdHighlighted = await lineHasSyntaxHighlighting(page, 4);
-    expect(line4MdHighlighted).toBe(true);
+    const boldLine = await findLineWithText(page, '**Bold text**');
+    const boldHighlighted = await lineHasSyntaxHighlighting(page, boldLine);
+    expect(boldHighlighted).toBe(true);
   });
 });

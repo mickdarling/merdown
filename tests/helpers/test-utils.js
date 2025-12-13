@@ -367,6 +367,64 @@ async function setContentAndWait(page, content) {
   await page.waitForTimeout(WAIT_TIMES.SHORT);
 }
 
+/**
+ * Check if a specific line has syntax highlighting
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {number} line - Line number (0-indexed)
+ * @returns {Promise<boolean>} True if the line has highlighted tokens
+ */
+async function lineHasSyntaxHighlighting(page, line) {
+  return page.evaluate((lineNum) => {
+    const cmElement = document.querySelector('.CodeMirror');
+    const cm = cmElement?.CodeMirror;
+    if (!cm) {
+      throw new Error('CodeMirror instance not found');
+    }
+
+    const lineContent = cm.getLine(lineNum);
+    if (!lineContent) {
+      return false;
+    }
+
+    // Check if any token in this line has a type (which means it's highlighted)
+    let pos = 0;
+    while (pos < lineContent.length) {
+      const token = cm.getTokenAt({ line: lineNum, ch: pos + 1 });
+      if (token.type) {
+        return true;
+      }
+      pos = token.end;
+    }
+
+    return false;
+  }, line);
+}
+
+/**
+ * Find the line number containing specific text
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} searchText - Text to search for in line content
+ * @returns {Promise<number>} Line number (0-indexed) or -1 if not found
+ */
+async function findLineWithText(page, searchText) {
+  return page.evaluate((text) => {
+    const cmElement = document.querySelector('.CodeMirror');
+    const cm = cmElement?.CodeMirror;
+    if (!cm) {
+      throw new Error('CodeMirror instance not found');
+    }
+
+    const lineCount = cm.lineCount();
+    for (let i = 0; i < lineCount; i++) {
+      const lineContent = cm.getLine(i);
+      if (lineContent && lineContent.includes(text)) {
+        return i;
+      }
+    }
+    return -1;
+  }, searchText);
+}
+
 module.exports = {
   // Constants
   WAIT_TIMES,
@@ -387,6 +445,8 @@ module.exports = {
   getLineTokens,
   lineHasTokenType,
   setContentAndWait,
+  lineHasSyntaxHighlighting,
+  findLineWithText,
 
   // Element checks
   isGlobalFunctionAvailable,
