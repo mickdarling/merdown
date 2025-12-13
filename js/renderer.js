@@ -105,6 +105,12 @@ function highlightYAMLFrontMatter(code) {
         return null;
     }
 
+    // Early exit optimization: check for closing delimiter before running regex
+    // If there's no closing delimiter (must have \n--- somewhere after opening), there's no valid YAML front matter
+    if (code.indexOf('\n---') === -1) {
+        return null;
+    }
+
     // Detect YAML front matter pattern: starts with ---, has content, ends with ---
     const frontMatterMatch = YAML_FRONTMATTER_REGEX.exec(code);
     if (!frontMatterMatch || typeof hljs === 'undefined') {
@@ -213,6 +219,22 @@ marked.setOptions({ renderer });
 /**
  * Pre-compiled regex for YAML front matter detection
  * Used by highlightYAMLFrontMatter() - compiled once for performance
+ *
+ * Pattern: /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/
+ *
+ * Delimiter Handling:
+ * - Opening delimiter (---\n): Requires a newline after '---' because YAML front matter
+ *   MUST have content or structure following the opening delimiter. An opening delimiter
+ *   without a newline would be incomplete or malformed.
+ *
+ * - Closing delimiter (---\n?): Has an OPTIONAL newline (\n?) because the closing '---'
+ *   may appear at the end of the file with no trailing newline, OR may have markdown
+ *   content following it. This flexibility handles both EOF scenarios and documents
+ *   with content after the front matter.
+ *
+ * Capture Groups:
+ * - Group 1 ([\s\S]*?): The YAML content between delimiters (non-greedy)
+ * - Group 2 ([\s\S]*): The markdown content after the closing delimiter (greedy)
  */
 const YAML_FRONTMATTER_REGEX = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 

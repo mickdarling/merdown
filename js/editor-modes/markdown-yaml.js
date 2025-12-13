@@ -14,6 +14,7 @@
         return {
           inFrontMatter: false,
           frontMatterEnded: false,
+          isFirstLine: true,
           yamlState: CodeMirror.startState(yamlMode),
           gfmState: CodeMirror.startState(gfmMode)
         };
@@ -23,22 +24,26 @@
         return {
           inFrontMatter: state.inFrontMatter,
           frontMatterEnded: state.frontMatterEnded,
+          isFirstLine: state.isFirstLine,
           yamlState: CodeMirror.copyState(yamlMode, state.yamlState),
           gfmState: CodeMirror.copyState(gfmMode, state.gfmState)
         };
       },
 
       token: function(stream, state) {
-        // At the very start of document, check for opening ---
-        if (stream.sol() && !state.frontMatterEnded) {
-          // Check if this is the opening delimiter at line 1
-          if (!state.inFrontMatter && stream.pos === 0 && stream.match(/^---\s*$/)) {
+        // Check for opening delimiter only on the very first line
+        if (stream.sol() && state.isFirstLine && !state.frontMatterEnded) {
+          if (stream.match(/^---\s*$/)) {
             state.inFrontMatter = true;
+            state.isFirstLine = false;
             return "meta";
           }
+          state.isFirstLine = false;  // First line wasn't ---, so no front matter
+        }
 
-          // Check if this is the closing delimiter
-          if (state.inFrontMatter && stream.match(/^---\s*$/)) {
+        // Check for closing delimiter
+        if (stream.sol() && state.inFrontMatter && !state.frontMatterEnded) {
+          if (stream.match(/^---\s*$/)) {
             state.inFrontMatter = false;
             state.frontMatterEnded = true;
             return "meta";
@@ -62,6 +67,12 @@
       },
 
       blankLine: function(state) {
+        // If we encounter a blank line before seeing any content,
+        // front matter can no longer start
+        if (state.isFirstLine) {
+          state.isFirstLine = false;
+        }
+
         if (state.inFrontMatter && yamlMode.blankLine) {
           yamlMode.blankLine(state.yamlState);
         } else if (!state.inFrontMatter && gfmMode.blankLine) {

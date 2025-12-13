@@ -481,6 +481,34 @@ Content here.
   });
 
   test.describe('Error resilience', () => {
+    test('handles hljs being undefined gracefully', async ({ page }) => {
+      // Store original hljs
+      await page.evaluate(() => {
+        window._originalHljs = window.hljs;
+        window.hljs = undefined;
+      });
+
+      // Try to render markdown with YAML front matter
+      const markdown = '```markdown\n---\ntitle: Test\n---\n# Hello\n```';
+      await setCodeMirrorContent(page, markdown);
+      await renderMarkdownAndWait(page);
+
+      // Verify code block exists (graceful fallback)
+      const codeBlock = await page.locator('#wrapper pre code').first();
+      await expect(codeBlock).toBeVisible();
+
+      // Verify content is present even without highlighting
+      const html = await page.$eval('#wrapper', el => el.innerHTML);
+      expect(html).toContain('title');
+      expect(html).toContain('Hello');
+
+      // Restore hljs
+      await page.evaluate(() => {
+        window.hljs = window._originalHljs;
+        delete window._originalHljs;
+      });
+    });
+
     test('handles malformed YAML gracefully', async ({ page }) => {
       // Invalid YAML syntax, but should still attempt highlighting
       const markdown = '```markdown\n---\ntitle: Test\ninvalid yaml: [unclosed\n---\n# Content\n```';
