@@ -369,8 +369,9 @@ graph LR
         C[Developer Kit]
         D[Themes]
         E[Security]
-        F[Contributing]
-        G[Sponsor]
+        F[Demos]
+        G[Contributing]
+        H[Sponsor]
     end
 
     A --- B
@@ -379,13 +380,15 @@ graph LR
     A --- E
     A --- F
     A --- G
+    A --- H
 
     click B "/?url=docs/about.md" "About Merview"
     click C "/?url=docs/developer-kit.md" "Developer Kit"
     click D "/?url=docs/themes.md" "Theme Guide"
     click E "/?url=docs/security.md" "Security"
-    click F "/?url=docs/contributing.md" "Contributing"
-    click G "/?url=docs/sponsor.md" "Support the Project"
+    click F "/?url=docs/demos/index.md" "Feature Demos"
+    click G "/?url=docs/contributing.md" "Contributing"
+    click H "/?url=docs/sponsor.md" "Support the Project"
 \`\`\`
 
 ---
@@ -396,6 +399,7 @@ graph LR
 - [Developer Kit](/?url=docs/developer-kit.md) - Integration guide and URL patterns
 - [Theme Guide](/?url=docs/themes.md) - 37 document styles and customization
 - [Security](/?url=docs/security.md) - Privacy-first design and protections
+- [Feature Demos](/?url=docs/demos/index.md) - Interactive examples
 - [Contributing](/?url=docs/contributing.md) - How to help improve Merview
 - [Support the Project](/?url=docs/sponsor.md) - Sponsor development
 
@@ -456,6 +460,10 @@ def fibonacci(n):
 | Syntax Highlighting | ✅ |
 | PDF Export | ✅ |
 | 37 Themes | ✅ |
+| YAML Front Matter | ✅ |
+| Code Validation | ✅ |
+| Load from URL | ✅ |
+| International Text | ✅ |
 
 ### Flowcharts
 
@@ -500,9 +508,11 @@ classDiagram
 ## Tips
 
 1. **Drag & Drop** - Drop any \`.md\` file to load it
-2. **Resize Panes** - Drag the divider between editor and preview
-3. **Keyboard Shortcuts** - Ctrl+S to save, Ctrl+P to print
-4. **Auto-save** - Your work is saved to browser storage
+2. **Load from URL** - Use \`?url=\` parameter or the Open URL dialog
+3. **YAML Metadata** - Add \`---\` delimited YAML at the start for document info
+4. **Code Validation** - Toggle the Lint button to check JSON, HTML, CSS
+5. **Keyboard Shortcuts** - Ctrl+S to save, Ctrl+P to print
+6. **Auto-save** - Your work is saved to browser storage
 
 ---
 

@@ -720,14 +720,14 @@ Quick documentation preview without leaving GitHub.
 3. Ensure URL uses HTTPS
 4. Try with a known-working URL to isolate the issue
 
-#### "Domain not allowed"
+#### CORS Error
 
-**Cause**: URL domain is not in the allowlist (if using older version)
+**Cause**: The server doesn't allow cross-origin requests
 
 **Solution**:
-1. Use a supported CDN or GitHub raw URLs
-2. Update to latest Merview version (supports any HTTPS URL)
-3. Host content on an allowed domain
+1. Use a server that supports CORS headers (GitHub, CDNs)
+2. Configure CORS headers on your own server (see [CORS Configuration Guide](/?url=docs/cors-configuration.md))
+3. Use a file that's publicly accessible
 
 #### Diagrams Not Rendering
 
@@ -802,6 +802,6 @@ If Merview doesn't fit your needs:
 
 ---
 
-**Last Updated**: 2025-12-11
+**Last Updated**: 2025-12-13
 
 **License**: AGPL-3.0

@@ -11,11 +11,11 @@ graph TD
     A[User Input] --> B{Content Type}
     B -->|Markdown| C[DOMPurify Sanitization]
     B -->|Custom CSS| D[URL Validation]
-    B -->|External URL| E[Domain Allowlist]
+    B -->|External URL| E[URL Security Checks]
 
     C --> F[Safe HTML Output]
-    D --> G[Trusted Sources Only]
-    E --> H[Content-Type Check]
+    D --> G[Content-Type Validation]
+    E --> H[HTTPS + Size Limits]
 
     F --> I[Rendered Preview]
     G --> I
@@ -73,25 +73,27 @@ Our CSP headers restrict:
 
 When loading content from URLs, multiple protections apply:
 
-### Domain Allowlist
+### Open URL Support
 
-Only these trusted sources are permitted:
+Merview supports loading markdown from **any HTTPS URL** for maximum flexibility:
 
-```
-✅ raw.githubusercontent.com
-✅ gist.githubusercontent.com
-✅ cdn.jsdelivr.net
-✅ unpkg.com
-✅ cdnjs.cloudflare.com
-```
-
-All other domains are blocked.
+- **No Domain Restrictions** - Load from any public HTTPS source
+- **GitHub Integration** - Automatic URL normalization for gist.github.com and github.com/blob URLs
+- **HTTPS Required** - All URLs must use secure HTTPS protocol
 
 ### Content-Type Validation
 
-- CSS files must return `text/css`
-- Markdown files must return text content types
+- Text content types accepted (text/plain, text/markdown, etc.)
 - Binary files are rejected
+- Dangerous types blocked (javascript, vbscript, etc.)
+
+### International Domain Name (IDN) Support
+
+Merview supports international domain names while protecting against attacks:
+
+- **IDN Allowed** - Domains like `例え.jp` or `münchen.de` work correctly
+- **Homograph Protection** - Mixed-script attacks are blocked (e.g., domains mixing Cyrillic and Latin characters)
+- **Unicode Normalization** - Proper handling of international characters
 
 ### URL Validation
 
@@ -99,19 +101,26 @@ All other domains are blocked.
 flowchart TD
     A[URL Input] --> B{Valid Format?}
     B -->|No| C[Reject]
-    B -->|Yes| D{Allowed Domain?}
+    B -->|Yes| D{HTTPS Protocol?}
     D -->|No| C
-    D -->|Yes| E{Safe Path?}
+    D -->|Yes| E{Safe URL?}
     E -->|No| C
-    E -->|Yes| F[Fetch Content]
-    F --> G{Valid Content-Type?}
-    G -->|No| C
-    G -->|Yes| H[Load Content]
+    E -->|Yes| F{Homograph Check}
+    F -->|Suspicious| C
+    F -->|OK| G[Fetch Content]
+    G --> H{Valid Content-Type?}
+    H -->|No| C
+    H -->|Yes| I{Size Limit OK?}
+    I -->|No| C
+    I -->|Yes| J[Load Content]
 ```
 
-- Maximum URL length enforced
-- Path traversal attempts blocked
-- Credential patterns detected and warned
+- **HTTPS required** - Protects content in transit
+- **Maximum URL length** - 8,000 character limit
+- **10MB size limit** - Prevents loading extremely large files
+- **10 second timeout** - Prevents hanging on slow endpoints
+- **Credential detection** - Warns if URL contains authentication tokens
+- **Homograph detection** - Blocks mixed-script domain attacks
 
 ---
 
@@ -136,6 +145,29 @@ When sharing via GitHub Gist:
 - **Minimal permissions** - Only gist:create scope
 - **Token handling** - Tokens stored securely, expire appropriately
 - **No plaintext storage** - Sensitive data protected
+
+---
+
+## YAML Front Matter Security
+
+Merview renders YAML front matter (document metadata) with security hardening:
+
+- **Safe Parsing** - Simple key-value parser with no code execution
+- **Dangerous Patterns Blocked** - YAML anchors (`&`), aliases (`*`), and custom tags (`!`) are rejected
+- **Size Limits** - Maximum 100 keys, 500 array items, 10,000 character values
+- **XSS Protected** - All values are HTML-escaped before rendering
+
+---
+
+## CORS Error Handling
+
+When loading content fails due to CORS restrictions:
+
+- **Helpful Error Messages** - Clear explanation of why content couldn't be loaded
+- **Configuration Guidance** - Links to CORS configuration documentation
+- **No Silent Failures** - All errors are communicated to the user
+
+See the [CORS Configuration Guide](/?url=docs/cors-configuration.md) for server setup instructions.
 
 ---
 
