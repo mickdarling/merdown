@@ -856,6 +856,82 @@ test.describe('URL Loading', () => {
       );
       expect(blockingWarnings.length).toBe(0);
     });
+
+    test('should handle malformed percent encoding gracefully', async ({ page }) => {
+      // Malformed percent encoding (incomplete sequences like %E6%97 instead of %E6%97%A5)
+      // The URL API should handle these gracefully without crashing
+
+      const malformedUrls = [
+        'https://example.com/docs/%E6%97.md',        // Incomplete UTF-8 sequence
+        'https://example.com/docs/%E6.md',           // Single byte of multi-byte char
+        'https://example.com/docs/%GG.md',           // Invalid hex digits
+        'https://example.com/docs/%.md',             // Percent with no hex
+        'https://example.com/docs/%2.md'             // Percent with single hex digit
+      ];
+
+      for (const url of malformedUrls) {
+        // These should not crash the validation - they may be allowed or blocked
+        // but should not throw an exception
+        const result = await page.evaluate((testUrl) => {
+          try {
+            // @ts-ignore - isAllowedMarkdownURL is defined in the app
+            const isAllowed = globalThis.isAllowedMarkdownURL(testUrl);
+            return { success: true, isAllowed };
+          } catch (e) {
+            return { success: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        }, url);
+
+        // Validation should complete without throwing
+        expect(result.success).toBe(true);
+      }
+    });
+
+    test('should handle double-encoded international characters', async ({ page }) => {
+      // Double encoding: 日 -> %E6%97%A5 -> %25E6%2597%25A5
+      // This can happen when URLs are encoded multiple times
+
+      const doubleEncodedUrl = 'https://example.com/docs/%25E6%2597%25A5%25E6%259C%25AC%25E8%25AA%259E.md';
+
+      // Double-encoded URL should still be valid (allowed)
+      const isAllowed = await testUrlValidation(page, doubleEncodedUrl);
+      expect(isAllowed).toBe(true);
+
+      // Verify the URL API handles it correctly
+      const urlParts = await page.evaluate((url) => {
+        const parsed = new URL(url);
+        return {
+          pathname: parsed.pathname,
+          // Check if it contains the double-encoded percent signs
+          hasDoubleEncoding: parsed.pathname.includes('%25')
+        };
+      }, doubleEncodedUrl);
+
+      // The pathname should preserve the double encoding
+      expect(urlParts.hasDoubleEncoding).toBe(true);
+    });
+
+    test('should handle mixed raw and percent-encoded international characters', async ({ page }) => {
+      // Mix of raw international chars and already-encoded chars in the same path
+      // This tests the URL API's handling of partial encoding
+
+      const result = await page.evaluate(() => {
+        // Raw Japanese + already-encoded Japanese in same path
+        const mixedUrl = 'https://example.com/日本語/%E4%B8%AD%E6%96%87/file.md';
+        const parsed = new URL(mixedUrl);
+
+        return {
+          href: parsed.href,
+          pathname: parsed.pathname,
+          // Both parts should end up percent-encoded
+          fullyEncoded: !parsed.pathname.includes('日') && !parsed.pathname.includes('中')
+        };
+      });
+
+      // URL API should encode the raw chars while preserving already-encoded ones
+      expect(result.fullyEncoded).toBe(true);
+      expect(result.pathname).toContain('%');
+    });
   });
 
   test.describe('GitHub Token Security (Private Repo URLs)', () => {
