@@ -89,6 +89,113 @@ renderer.heading = function(text, level) {
 };
 
 /**
+ * Helper function to highlight markdown code blocks with YAML front matter
+ * Detects YAML front matter pattern (---\nYAML\n---) and highlights YAML and markdown separately
+ * @param {string} code - The code content to highlight
+ * @returns {string|null} HTML string with highlighted content, or null if not applicable
+ */
+function highlightYAMLFrontMatter(code) {
+    // Early exit if code doesn't start with YAML delimiter
+    if (!code.startsWith('---')) {
+        return null;
+    }
+
+    // Prevent ReDoS with extremely large inputs
+    if (code.length > 100000) {
+        return null;
+    }
+
+    // Early exit optimization: check for closing delimiter before running regex
+    // If there's no closing delimiter (must have \n--- somewhere after opening), there's no valid YAML front matter
+    if (!code.includes('\n---')) {
+        return null;
+    }
+
+    // Detect YAML front matter pattern: starts with ---, has content, ends with ---
+    const frontMatterMatch = YAML_FRONTMATTER_REGEX.exec(code);
+    if (!frontMatterMatch || typeof hljs === 'undefined') {
+        return null;
+    }
+
+    try {
+        const yamlContent = frontMatterMatch[1];
+        const mdContent = frontMatterMatch[2];
+
+        // Handle empty or whitespace-only YAML content
+        // This handles the edge case of "---\n---" or "---\n  \n---" with no actual YAML
+        if (!yamlContent?.trim()) {
+            const delimiterClass = 'hljs-meta';
+            const hasMdContent = mdContent.trim();
+            const highlightedMd = hasMdContent
+                ? hljs.highlight(mdContent, { language: 'markdown', ignoreIllegals: true })
+                : { value: '' };
+            const mdOutput = highlightedMd.value ? '\n' + highlightedMd.value : '';
+            return `<pre><code class="hljs language-markdown" data-language="markdown"><span class="${delimiterClass}">---</span>\n<span class="${delimiterClass}">---</span>${mdOutput}</code></pre>`;
+        }
+
+        // Highlight each section with appropriate language
+        const highlightedYaml = hljs.highlight(yamlContent, { language: 'yaml', ignoreIllegals: true });
+        const highlightedMd = mdContent.trim()
+            ? hljs.highlight(mdContent, { language: 'markdown', ignoreIllegals: true })
+            : { value: '' };
+
+        // Combine with styled delimiters (hljs-meta for the --- markers)
+        const delimiterClass = 'hljs-meta';
+        return `<pre><code class="hljs language-markdown" data-language="markdown"><span class="${delimiterClass}">---</span>\n${highlightedYaml.value}\n<span class="${delimiterClass}">---</span>${highlightedMd.value ? '\n' + highlightedMd.value : ''}</code></pre>`;
+    } catch (err) {
+        console.error('YAML front matter highlight error:', err);
+        return null;
+    }
+}
+
+/**
+ * Helper function to apply syntax highlighting to code blocks
+ * Handles language detection, normalization, and fallback to auto-detection
+ * @param {string} code - The code content to highlight
+ * @param {string} language - The language identifier (may be null/undefined)
+ * @returns {string} HTML string with highlighted code
+ */
+function highlightCodeBlock(code, language) {
+    // Check if highlight.js is available
+    if (typeof hljs === 'undefined') {
+        console.error('highlight.js (hljs) is not loaded!');
+        const escaped = escapeHtml(code);
+        return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
+    }
+
+    // Apply syntax highlighting for specified language
+    if (language) {
+        try {
+            // Normalize language names (yaml/yml are the same)
+            const normalizedLang = language.toLowerCase();
+            const langMap = { 'yml': 'yaml' };
+            const mappedLang = langMap[normalizedLang] || normalizedLang;
+
+            if (hljs.getLanguage(mappedLang)) {
+                const highlighted = hljs.highlight(code, { language: mappedLang, ignoreIllegals: true });
+                return `<pre><code class="hljs language-${mappedLang}" data-language="${mappedLang}">${highlighted.value}</code></pre>`;
+            } else {
+                console.warn('Language not supported by highlight.js:', language);
+            }
+        } catch (err) {
+            console.error('Highlight error for language', language, ':', err);
+            // Fall through to auto-detection on error
+        }
+    }
+
+    // Fallback to auto-detection or plain rendering
+    try {
+        const highlighted = hljs.highlightAuto(code);
+        return `<pre><code class="hljs" data-language="${highlighted.language || language || 'text'}">${highlighted.value}</code></pre>`;
+    } catch (err) {
+        console.error('Auto-highlight error:', err);
+        // Final fallback to plain code block
+        const escaped = escapeHtml(code);
+        return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
+    }
+}
+
+/**
  * Custom code block renderer
  * - Detects and renders Mermaid diagrams with expand buttons
  * - Applies syntax highlighting to code blocks using highlight.js
@@ -106,49 +213,52 @@ renderer.code = function(code, language) {
         </div>`;
     }
 
-    // Check if highlight.js is available
-    if (typeof hljs === 'undefined') {
-        console.error('highlight.js (hljs) is not loaded!');
-        const escaped = escapeHtml(code);
-        return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
+    // Handle markdown with YAML front matter
+    if (language === 'markdown' || language === 'md') {
+        const yamlResult = highlightYAMLFrontMatter(code);
+        if (yamlResult) {
+            return yamlResult;
+        }
     }
 
     // Apply syntax highlighting for other code blocks
-    try {
-        if (language) {
-            // Normalize language names (yaml/yml are the same)
-            const normalizedLang = language.toLowerCase();
-            const langMap = {
-                'yml': 'yaml'
-            };
-            const mappedLang = langMap[normalizedLang] || normalizedLang;
-
-            if (hljs.getLanguage(mappedLang)) {
-                const highlighted = hljs.highlight(code, { language: mappedLang, ignoreIllegals: true });
-                return `<pre><code class="hljs language-${mappedLang}" data-language="${mappedLang}">${highlighted.value}</code></pre>`;
-            } else {
-                console.warn('Language not supported by highlight.js:', language);
-            }
-        }
-    } catch (err) {
-        console.error('Highlight error for language', language, ':', err);
-        // Fall through to auto-detection on error
-    }
-
-    // Fallback to auto-detection or plain rendering
-    try {
-        const highlighted = hljs.highlightAuto(code);
-        return `<pre><code class="hljs" data-language="${highlighted.language || language || 'text'}">${highlighted.value}</code></pre>`;
-    } catch (err) {
-        console.error('Auto-highlight error:', err);
-        // Final fallback to plain code block
-        const escaped = escapeHtml(code);
-        return `<pre><code data-language="${language || 'text'}">${escaped}</code></pre>`;
-    }
+    return highlightCodeBlock(code, language);
 };
 
 // Apply the custom renderer to marked
 marked.setOptions({ renderer });
+
+/**
+ * Pre-compiled regex for YAML front matter detection
+ * Used by highlightYAMLFrontMatter() - compiled once for performance
+ *
+ * Pattern: /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/
+ *
+ * Delimiter Handling:
+ * - Opening delimiter (---\n): Requires a newline after '---' because YAML front matter
+ *   MUST have content or structure following the opening delimiter. An opening delimiter
+ *   without a newline would be incomplete or malformed.
+ *
+ * - Closing delimiter (---\n?): Has an OPTIONAL newline (\n?) because the closing '---'
+ *   may appear at the end of the file with no trailing newline, OR may have markdown
+ *   content following it. This flexibility handles both EOF scenarios and documents
+ *   with content after the front matter.
+ *
+ * Capture Groups:
+ * - Group 1 ([\s\S]*?): The YAML content between delimiters (non-greedy)
+ * - Group 2 ([\s\S]*): The markdown content after the closing delimiter (greedy)
+ *
+ * Regex Backtracking Safety:
+ * The non-greedy quantifier ([\s\S]*?) in Group 1 could potentially cause catastrophic
+ * backtracking with malicious inputs. However, this risk is mitigated by several guards
+ * in highlightYAMLFrontMatter():
+ * - 100KB size limit check (line 104) prevents extremely large inputs
+ * - Early exit if '\n---' delimiter not found (line 110) prevents worst-case backtracking
+ * - startsWith('---') check (line 99) ensures proper start pattern
+ * These guards ensure the regex operates on validated, bounded inputs, making catastrophic
+ * backtracking practically impossible.
+ */
+const YAML_FRONTMATTER_REGEX = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
 
 /**
  * Security limits for YAML front matter parsing

@@ -16,7 +16,7 @@ export function initCodeMirror(onChangeCallback) {
     const { editorTextarea } = getElements();
 
     state.cmEditor = CodeMirror.fromTextArea(editorTextarea, {
-        mode: 'gfm', // GitHub Flavored Markdown
+        mode: 'gfm-yaml-frontmatter', // GitHub Flavored Markdown with YAML front matter
         theme: 'custom', // Our custom theme loaded from styles/editor/
         lineNumbers: true,
         lineWrapping: true,
