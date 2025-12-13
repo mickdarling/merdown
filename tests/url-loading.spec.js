@@ -5,6 +5,12 @@
 const { test, expect } = require('@playwright/test');
 
 /**
+ * Maximum URL length allowed by the application (matches security.js)
+ * @constant {number}
+ */
+const MAX_URL_LENGTH = 2048;
+
+/**
  * Tests for URL parameter loading functionality (Issue #79, PR #80, Issue #201)
  *
  * The URL loading feature should:
@@ -612,6 +618,320 @@ test.describe('URL Loading', () => {
       const editorContent = await page.evaluate(() => globalThis.getEditorContent());
       expect(editorContent.length).toBeGreaterThan(100);
       expect(editorContent.toLowerCase()).toContain('mermaid');
+    });
+  });
+
+  test.describe('URL Path Encoding with International Characters (Issue #248)', () => {
+    test.beforeEach(async ({ page }) => {
+      await page.goto('/');
+      await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+    });
+
+    test('should allow Japanese characters in URL path', async ({ page }) => {
+      // URLs with Japanese characters in the path should be allowed
+      // Browsers automatically percent-encode non-ASCII path characters
+      const urlWithJapanese = 'https://example.com/docs/日本語ファイル.md';
+      const isAllowed = await testUrlValidation(page, urlWithJapanese);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow percent-encoded Japanese path', async ({ page }) => {
+      // Pre-encoded Japanese path should be accepted
+      const encodedUrl = 'https://example.com/docs/%E6%97%A5%E6%9C%AC%E8%AA%9E.md';
+      const isAllowed = await testUrlValidation(page, encodedUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow Chinese characters in URL path', async ({ page }) => {
+      // Chinese characters in path
+      const urlWithChinese = 'https://example.com/文档/readme.md';
+      const isAllowed = await testUrlValidation(page, urlWithChinese);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow Korean characters in URL path', async ({ page }) => {
+      // Korean (Hangul) characters in path
+      const urlWithKorean = 'https://example.com/path/to/한국어.md';
+      const isAllowed = await testUrlValidation(page, urlWithKorean);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow GitHub URL with international path', async ({ page }) => {
+      // GitHub raw URL with international characters in path
+      const githubUrl = 'https://raw.githubusercontent.com/user/repo/main/文档/readme.md';
+      const isAllowed = await testUrlValidation(page, githubUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow gist URL with international filename', async ({ page }) => {
+      // Gist URL with international filename
+      const gistUrl = 'https://gist.githubusercontent.com/user/abc123/raw/日本語.md';
+      const isAllowed = await testUrlValidation(page, gistUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with mixed ASCII and international characters in path', async ({ page }) => {
+      // Mixed ASCII and international characters
+      const mixedUrl = 'https://example.com/docs/guide-日本語-v1.md';
+      const isAllowed = await testUrlValidation(page, mixedUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with international directory and filename', async ({ page }) => {
+      // Both directory and filename with international characters
+      const deepPath = 'https://example.com/文档/指南/日本語/readme.md';
+      const isAllowed = await testUrlValidation(page, deepPath);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with percent-encoded Chinese characters', async ({ page }) => {
+      // Pre-encoded Chinese characters
+      const encodedChinese = 'https://example.com/%E6%96%87%E6%A1%A3/readme.md';
+      const isAllowed = await testUrlValidation(page, encodedChinese);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with percent-encoded Korean characters', async ({ page }) => {
+      // Pre-encoded Korean characters
+      const encodedKorean = 'https://example.com/path/%ED%95%9C%EA%B5%AD%EC%96%B4.md';
+      const isAllowed = await testUrlValidation(page, encodedKorean);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with international query parameters', async ({ page }) => {
+      // International characters in query parameters (not just path)
+      const urlWithQuery = 'https://example.com/file.md?title=日本語';
+      const isAllowed = await testUrlValidation(page, urlWithQuery);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should allow URL with emoji in path', async ({ page }) => {
+      // Emoji are also non-ASCII Unicode characters
+      const emojiUrl = 'https://example.com/docs/readme-🚀.md';
+      const isAllowed = await testUrlValidation(page, emojiUrl);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should reject URL with international characters in HOSTNAME (security)', async ({ page }) => {
+      // While paths with international chars are OK, hostnames should be blocked
+      // This prevents IDN homograph attacks
+      const urlWithIntlHostname = 'https://例え.com/file.md';
+      const isAllowed = await testUrlValidation(page, urlWithIntlHostname);
+      expect(isAllowed).toBe(false);
+    });
+
+    test('should reject URL with Cyrillic in hostname but allow in path', async ({ page }) => {
+      // Cyrillic in hostname = blocked (homograph attack)
+      const cyrillicHostname = 'https://examрle.com/file.md'; // 'р' is Cyrillic
+      const isAllowedHostname = await testUrlValidation(page, cyrillicHostname);
+      expect(isAllowedHostname).toBe(false);
+
+      // Cyrillic in path = allowed
+      const cyrillicPath = 'https://example.com/файл.md';
+      const isAllowedPath = await testUrlValidation(page, cyrillicPath);
+      expect(isAllowedPath).toBe(true);
+    });
+
+    test('should handle URL.toString() with international characters correctly', async ({ page }) => {
+      // Test that URL parsing and toString() preserves international characters
+      const result = await page.evaluate(() => {
+        const url = new URL('https://example.com/docs/日本語.md');
+        return {
+          href: url.href,
+          pathname: url.pathname,
+          // pathname should be percent-encoded
+          isEncoded: url.pathname.includes('%')
+        };
+      });
+
+      // URL API should automatically percent-encode the path
+      expect(result.isEncoded).toBe(true);
+      expect(result.href).toContain('%');
+    });
+
+    test('should verify normalizeGitHubContentUrl preserves encoded international paths for GitHub blobs', async ({ page }) => {
+      // Test that normalizeGitHubContentUrl handles international characters correctly for GitHub blobs
+      const result = await page.evaluate(() => {
+        const blobUrl = 'https://github.com/user/repo/blob/main/文档/readme.md';
+        // @ts-ignore - normalizeGitHubContentUrl is defined in the app
+        const normalized = globalThis.normalizeGitHubContentUrl(blobUrl);
+        return normalized;
+      });
+
+      // Should convert to raw URL and preserve encoded path
+      expect(result).toContain('raw.githubusercontent.com');
+      expect(result).toContain('user/repo/main/');
+      // Path should be percent-encoded in the result
+      expect(result).toContain('%');
+    });
+
+    test('should verify normalizeGistUrl preserves encoded international paths', async ({ page }) => {
+      // Test that normalizeGistUrl handles international characters correctly
+      const result = await page.evaluate(() => {
+        const gistUrl = 'https://gist.github.com/user/abc123/日本語.md';
+        // @ts-ignore - normalizeGistUrl is defined in the app
+        const normalized = globalThis.normalizeGistUrl(gistUrl);
+        return normalized;
+      });
+
+      // Should convert to raw URL and preserve encoded filename
+      expect(result).toContain('gist.githubusercontent.com');
+      expect(result).toContain('/raw/');
+      // Filename should be percent-encoded
+      expect(result).toContain('%');
+    });
+
+    test('should allow very long international paths under length limit', async ({ page }) => {
+      // Long but valid international path
+      const baseUrl = 'https://example.com/';
+      const longPath = '日本語/'.repeat(50) + 'file.md';
+      const fullUrl = baseUrl + longPath;
+
+      // Only test if under the 2048 limit
+      if (fullUrl.length <= 2048) {
+        const isAllowed = await testUrlValidation(page, fullUrl);
+        expect(isAllowed).toBe(true);
+      }
+    });
+
+    test('should check URL length limit on raw string (not encoded length)', async ({ page }) => {
+      // The length validation checks the RAW string length (before percent-encoding)
+      // This is a security measure to prevent DoS - checking encoded length would be expensive
+      const baseUrl = 'https://example.com/';
+
+      // Test 1: URL with international chars that's under MAX_URL_LENGTH raw but over when encoded
+      // Each Japanese character '日' encodes to 9 bytes (%E6%97%A5)
+      // 230 chars * 9 bytes = 2070 bytes encoded, but only ~253 bytes raw
+      const pathUnder = '日'.repeat(230) + '.md';
+      const urlUnder = baseUrl + pathUnder;
+      expect(urlUnder.length).toBeLessThan(MAX_URL_LENGTH); // Raw length under limit
+      const isAllowedUnder = await testUrlValidation(page, urlUnder);
+      expect(isAllowedUnder).toBe(true); // Should be allowed (raw length is what matters)
+
+      // Test 2: URL that exceeds MAX_URL_LENGTH in RAW string length
+      // This creates a 2050-character URL (2026 repeated chars + 24 for "https://example.com/" + ".md")
+      // We chose 2050 to clearly exceed the 2048 limit while staying well under test framework constraints
+      const pathOver = '日'.repeat(2026) + '.md'; // 2050 chars raw (2026 + 23 for base + 1 for /)
+      const urlOver = baseUrl + pathOver;
+      expect(urlOver.length).toBeGreaterThan(MAX_URL_LENGTH); // Raw length over limit
+      const isAllowedOver = await testUrlValidation(page, urlOver);
+      expect(isAllowedOver).toBe(false); // Should be blocked (raw length exceeds limit)
+    });
+
+    test('should handle URL with international fragment identifier', async ({ page }) => {
+      // Fragment with international characters
+      const urlWithFragment = 'https://example.com/file.md#セクション';
+      const isAllowed = await testUrlValidation(page, urlWithFragment);
+      expect(isAllowed).toBe(true);
+    });
+
+    test('should properly encode international characters for fetch', async ({ page }) => {
+      // Verify that fetch receives properly encoded URLs
+      const consoleMessages = [];
+      page.on('console', msg => {
+        consoleMessages.push({ type: msg.type(), text: msg.text() });
+      });
+
+      // This will fail (non-existent URL) but we can check the encoding in the error
+      const intlUrl = 'https://example.com/docs/日本語.md';
+      const fetchResult = await page.evaluate(async (url) => {
+        try {
+          // @ts-ignore - loadMarkdownFromURL is defined in the app
+          await globalThis.loadMarkdownFromURL(url);
+          return { success: true, error: null };
+        } catch (e) {
+          // Expected to fail (non-existent URL) - we're testing URL encoding, not fetch success
+          // Return error info so we can verify the URL was properly processed
+          return { success: false, error: e instanceof Error ? e.message : String(e) };
+        }
+      }, intlUrl);
+
+      // We expect the fetch to fail (non-existent URL), but the error should not be about encoding
+      expect(fetchResult.success).toBe(false);
+      // Error should be about fetch failure, not URL validation
+      expect(fetchResult.error).not.toContain('blocked');
+
+      // The URL should have been validated (no blocking warnings)
+      const blockingWarnings = consoleMessages.filter(msg =>
+        msg.type === 'warning' && msg.text.includes('blocked')
+      );
+      expect(blockingWarnings.length).toBe(0);
+    });
+
+    test('should handle malformed percent encoding gracefully', async ({ page }) => {
+      // Malformed percent encoding (incomplete sequences like %E6%97 instead of %E6%97%A5)
+      // The URL API should handle these gracefully without crashing
+
+      const malformedUrls = [
+        'https://example.com/docs/%E6%97.md',        // Incomplete UTF-8 sequence
+        'https://example.com/docs/%E6.md',           // Single byte of multi-byte char
+        'https://example.com/docs/%GG.md',           // Invalid hex digits
+        'https://example.com/docs/%.md',             // Percent with no hex
+        'https://example.com/docs/%2.md'             // Percent with single hex digit
+      ];
+
+      for (const url of malformedUrls) {
+        // These should not crash the validation - they may be allowed or blocked
+        // but should not throw an exception
+        const result = await page.evaluate((testUrl) => {
+          try {
+            // @ts-ignore - isAllowedMarkdownURL is defined in the app
+            const isAllowed = globalThis.isAllowedMarkdownURL(testUrl);
+            return { success: true, isAllowed };
+          } catch (e) {
+            return { success: false, error: e instanceof Error ? e.message : String(e) };
+          }
+        }, url);
+
+        // Validation should complete without throwing
+        expect(result.success).toBe(true);
+      }
+    });
+
+    test('should handle double-encoded international characters', async ({ page }) => {
+      // Double encoding: 日 -> %E6%97%A5 -> %25E6%2597%25A5
+      // This can happen when URLs are encoded multiple times
+
+      const doubleEncodedUrl = 'https://example.com/docs/%25E6%2597%25A5%25E6%259C%25AC%25E8%25AA%259E.md';
+
+      // Double-encoded URL should still be valid (allowed)
+      const isAllowed = await testUrlValidation(page, doubleEncodedUrl);
+      expect(isAllowed).toBe(true);
+
+      // Verify the URL API handles it correctly
+      const urlParts = await page.evaluate((url) => {
+        const parsed = new URL(url);
+        return {
+          pathname: parsed.pathname,
+          // Check if it contains the double-encoded percent signs
+          hasDoubleEncoding: parsed.pathname.includes('%25')
+        };
+      }, doubleEncodedUrl);
+
+      // The pathname should preserve the double encoding
+      expect(urlParts.hasDoubleEncoding).toBe(true);
+    });
+
+    test('should handle mixed raw and percent-encoded international characters', async ({ page }) => {
+      // Mix of raw international chars and already-encoded chars in the same path
+      // This tests the URL API's handling of partial encoding
+
+      const result = await page.evaluate(() => {
+        // Raw Japanese + already-encoded Japanese in same path
+        const mixedUrl = 'https://example.com/日本語/%E4%B8%AD%E6%96%87/file.md';
+        const parsed = new URL(mixedUrl);
+
+        return {
+          href: parsed.href,
+          pathname: parsed.pathname,
+          // Both parts should end up percent-encoded
+          fullyEncoded: !parsed.pathname.includes('日') && !parsed.pathname.includes('中')
+        };
+      });
+
+      // URL API should encode the raw chars while preserving already-encoded ones
+      expect(result.fullyEncoded).toBe(true);
+      expect(result.pathname).toContain('%');
     });
   });
 
