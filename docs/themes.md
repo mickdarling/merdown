@@ -48,18 +48,19 @@ The Style dropdown provides access to the [MarkedCustomStyles](https://github.co
 
 ### Using Custom CSS
 
-You can load any CSS file from a URL:
+You can load any CSS file from any HTTPS URL:
 
 1. Select **"Load from URL..."** in the Style dropdown
 2. Enter the URL to your CSS file
 3. The style is applied immediately
 
-**Trusted sources for CSS:**
+**Popular sources for CSS:**
 - `raw.githubusercontent.com` - GitHub raw files
 - `cdn.jsdelivr.net` - jsDelivr CDN
 - `unpkg.com` - unpkg CDN
 - `cdnjs.cloudflare.com` - Cloudflare CDN
 - `gist.githubusercontent.com` - GitHub Gists
+- Any HTTPS server with CORS headers
 
 ---
 
