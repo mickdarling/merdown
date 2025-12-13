@@ -119,6 +119,7 @@ function extractTagName(tag) {
  * Known limitations:
  * - May have false positives with angle brackets in script content (e.g., `if (x<div && y>5)`)
  * - Does not validate tag name matching (e.g., won't catch `<div>...</span>`)
+ * - Doesn't handle comments containing HTML-like syntax (e.g., `<!-- <div> -->`)
  * - For production use cases requiring accurate HTML validation, consider a dedicated parser library
  *
  * @param {string} code - The HTML code to validate
@@ -142,8 +143,8 @@ function validateHTML(code, blockIndex) {
         // Exclude void elements
         if (VOID_ELEMENTS.has(tagName)) return false;
 
-        // Exclude self-closing tags (e.g., <br />)
-        if (tag.endsWith('/>')) return false;
+        // Only allow self-closing syntax for void elements
+        if (tag.endsWith('/>') && VOID_ELEMENTS.has(tagName)) return false;
 
         return true;
     });
