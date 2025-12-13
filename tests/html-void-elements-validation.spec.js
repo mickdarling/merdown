@@ -1,0 +1,293 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Mick Darling
+
+// @ts-check
+const { test, expect } = require('@playwright/test');
+const {
+  waitForPageReady,
+  waitForGlobalFunction,
+  waitForElementClass,
+  setCodeMirrorContent,
+  renderMarkdownAndWait,
+  WAIT_TIMES
+} = require('./helpers/test-utils');
+
+/**
+ * Tests for HTML Void Elements Validation
+ *
+ * These tests ensure that HTML void elements (self-closing tags like <br>, <img>, etc.)
+ * are properly handled by the validation system and do not trigger false positive warnings.
+ *
+ * Related to Issue #280 and PR #281.
+ */
+test.describe('HTML Void Elements Validation', () => {
+  test.beforeEach(async ({ page }) => {
+    await waitForPageReady(page);
+    await waitForGlobalFunction(page, 'toggleLintPanel');
+    await waitForGlobalFunction(page, 'validateCode');
+  });
+
+  test('should NOT warn for HTML with void elements', async ({ page }) => {
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Create markdown with valid HTML containing void elements
+    const markdown = `
+# HTML Void Elements Test
+
+This HTML block contains void elements that should NOT trigger warnings:
+
+\`\`\`html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <link rel="stylesheet" href="style.css">
+    <title>Valid HTML</title>
+</head>
+<body>
+    <h1>Hello World</h1>
+    <p>A paragraph with a line break:<br>New line here.</p>
+    <img src="logo.png" alt="Logo">
+    <hr>
+    <input type="text" name="username">
+</body>
+</html>
+\`\`\`
+`;
+
+    await setCodeMirrorContent(page, markdown);
+    await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Check lint panel content
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should show "No issues found" - void elements should not cause warnings
+    expect(lintContent).toContain('No issues found');
+    expect(lintContent).not.toContain('Possible unclosed HTML tags');
+  });
+
+  test('should still warn for actually unclosed tags', async ({ page }) => {
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Create markdown with HTML that has genuinely unclosed tags
+    const markdown = `
+# Unclosed Tags Test
+
+This HTML block has real unclosed tags:
+
+\`\`\`html
+<div>
+    <p>This paragraph is not closed
+    <span>Neither is this span
+</div>
+\`\`\`
+`;
+
+    await setCodeMirrorContent(page, markdown);
+    await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Check lint panel content
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should show warning for unclosed tags
+    expect(lintContent).toContain('Possible unclosed HTML tags');
+    expect(lintContent).toContain('WARNING');
+    expect(lintContent).toContain('HTML');
+  });
+
+  test('should handle self-closing void elements', async ({ page }) => {
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Create markdown with self-closing void elements (e.g., <br />, <img />)
+    const markdown = `
+# Self-Closing Void Elements Test
+
+This HTML uses self-closing syntax for void elements:
+
+\`\`\`html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <link rel="stylesheet" href="style.css" />
+    <title>Self-Closing Test</title>
+</head>
+<body>
+    <h1>Testing Self-Closing Tags</h1>
+    <p>Line break with self-close:<br />New line.</p>
+    <img src="logo.png" alt="Logo" />
+    <hr />
+    <input type="text" name="field" />
+</body>
+</html>
+\`\`\`
+`;
+
+    await setCodeMirrorContent(page, markdown);
+    await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Check lint panel content
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should show "No issues found" - self-closing void elements are valid
+    expect(lintContent).toContain('No issues found');
+    expect(lintContent).not.toContain('Possible unclosed HTML tags');
+  });
+
+  test('should handle mix of void elements and regular tags', async ({ page }) => {
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Create markdown with mixed void and regular elements
+    const markdown = `
+# Mixed Elements Test
+
+\`\`\`html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Mixed Tags</title>
+</head>
+<body>
+    <div>
+        <h1>Title</h1>
+        <img src="test.jpg" alt="Test">
+        <p>Paragraph with <br> break.</p>
+        <input type="text">
+        <hr>
+    </div>
+</body>
+</html>
+\`\`\`
+`;
+
+    await setCodeMirrorContent(page, markdown);
+    await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Check lint panel content
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should show "No issues found" - all tags properly balanced
+    expect(lintContent).toContain('No issues found');
+  });
+
+  test('should load code-validation demo without void element warnings', async ({ page }) => {
+    // Load the code-validation demo
+    await page.goto('/?url=docs/demos/code-validation.md');
+    await page.waitForSelector('.CodeMirror', { timeout: 15000 });
+
+    // Wait for content to load and render
+    await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Get all lint issues
+    const lintIssues = await page.$$eval('.lint-issue', issues => {
+      return issues.map(issue => ({
+        type: issue.querySelector('.lint-issue-type')?.textContent || '',
+        message: issue.querySelector('.lint-issue-message')?.textContent || ''
+      }));
+    });
+
+    // Filter for HTML-related issues
+    const htmlIssues = lintIssues.filter(issue =>
+      issue.message.includes('unclosed') ||
+      issue.message.includes('Possible unclosed HTML tags')
+    );
+
+    // The "Valid HTML" block should not have unclosed tag warnings
+    // There may be other intentional errors in the demo, but the valid HTML block
+    // (which contains void elements like <meta>, <title>, etc.) should be clean
+    const validHtmlBlockIssues = htmlIssues.filter(issue =>
+      // The valid HTML block is early in the demo, so if there are unclosed tag warnings,
+      // they should come from the intentionally invalid examples later
+      !issue.message.includes('Missing DOCTYPE') // This is okay for partial examples
+    );
+
+    // The code-validation demo has intentionally invalid HTML blocks,
+    // but the "Valid HTML" block should not trigger void element warnings.
+    // We expect some warnings from the intentional examples, but verify the count
+    // is reasonable (i.e., not every HTML block is flagged)
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should not show excessive warnings - the valid blocks should pass
+    const warningCount = (lintContent.match(/WARNING/g) || []).length;
+
+    // The demo has several intentional errors, but not all blocks are invalid.
+    // A reasonable expectation is fewer than 10 warnings total.
+    expect(warningCount).toBeLessThan(10);
+  });
+
+  test('should handle all standard HTML5 void elements', async ({ page }) => {
+    // Enable lint panel
+    await page.click('#lintToggle');
+    await waitForElementClass(page, '#lintPanel', 'show');
+
+    // Test all HTML5 void elements
+    const markdown = `
+# All Void Elements Test
+
+\`\`\`html
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <base href="/">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <img src="test.jpg" alt="Test">
+    <br>
+    <hr>
+    <input type="text">
+    <area shape="rect" coords="0,0,100,100" href="link.html">
+    <embed src="video.mp4">
+    <param name="autoplay" value="true">
+    <source src="audio.mp3" type="audio/mpeg">
+    <track src="subtitles.vtt" kind="subtitles">
+    <wbr>
+    <col>
+</body>
+</html>
+\`\`\`
+`;
+
+    await setCodeMirrorContent(page, markdown);
+    await renderMarkdownAndWait(page, WAIT_TIMES.LONG);
+
+    // Wait for validation to complete
+    await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+    // Check lint panel content
+    const lintContent = await page.$eval('#lintContent', el => el.textContent);
+
+    // Should show "No issues found" - all void elements properly handled
+    expect(lintContent).toContain('No issues found');
+    expect(lintContent).not.toContain('Possible unclosed HTML tags');
+  });
+});

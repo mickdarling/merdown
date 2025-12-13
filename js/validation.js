@@ -92,6 +92,16 @@ function validateJavaScript(_code, _blockIndex) {
 }
 
 /**
+ * Extract tag name from an HTML tag
+ * @param {string} tag - The HTML tag (e.g., "<div>", "<img />")
+ * @returns {string|null} The tag name in lowercase, or null if no match
+ */
+function extractTagName(tag) {
+    const match = tag.match(/<(\w+)/);
+    return match ? match[1].toLowerCase() : null;
+}
+
+/**
  * Basic HTML validation
  * Checks for common HTML issues like unclosed tags and missing DOCTYPE
  * @param {string} code - The HTML code to validate
@@ -115,10 +125,8 @@ function validateHTML(code, blockIndex) {
     // Filter out void elements and self-closing tags from open tags count
     const nonVoidOpenTags = openTags.filter(tag => {
         // Extract tag name from opening tag
-        const tagNameMatch = tag.match(/<(\w+)/);
-        if (!tagNameMatch) return true;
-
-        const tagName = tagNameMatch[1].toLowerCase();
+        const tagName = extractTagName(tag);
+        if (!tagName) return true;
 
         // Exclude void elements
         if (VOID_ELEMENTS.has(tagName)) return false;
