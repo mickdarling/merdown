@@ -107,7 +107,7 @@ function highlightYAMLFrontMatter(code) {
 
     // Early exit optimization: check for closing delimiter before running regex
     // If there's no closing delimiter (must have \n--- somewhere after opening), there's no valid YAML front matter
-    if (code.indexOf('\n---') === -1) {
+    if (!code.includes('\n---')) {
         return null;
     }
 
@@ -120,6 +120,16 @@ function highlightYAMLFrontMatter(code) {
     try {
         const yamlContent = frontMatterMatch[1];
         const mdContent = frontMatterMatch[2];
+
+        // Handle empty or whitespace-only YAML content
+        // This handles the edge case of "---\n---" or "---\n  \n---" with no actual YAML
+        if (!yamlContent || !yamlContent.trim()) {
+            const delimiterClass = 'hljs-meta';
+            const highlightedMd = mdContent.trim()
+                ? hljs.highlight(mdContent, { language: 'markdown', ignoreIllegals: true })
+                : { value: '' };
+            return `<pre><code class="hljs language-markdown" data-language="markdown"><span class="${delimiterClass}">---</span>\n<span class="${delimiterClass}">---</span>${highlightedMd.value ? '\n' + highlightedMd.value : ''}</code></pre>`;
+        }
 
         // Highlight each section with appropriate language
         const highlightedYaml = hljs.highlight(yamlContent, { language: 'yaml', ignoreIllegals: true });
@@ -220,7 +230,7 @@ marked.setOptions({ renderer });
  * Pre-compiled regex for YAML front matter detection
  * Used by highlightYAMLFrontMatter() - compiled once for performance
  *
- * Pattern: /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/
+ * Pattern: /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/m
  *
  * Delimiter Handling:
  * - Opening delimiter (---\n): Requires a newline after '---' because YAML front matter
@@ -235,8 +245,18 @@ marked.setOptions({ renderer });
  * Capture Groups:
  * - Group 1 ([\s\S]*?): The YAML content between delimiters (non-greedy)
  * - Group 2 ([\s\S]*): The markdown content after the closing delimiter (greedy)
+ *
+ * Regex Backtracking Safety:
+ * The non-greedy quantifier ([\s\S]*?) in Group 1 could potentially cause catastrophic
+ * backtracking with malicious inputs. However, this risk is mitigated by several guards
+ * in highlightYAMLFrontMatter():
+ * - 100KB size limit check (line 104) prevents extremely large inputs
+ * - Early exit if '\n---' delimiter not found (line 110) prevents worst-case backtracking
+ * - startsWith('---') check (line 99) ensures proper start pattern
+ * These guards ensure the regex operates on validated, bounded inputs, making catastrophic
+ * backtracking practically impossible.
  */
-const YAML_FRONTMATTER_REGEX = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/;
+const YAML_FRONTMATTER_REGEX = /^---\n([\s\S]*?)\n---\n?([\s\S]*)$/m;
 
 /**
  * Security limits for YAML front matter parsing

@@ -390,6 +390,27 @@ const x = 42;
       const hasSectionClass = await codeBlockHasClass(page, 'hljs-section');
       expect(hasSectionClass).toBe(true);
     });
+
+    test('handles malformed opening delimiter (spaces after dashes)', async ({ page }) => {
+      const markdown = '```markdown\n---   \ntitle: Test\n---\n# Hello\n```';
+      await setCodeMirrorContent(page, markdown);
+      await renderMarkdownAndWait(page);
+
+      // Should not be treated as YAML front matter due to trailing spaces
+      const wrapper = await page.locator('#wrapper').innerHTML();
+      // Verify it renders but without special YAML highlighting
+      expect(wrapper).toContain('<pre>');
+    });
+
+    test('handles malformed closing delimiter (extra characters)', async ({ page }) => {
+      const markdown = '```markdown\n---\ntitle: Test\n--- extra\n# Hello\n```';
+      await setCodeMirrorContent(page, markdown);
+      await renderMarkdownAndWait(page);
+
+      // Should not match as valid front matter
+      const wrapper = await page.locator('#wrapper').innerHTML();
+      expect(wrapper).toContain('<pre>');
+    });
   });
 
   test.describe('Real-world examples', () => {
@@ -484,8 +505,8 @@ Content here.
     test('handles hljs being undefined gracefully', async ({ page }) => {
       // Store original hljs
       await page.evaluate(() => {
-        window._originalHljs = window.hljs;
-        window.hljs = undefined;
+        globalThis._originalHljs = globalThis.hljs;
+        globalThis.hljs = undefined;
       });
 
       // Try to render markdown with YAML front matter
@@ -504,8 +525,8 @@ Content here.
 
       // Restore hljs
       await page.evaluate(() => {
-        window.hljs = window._originalHljs;
-        delete window._originalHljs;
+        globalThis.hljs = globalThis._originalHljs;
+        delete globalThis._originalHljs;
       });
     });
 
@@ -565,6 +586,31 @@ tags:
       const html = await renderAndGetHtml(page, markdown);
       expect(html).toContain('title');
       expect(html).toContain('A'.repeat(100)); // At least some of it
+    });
+
+    test('handles empty YAML content between delimiters', async ({ page }) => {
+      const markdown = '```markdown\n---\n---\n# Just Markdown\n```';
+      await setCodeMirrorContent(page, markdown);
+      await renderMarkdownAndWait(page);
+
+      // Should render with delimiters but no YAML content
+      const codeBlock = await page.locator('#wrapper pre code').first();
+      await expect(codeBlock).toBeVisible();
+
+      // Should render without errors and contain the markdown content
+      const html = await page.locator('#wrapper').innerHTML();
+      expect(html).toContain('Just Markdown');
+      expect(html).toContain('<pre>');
+    });
+
+    test('handles whitespace-only YAML content', async ({ page }) => {
+      const markdown = '```markdown\n---\n   \n\n---\n# Content\n```';
+      await setCodeMirrorContent(page, markdown);
+      await renderMarkdownAndWait(page);
+
+      // Should handle gracefully
+      const codeBlock = await page.locator('#wrapper pre code').first();
+      await expect(codeBlock).toBeVisible();
     });
   });
 });

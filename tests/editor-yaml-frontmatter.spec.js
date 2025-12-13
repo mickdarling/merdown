@@ -71,7 +71,7 @@ async function getLineTokens(page, line) {
  */
 async function lineHasTokenType(page, line, tokenType) {
   const tokens = await getLineTokens(page, line);
-  return tokens.some(token => token.type && token.type.includes(tokenType));
+  return tokens.some(token => token.type?.includes(tokenType));
 }
 
 /**
@@ -117,7 +117,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
       const line1Tokens = await getLineTokens(page, 1);
       // Should not have the special "meta" type that indicates YAML front matter delimiter
       const hasYamlMeta = line1Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -132,7 +132,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
 
       // Check if first non-whitespace token is "---" with meta type
       const yamlDelimiterToken = line0Tokens.find(token =>
-        token.string.trim() === '---' && token.type && token.type.includes('meta')
+        token.string.trim() === '---' && token.type?.includes('meta')
       );
 
       // Should not find YAML front matter delimiter (it's at sol() but not matching the pattern)
@@ -148,7 +148,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
       // This enforces that YAML front matter must truly be at the very start
       const line1Tokens = await getLineTokens(page, 1);
       const hasYamlMeta = line1Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -211,7 +211,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
 
       // Check that it's not being treated as YAML front matter meta
       const isYamlDelimiter = line7Tokens.some(token =>
-        token.type && token.type.includes('meta') &&
+        token.type?.includes('meta') &&
         token.string === '---' &&
         // Make sure it's being treated as YAML meta, not GFM meta
         token.type.split(' ').length <= 2 // YAML meta is typically just "meta" or "meta something"
@@ -251,7 +251,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
       // Line 1 (---) should NOT be treated as front matter opening
       const line1Tokens = await getLineTokens(page, 1);
       const hasYamlMeta = line1Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -273,10 +273,10 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
 
       // These should not have the YAML meta delimiter type
       const line4IsYamlDelimiter = line4Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
       const line6IsYamlDelimiter = line6Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
 
       expect(line4IsYamlDelimiter).toBe(false);
@@ -314,7 +314,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
       // Four dashes should NOT be treated as YAML front matter delimiter
       const line0Tokens = await getLineTokens(page, 0);
       const hasYamlMeta = line0Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string.includes('----')
+        token.type?.includes('meta') && token.string.includes('----')
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -335,7 +335,7 @@ test.describe('CodeMirror YAML Front Matter Editor Mode', () => {
       // --- with trailing non-whitespace should NOT match the pattern
       const line0Tokens = await getLineTokens(page, 0);
       const hasYamlMeta = line0Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---'
+        token.type?.includes('meta') && token.string === '---'
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -381,7 +381,7 @@ Content here.`;
 
       // Should not have YAML front matter meta type
       const hasYamlMeta = line0Tokens.some(token =>
-        token.type && token.type.includes('meta')
+        token.type?.includes('meta')
       );
       expect(hasYamlMeta).toBe(false);
     });
@@ -413,7 +413,7 @@ More content.`;
       // not as YAML delimiter
       const line8Tokens = await getLineTokens(page, 8);
       const isYamlDelimiter = line8Tokens.some(token =>
-        token.type && token.type.includes('meta') && token.string === '---' &&
+        token.type?.includes('meta') && token.string === '---' &&
         token.type.split(' ').length <= 2
       );
       expect(isYamlDelimiter).toBe(false);
