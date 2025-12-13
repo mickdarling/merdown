@@ -106,3 +106,7 @@ Understand how Merview handles problems gracefully:
 - [← Back to Welcome](/?sample)
 - [About Merview](/?url=docs/about.md)
 - [Developer Kit](/?url=docs/developer-kit.md)
+
+---
+
+*Found an issue with these demos? [Report it on GitHub](https://github.com/mickdarling/merview/issues/new)*

@@ -249,3 +249,7 @@ Start writing your content here...
 - [Code Validation Demo](/?url=docs/demos/code-validation.md)
 - [International Text Demo](/?url=docs/demos/international-text.md)
 - [Error Handling Demo](/?url=docs/demos/error-handling.md)
+
+---
+
+*Found an issue with this demo? [Report it on GitHub](https://github.com/mickdarling/merview/issues/new)*

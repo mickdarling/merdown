@@ -259,3 +259,7 @@ If you encounter persistent errors:
 - [International Text Demo](/?url=docs/demos/international-text.md)
 - [YAML Front Matter Demo](/?url=docs/demos/yaml-front-matter.md)
 - [CORS Configuration Guide](/?url=docs/cors-configuration.md)
+
+---
+
+*Found an issue with this demo? [Report it on GitHub](https://github.com/mickdarling/merview/issues/new)*

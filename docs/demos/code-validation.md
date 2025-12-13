@@ -173,11 +173,11 @@ These code blocks contain errors that the linter will detect:
 
 ---
 
-## Languages Not Validated
+## Languages Not Yet Validated
 
-JavaScript validation is disabled for security reasons. These languages show syntax highlighting only:
+JavaScript and Python require parser libraries for safe syntax validation. These languages show syntax highlighting only (for now):
 
-### JavaScript (No Validation)
+### JavaScript (No Validation Yet)
 
 ```javascript
 // This has a syntax error but won't be flagged
@@ -188,7 +188,7 @@ const x = {
 };
 ```
 
-### Python (No Validation)
+### Python (No Validation Yet)
 
 ```python
 # Python is highlighted but not validated
@@ -199,6 +199,8 @@ def example():
 ### Other Languages
 
 YAML, Bash, SQL, and other languages are syntax-highlighted but not validated.
+
+> **Coming in v1.1:** Full syntax validation for JavaScript (via Acorn), Python, YAML, and more. See [issue #198](https://github.com/mickdarling/merview/issues/198) for details.
 
 ---
 
@@ -217,3 +219,7 @@ YAML, Bash, SQL, and other languages are syntax-highlighted but not validated.
 - [International Text Demo](/?url=docs/demos/international-text.md)
 - [YAML Front Matter Demo](/?url=docs/demos/yaml-front-matter.md)
 - [Error Handling Demo](/?url=docs/demos/error-handling.md)
+
+---
+
+*Found an issue with this demo? [Report it on GitHub](https://github.com/mickdarling/merview/issues/new)*

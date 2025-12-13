@@ -260,3 +260,7 @@ Merview supports loading content from international domain names:
 - [Code Validation Demo](/?url=docs/demos/code-validation.md)
 - [YAML Front Matter Demo](/?url=docs/demos/yaml-front-matter.md)
 - [Error Handling Demo](/?url=docs/demos/error-handling.md)
+
+---
+
+*Found an issue with this demo? [Report it on GitHub](https://github.com/mickdarling/merview/issues/new)*
