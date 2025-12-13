@@ -55,18 +55,6 @@ async function lineHasTokenType(page, line, tokenType) {
 }
 
 /**
- * Helper to find a token with specific string content
- * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {number} line - Line number (0-indexed)
- * @param {string} searchString - String to search for
- * @returns {Promise<{type: string, string: string} | null>} Token or null if not found
- */
-async function findTokenByString(page, line, searchString) {
-  const tokens = await getLineTokens(page, line);
-  return tokens.find(token => token.string.includes(searchString)) || null;
-}
-
-/**
  * Helper to set CodeMirror content and wait for it to be processed
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {string} content - Content to set

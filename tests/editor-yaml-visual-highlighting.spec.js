@@ -10,35 +10,6 @@ const {
 } = require('./helpers/test-utils');
 
 /**
- * Helper to get the computed color of a token at a specific position
- * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {number} line - Line number (0-indexed)
- * @param {number} ch - Character position (0-indexed)
- * @returns {Promise<string>} RGB color string
- */
-async function getTokenColor(page, line, ch) {
-  return page.evaluate(({ line, ch }) => {
-    const cmElement = document.querySelector('.CodeMirror');
-    const cm = cmElement?.CodeMirror;
-    if (!cm) {
-      throw new Error('CodeMirror instance not found');
-    }
-
-    // Get the DOM element for this position
-    const coords = cm.charCoords({ line, ch }, 'local');
-    const element = document.elementFromPoint(coords.left, coords.top);
-
-    if (!element) {
-      throw new Error('Could not find element at position');
-    }
-
-    // Get computed color
-    const style = window.getComputedStyle(element);
-    return style.color;
-  }, { line, ch });
-}
-
-/**
  * Helper to check if a specific line has syntax highlighting
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {number} line - Line number (0-indexed)
