@@ -484,6 +484,7 @@ async function applyCSSCore(cssText) {
     applySyntaxOverride();
 
     // Re-render markdown to update Mermaid diagrams with new CSS
+    // Note: YAML panel state preservation is handled automatically in renderMarkdown() (#268 fix)
     scheduleRender();
 }
 

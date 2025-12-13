@@ -491,6 +491,9 @@ export async function renderMarkdown() {
         const { wrapper } = getElements();
         const markdown = state.cmEditor ? state.cmEditor.getValue() : '';
 
+        // SAVE STATE: Preserve YAML metadata panel open/closed state before re-render (#268 fix)
+        const yamlPanelWasOpen = wrapper?.querySelector('.yaml-front-matter')?.open;
+
         // Reset mermaid counter for consistent diagram IDs
         state.mermaidCounter = 0;
 
@@ -542,6 +545,15 @@ export async function renderMarkdown() {
         // This ensures the lint panel updates in real-time as content changes
         if (state.lintEnabled) {
             scheduleValidation();
+        }
+
+        // RESTORE STATE: Restore YAML metadata panel state after re-render (#268 fix)
+        // This preserves the open/closed state automatically for ALL re-renders
+        if (yamlPanelWasOpen !== undefined) {
+            const details = wrapper?.querySelector('.yaml-front-matter');
+            if (details) {
+                details.open = yamlPanelWasOpen;
+            }
         }
     } catch (error) {
         console.error('Critical error in renderMarkdown:', error);
