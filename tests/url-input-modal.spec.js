@@ -293,59 +293,77 @@ function browserCheckStateCleanup() {
 }
 
 /**
- * Browser-side helper: Test context description updates
+ * Browser-side helper: Test context description updates by triggering modal through UI
  * @returns {Promise<boolean>} True if context descriptions update correctly
  */
 function browserTestContextDescriptions() {
-  const MODAL_DELAY_MS = 100;
+  const MODAL_DELAY_MS = 150;
   return new Promise(function resolveContextTest(resolve) {
     const contextDesc = document.getElementById('urlModalContextDesc');
-    if (!contextDesc) {
+    const modal = document.getElementById('urlModal');
+    if (!contextDesc || !modal) {
       resolve(false);
       return;
     }
 
-    // Check if openUrlInputModal is available (it's called via selector changes)
-    if (typeof globalThis.openUrlInputModal !== 'function') {
-      // If function doesn't exist, check that element exists and has content
-      resolve(contextDesc.textContent.length > 0);
-      return;
-    }
+    // Map selectors to their expected context description text
+    const selectorContexts = [
+      { selectorId: 'styleSelector', expectedText: 'CSS stylesheet', optionText: 'Load from URL' },
+      { selectorId: 'syntaxThemeSelector', expectedText: 'syntax highlighting theme', optionText: 'Load from URL' },
+      { selectorId: 'editorThemeSelector', expectedText: 'CodeMirror editor theme', optionText: 'Load from URL' },
+      { selectorId: 'mermaidThemeSelector', expectedText: 'Mermaid diagram theme', optionText: 'Load from URL' }
+    ];
 
-    // Test different contexts
-    const contexts = {
-      'style': 'CSS stylesheet',
-      'syntax': 'syntax highlighting theme',
-      'editor': 'CodeMirror editor theme',
-      'mermaid': 'Mermaid diagram theme',
-      'markdown': 'markdown document'
-    };
-
+    let testIndex = 0;
     let allCorrect = true;
 
-    // Test each context
-    for (const context of Object.keys(contexts)) {
-      const expectedText = contexts[context];
-
-      // Simulate opening modal with context
-      globalThis.openUrlInputModal('styleSelector', context);
-
-      const actualText = contextDesc.textContent;
-      if (!actualText.includes(expectedText)) {
-        allCorrect = false;
-        break;
+    function testNextContext() {
+      if (testIndex >= selectorContexts.length) {
+        resolve(allCorrect);
+        return;
       }
 
-      // Close modal
-      const modal = document.getElementById('urlModal');
-      if (modal?.open) {
-        modal.close();
+      const { selectorId, expectedText, optionText } = selectorContexts[testIndex];
+      const selector = document.getElementById(selectorId);
+
+      if (!selector) {
+        testIndex++;
+        testNextContext();
+        return;
       }
+
+      // Find the "Load from URL" option
+      const options = Array.from(selector.options);
+      const urlOption = options.find(function findUrlOption(opt) {
+        return opt.textContent.includes(optionText);
+      });
+
+      if (!urlOption) {
+        testIndex++;
+        testNextContext();
+        return;
+      }
+
+      // Select the option to trigger modal
+      selector.value = urlOption.value;
+      selector.dispatchEvent(new Event('change', { bubbles: true }));
+
+      // Wait for modal to open and check context
+      setTimeout(function checkContext() {
+        if (modal.open) {
+          const actualText = contextDesc.textContent;
+          if (!actualText.includes(expectedText)) {
+            allCorrect = false;
+          }
+          modal.close();
+        }
+
+        testIndex++;
+        setTimeout(testNextContext, 50);
+      }, MODAL_DELAY_MS);
     }
 
-    setTimeout(function finishTest() {
-      resolve(allCorrect);
-    }, MODAL_DELAY_MS);
+    testNextContext();
   });
 }
 
