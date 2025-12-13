@@ -5,6 +5,12 @@
 const { test, expect } = require('@playwright/test');
 
 /**
+ * Maximum URL length allowed by the application (matches security.js)
+ * @constant {number}
+ */
+const MAX_URL_LENGTH = 2048;
+
+/**
  * Tests for URL parameter loading functionality (Issue #79, PR #80, Issue #201)
  *
  * The URL loading feature should:
@@ -792,21 +798,21 @@ test.describe('URL Loading', () => {
       // This is a security measure to prevent DoS - checking encoded length would be expensive
       const baseUrl = 'https://example.com/';
 
-      // Test 1: URL with international chars that's under 2048 raw but over 2048 when encoded
+      // Test 1: URL with international chars that's under MAX_URL_LENGTH raw but over when encoded
       // Each Japanese character '日' encodes to 9 bytes (%E6%97%A5)
       // 230 chars * 9 bytes = 2070 bytes encoded, but only ~253 bytes raw
       const pathUnder = '日'.repeat(230) + '.md';
       const urlUnder = baseUrl + pathUnder;
-      expect(urlUnder.length).toBeLessThan(2048); // Raw length under limit
+      expect(urlUnder.length).toBeLessThan(MAX_URL_LENGTH); // Raw length under limit
       const isAllowedUnder = await testUrlValidation(page, urlUnder);
       expect(isAllowedUnder).toBe(true); // Should be allowed (raw length is what matters)
 
-      // Test 2: URL that exceeds 2048 in RAW string length
+      // Test 2: URL that exceeds MAX_URL_LENGTH in RAW string length
       // This creates a 2050-character URL (2026 repeated chars + 24 for "https://example.com/" + ".md")
       // We chose 2050 to clearly exceed the 2048 limit while staying well under test framework constraints
       const pathOver = '日'.repeat(2026) + '.md'; // 2050 chars raw (2026 + 23 for base + 1 for /)
       const urlOver = baseUrl + pathOver;
-      expect(urlOver.length).toBeGreaterThan(2048); // Raw length over limit
+      expect(urlOver.length).toBeGreaterThan(MAX_URL_LENGTH); // Raw length over limit
       const isAllowedOver = await testUrlValidation(page, urlOver);
       expect(isAllowedOver).toBe(false); // Should be blocked (raw length exceeds limit)
     });
@@ -827,16 +833,22 @@ test.describe('URL Loading', () => {
 
       // This will fail (non-existent URL) but we can check the encoding in the error
       const intlUrl = 'https://example.com/docs/日本語.md';
-      await page.evaluate(async (url) => {
+      const fetchResult = await page.evaluate(async (url) => {
         try {
           // @ts-ignore - loadMarkdownFromURL is defined in the app
           await globalThis.loadMarkdownFromURL(url);
+          return { success: true, error: null };
         } catch (e) {
-          // Expected to fail - we're just testing encoding
-          // Expected errors: TypeError (network failure) or Error (fetch failed)
-          // The specific error type doesn't matter - we're validating URL encoding, not fetch success
+          // Expected to fail (non-existent URL) - we're testing URL encoding, not fetch success
+          // Return error info so we can verify the URL was properly processed
+          return { success: false, error: e instanceof Error ? e.message : String(e) };
         }
       }, intlUrl);
+
+      // We expect the fetch to fail (non-existent URL), but the error should not be about encoding
+      expect(fetchResult.success).toBe(false);
+      // Error should be about fetch failure, not URL validation
+      expect(fetchResult.error).not.toContain('blocked');
 
       // The URL should have been validated (no blocking warnings)
       const blockingWarnings = consoleMessages.filter(msg =>
