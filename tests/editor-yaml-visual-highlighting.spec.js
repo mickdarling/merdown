@@ -5,10 +5,10 @@
 const { test, expect } = require('@playwright/test');
 const {
   waitForPageReady,
-  setCodeMirrorContent,
   setContentAndWait,
   lineHasSyntaxHighlighting,
   findLineWithText,
+  findNthLineWithText,
   WAIT_TIMES
 } = require('./helpers/test-utils');
 
@@ -83,21 +83,7 @@ post_settings:
     expect(aliasHighlighted).toBe(true);
 
     // Closing delimiter (find the second occurrence of ---)
-    const closingDelimiterLine = await page.evaluate(() => {
-      const cmElement = document.querySelector('.CodeMirror');
-      const cm = cmElement?.CodeMirror;
-      if (!cm) throw new Error('CodeMirror instance not found');
-      const lineCount = cm.lineCount();
-      let foundCount = 0;
-      for (let i = 0; i < lineCount; i++) {
-        const lineContent = cm.getLine(i);
-        if (lineContent === '---') {
-          foundCount++;
-          if (foundCount === 2) return i;
-        }
-      }
-      return -1;
-    });
+    const closingDelimiterLine = await findNthLineWithText(page, '---', 2);
     const closingHighlighted = await lineHasSyntaxHighlighting(page, closingDelimiterLine);
     expect(closingHighlighted).toBe(true);
 

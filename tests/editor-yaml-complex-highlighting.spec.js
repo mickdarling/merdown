@@ -35,16 +35,19 @@ metadata:
       const line2Tokens = await getLineTokens(page, 2);
       const authorToken = line2Tokens.find(t => t.string.includes('author'));
       expect(authorToken).toBeDefined();
+      expect(authorToken?.type).toBeTruthy();
 
       // Line 3: "    name:" (double nested)
       const line3Tokens = await getLineTokens(page, 3);
       const nameToken = line3Tokens.find(t => t.string.includes('name'));
       expect(nameToken).toBeDefined();
+      expect(nameToken?.type).toBeTruthy();
 
       // Line 4: "    email:" (double nested)
       const line4Tokens = await getLineTokens(page, 4);
       const emailToken = line4Tokens.find(t => t.string.includes('email'));
       expect(emailToken).toBeDefined();
+      expect(emailToken?.type).toBeTruthy();
     });
 
     test('highlights deeply nested structures', async ({ page }) => {

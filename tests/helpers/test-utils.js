@@ -425,6 +425,31 @@ async function findLineWithText(page, searchText) {
   }, searchText);
 }
 
+/**
+ * Find the nth occurrence of a line with exact text match
+ * @param {import('@playwright/test').Page} page - Playwright page object
+ * @param {string} searchText - Exact text to match
+ * @param {number} occurrence - Which occurrence to find (1 = first, 2 = second, etc.)
+ * @returns {Promise<number>} Line number (0-indexed) or -1 if not found
+ */
+async function findNthLineWithText(page, searchText, occurrence = 1) {
+  return page.evaluate(({ text, n }) => {
+    const cmElement = document.querySelector('.CodeMirror');
+    const cm = cmElement?.CodeMirror;
+    if (!cm) throw new Error('CodeMirror instance not found');
+    const lineCount = cm.lineCount();
+    let foundCount = 0;
+    for (let i = 0; i < lineCount; i++) {
+      const lineContent = cm.getLine(i);
+      if (lineContent === text) {
+        foundCount++;
+        if (foundCount === n) return i;
+      }
+    }
+    return -1;
+  }, { text: searchText, n: occurrence });
+}
+
 module.exports = {
   // Constants
   WAIT_TIMES,
@@ -447,6 +472,7 @@ module.exports = {
   setContentAndWait,
   lineHasSyntaxHighlighting,
   findLineWithText,
+  findNthLineWithText,
 
   // Element checks
   isGlobalFunctionAvailable,
