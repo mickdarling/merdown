@@ -802,6 +802,8 @@ test.describe('URL Loading', () => {
       expect(isAllowedUnder).toBe(true); // Should be allowed (raw length is what matters)
 
       // Test 2: URL that exceeds 2048 in RAW string length
+      // This creates a 2050-character URL (2026 repeated chars + 24 for "https://example.com/" + ".md")
+      // We chose 2050 to clearly exceed the 2048 limit while staying well under test framework constraints
       const pathOver = '日'.repeat(2026) + '.md'; // 2050 chars raw (2026 + 23 for base + 1 for /)
       const urlOver = baseUrl + pathOver;
       expect(urlOver.length).toBeGreaterThan(2048); // Raw length over limit
@@ -831,6 +833,8 @@ test.describe('URL Loading', () => {
           await globalThis.loadMarkdownFromURL(url);
         } catch (e) {
           // Expected to fail - we're just testing encoding
+          // Expected errors: TypeError (network failure) or Error (fetch failed)
+          // The specific error type doesn't matter - we're validating URL encoding, not fetch success
         }
       }, intlUrl);
 
