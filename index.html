@@ -199,29 +199,8 @@
 
         .toolbar-buttons {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
-            width: 100%;
-        }
-
-        .toolbar-group {
-            display: flex;
             gap: 10px;
             align-items: center;
-        }
-
-        .toolbar-left {
-            margin-left: 20px;
-        }
-
-        .toolbar-center {
-            position: absolute;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-
-        .toolbar-right {
-            gap: 10px;
         }
 
         .style-selector {
@@ -1165,18 +1144,12 @@
             </a>
         </header>
         <div class="toolbar-buttons">
-            <div class="toolbar-group toolbar-left">
-                <button class="btn btn-success" onclick="saveFile()">💾 Save</button>
-                <button class="btn btn-success" onclick="exportToPDF()">📄 Save as PDF</button>
-                <button class="btn btn-success" onclick="shareToGist()" id="shareGistBtn" title="Share document as a GitHub Gist">🔗 Share to Gist</button>
-            </div>
-            <div class="toolbar-group toolbar-center">
-                <button class="btn" onclick="loadWelcomePage()">📋 Welcome</button>
-            </div>
-            <div class="toolbar-group toolbar-right">
-                <button class="btn" id="lintToggle" onclick="toggleLintPanel()">🔍 Code Validation</button>
-                <button class="btn btn-danger" onclick="clearEditor()">✖️ Clear</button>
-            </div>
+            <button class="btn btn-success" onclick="saveFile()">💾 Save</button>
+            <button class="btn btn-success" onclick="exportToPDF()">📄 Save as PDF</button>
+            <button class="btn btn-success" onclick="shareToGist()" id="shareGistBtn" title="Share document as a GitHub Gist">🔗 Share to Gist</button>
+            <button class="btn" onclick="loadWelcomePage()">📋 Welcome</button>
+            <button class="btn" id="lintToggle" onclick="toggleLintPanel()">🔍 Code Validation</button>
+            <button class="btn btn-danger" onclick="clearEditor()">✖️ Clear</button>
         </div>
     </div>
 
