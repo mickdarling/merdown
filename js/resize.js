@@ -5,6 +5,7 @@
  */
 
 import { getElements } from './dom.js';
+import { state } from './state.js';
 
 // Track resize state (module-local)
 // Note: This is intentionally NOT in state.js because:
@@ -55,6 +56,10 @@ function handleResize(e) {
     // Apply flex-basis to both panels
     editorPanel.style.flexBasis = `${clampedPercentage}%`;
     previewPanel.style.flexBasis = `${100 - clampedPercentage}%`;
+
+    // Store the panel widths in state to persist across document changes
+    state.editorPanelWidth = clampedPercentage;
+    state.previewPanelWidth = 100 - clampedPercentage;
 }
 
 /**
@@ -65,6 +70,27 @@ function stopResize() {
         isResizing = false;
         document.body.style.cursor = '';
         document.body.style.userSelect = '';
+    }
+}
+
+/**
+ * Restore panel widths from state
+ * Applies saved panel widths if they exist, otherwise uses default 50/50
+ */
+export function restorePanelWidths() {
+    const elements = getElements();
+    const editorPanel = elements.editorPanel;
+    const previewPanel = elements.previewPanel;
+
+    if (!editorPanel || !previewPanel) {
+        console.warn('Panel elements not found');
+        return;
+    }
+
+    // Only restore if we have saved widths
+    if (state.editorPanelWidth !== null && state.previewPanelWidth !== null) {
+        editorPanel.style.flexBasis = `${state.editorPanelWidth}%`;
+        previewPanel.style.flexBasis = `${state.previewPanelWidth}%`;
     }
 }
 
@@ -85,4 +111,7 @@ export function initResizeHandle() {
     resizeHandle.addEventListener('mousedown', startResize);
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
+
+    // Restore saved panel widths if they exist
+    restorePanelWidths();
 }
