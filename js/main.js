@@ -166,8 +166,9 @@ function handleRemoteURLParam(remoteURL) {
 /**
  * Handle loading content from inline markdown parameter.
  * @param {string} inlineMarkdown - The URL-encoded markdown
+ * @returns {Promise<void>}
  */
-function handleInlineMarkdownParam(inlineMarkdown) {
+async function handleInlineMarkdownParam(inlineMarkdown) {
     try {
         const decoded = decodeURIComponent(inlineMarkdown);
         setEditorContent(decoded);
@@ -175,7 +176,7 @@ function handleInlineMarkdownParam(inlineMarkdown) {
     } catch (error) {
         console.error('Error decoding inline markdown:', error);
         showStatus('Error loading markdown from URL', 'warning');
-        loadSavedContentOrSample();
+        await loadSavedContentOrSample();
     }
 }
 
@@ -191,13 +192,14 @@ function handleInlineMarkdownParam(inlineMarkdown) {
  * 2. ?url= parameter - loads from remote URL
  * 3. ?md= parameter - loads inline markdown
  * 4. No parameters - uses fresh visit detection (sample or localStorage)
+ * @returns {Promise<void>}
  */
-function handleURLParameters() {
+async function handleURLParameters() {
     const urlParams = new URLSearchParams(globalThis.location.search);
 
     // Check for sample parameter - explicitly load the sample/welcome document
     if (urlParams.has('sample')) {
-        loadWelcomePage();
+        await loadWelcomePage();
         markSessionInitialized();
         return;
     }
@@ -214,14 +216,14 @@ function handleURLParameters() {
     // Check for inline markdown parameter
     const inlineMarkdown = urlParams.get('md');
     if (inlineMarkdown) {
-        handleInlineMarkdownParam(inlineMarkdown);
+        await handleInlineMarkdownParam(inlineMarkdown);
         markSessionInitialized();
         applyStyleParam(urlParams);
         return;
     }
 
     // No URL parameters - use fresh visit detection to decide content
-    loadSavedContentOrSample();
+    await loadSavedContentOrSample();
     markSessionInitialized();
     applyStyleParam(urlParams);
 }
@@ -244,12 +246,13 @@ function applyStyleParam(urlParams) {
  *
  * Note: markSessionInitialized() is called by handleURLParameters() after
  * this function returns, so we don't call it here.
+ * @returns {Promise<void>}
  */
-function loadSavedContentOrSample() {
+async function loadSavedContentOrSample() {
     // Fresh visit = new tab/window, always show welcome page for predictable UX
     // This also addresses minor security concern of cached content persisting
     if (isFreshVisit()) {
-        loadWelcomePage();
+        await loadWelcomePage();
         return;
     }
 
@@ -259,7 +262,7 @@ function loadSavedContentOrSample() {
         setEditorContent(saved);
         renderMarkdown();
     } else {
-        loadWelcomePage();
+        await loadWelcomePage();
     }
 }
 
@@ -271,9 +274,9 @@ function loadSavedContentOrSample() {
 function initBrandHomeLink() {
     const brandHomeLink = document.getElementById('brandHomeLink');
     if (brandHomeLink) {
-        brandHomeLink.addEventListener('click', (e) => {
+        brandHomeLink.addEventListener('click', async (e) => {
             e.preventDefault();
-            loadWelcomePage();
+            await loadWelcomePage();
             showStatus('Welcome page loaded');
         });
     }

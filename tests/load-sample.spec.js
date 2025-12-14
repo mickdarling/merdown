@@ -37,9 +37,10 @@ const EXPECTED_CONTENT = {
  */
 async function browserLoadWelcomePageAndWait(waitTime) {
   if (typeof globalThis.loadWelcomePage === 'function') {
-    globalThis.loadWelcomePage();
+    await globalThis.loadWelcomePage();
   }
 
+  // Additional wait for any post-load rendering
   await new Promise(function resolveAfterWait(resolve) {
     setTimeout(resolve, waitTime);
   });
@@ -93,9 +94,9 @@ test.describe('Load Sample Functionality', () => {
     test('loadWelcomePage() should be callable without errors', async ({ page }) => {
       await clearCodeMirrorContent(page);
 
-      const didExecute = await page.evaluate(() => {
+      const didExecute = await page.evaluate(async () => {
         try {
-          globalThis.loadWelcomePage();
+          await globalThis.loadWelcomePage();
           return true;
         } catch (error) {
           console.error('loadWelcomePage error:', error);
@@ -342,6 +343,69 @@ test.describe('Load Sample Functionality', () => {
       });
 
       expect(wrapperExists).toBe(true);
+    });
+  });
+
+  test.describe('Error Handling', () => {
+    test('loadWelcomePage() should handle missing file gracefully', async ({ page }) => {
+      // Set up initial content to verify it's preserved on error
+      await setCodeMirrorContent(page, '# Initial Content');
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+
+      // Mock fetch to return 404 for the welcome page
+      await page.route('**/docs/welcome.md', route => route.fulfill({
+        status: 404,
+        contentType: 'text/plain',
+        body: 'Not Found'
+      }));
+
+      // Attempt to load welcome page - should handle error gracefully
+      const result = await page.evaluate(async () => {
+        try {
+          await globalThis.loadWelcomePage();
+          return { threw: false };
+        } catch (error) {
+          return { threw: true, message: error.message };
+        }
+      });
+
+      // The function should not throw - it handles errors internally
+      expect(result.threw).toBe(false);
+
+      // Wait for any status message to appear
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+
+      // Verify the app didn't crash - editor should still be functional
+      const editorStillWorks = await page.evaluate(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        return cmElement && cmElement.CodeMirror !== undefined;
+      });
+      expect(editorStillWorks).toBe(true);
+    });
+
+    test('loadWelcomePage() should handle network failure gracefully', async ({ page }) => {
+      // Mock fetch to simulate network failure
+      await page.route('**/docs/welcome.md', route => route.abort('failed'));
+
+      // Attempt to load welcome page - should handle error gracefully
+      const result = await page.evaluate(async () => {
+        try {
+          await globalThis.loadWelcomePage();
+          return { threw: false };
+        } catch (error) {
+          return { threw: true, message: error.message };
+        }
+      });
+
+      // The function should not throw - it handles errors internally
+      expect(result.threw).toBe(false);
+
+      // Verify the app didn't crash - editor should still be functional
+      const editorStillWorks = await page.evaluate(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        return cmElement && cmElement.CodeMirror !== undefined;
+      });
+      expect(editorStillWorks).toBe(true);
     });
   });
 });
