@@ -5,7 +5,7 @@ A client-side Markdown editor with first-class Mermaid diagram support.
 ```mermaid
 graph LR
     subgraph Merview Documentation
-        A[Welcome<br/>You Are Here]
+        A[Welcome]
         B[About]
         C[Developer Kit]
         D[Themes]
@@ -50,18 +50,52 @@ graph LR
 
 ### 1. Load a Document
 
-- **Drag & drop** any `.md` file onto the editor
-- **Menu → Open** to load from file
-- **Menu → Open URL** to load from a URL
-- Or just **start typing** in the editor
+```mermaid
+graph LR
+    A[Load a Document] --> B[Drag & Drop<br/>.md file]
+    A --> C[Menu → Open<br/>local file]
+    A --> D[Menu → Open URL<br/>remote file]
+    A --> E[Just Start<br/>Typing]
+    B --> F[Real-time Preview]
+    C --> F
+    D --> F
+    E --> F
+```
+
+Choose how to start: drag and drop a `.md` file onto the editor, use the Menu to open a local file or URL, or simply start typing directly in the editor.
 
 ### 2. Write Markdown
+
+```markdown
+# Heading 1
+## Heading 2
+
+Write **bold text** and *italic text*.
+
+- Bullet lists
+- Are easy
+
+1. Numbered lists
+2. Work too
+
+[Links](https://example.com) are simple.
+```
 
 Type in the left pane. The preview updates in real-time on the right.
 
 ### 3. Add Mermaid Diagrams
 
 Use fenced code blocks with `mermaid` as the language:
+
+````markdown
+```mermaid
+sequenceDiagram
+    You->>Merview: Write Markdown
+    Merview->>You: See it rendered instantly
+```
+````
+
+Which renders as:
 
 ```mermaid
 sequenceDiagram
@@ -71,7 +105,13 @@ sequenceDiagram
 
 ### 4. Choose Your Style
 
-Use the **Style** dropdown to pick from 37 professional themes.
+Customize your view with multiple theme options:
+- **Style** - Document appearance themes
+- **Code Theme** - Syntax highlighting for code blocks
+- **Editor Theme** - Editor pane appearance
+- **Mermaid Theme** - Diagram styling
+
+See the [Theme Guide](/?url=docs/themes.md) for all options and previews.
 
 ### 5. Export
 
@@ -155,11 +195,12 @@ classDiagram
 
 ## Tips
 
-1. **Load from URL** - Use `?url=` parameter or the Open URL dialog
-2. **YAML Metadata** - Add `---` delimited YAML at the start for document info
-3. **Code Validation** - Toggle the Lint button to check JSON, HTML, CSS
-4. **Keyboard Shortcuts** - Ctrl+S to save, Ctrl+P to print
-5. **Auto-save** - Your work is saved to browser storage
+1. **AI-Powered Content** - AI assistants (ChatGPT, Claude, etc.) excel at generating markdown with Mermaid diagrams and code blocks—great for visualizing complex topics
+2. **Load from URL** - Use `?url=` parameter or the Open URL dialog
+3. **YAML Metadata** - Add `---` delimited YAML at the start for document info
+4. **Code Validation** - Toggle the Lint button to check JSON, HTML, CSS
+5. **Keyboard Shortcuts** - Ctrl+S to save, Ctrl+P to print
+6. **Auto-save** - Your work is saved to browser storage
 
 ---
 
