@@ -8,7 +8,7 @@ import { state } from './state.js';
 import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js';
 import { renderMarkdown, scheduleRender } from './renderer.js';
 import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, initURLModalHandlers, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground, applyCachedBackground } from './themes.js';
-import { loadMarkdownFromURL, loadWelcomePage, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, initFileInputHandlers } from './file-ops.js';
+import { loadMarkdownFromURL, loadWelcomePage, clearWelcomePageCache, openFile, saveFile, saveFileAs, isValidMarkdownFile, isValidMarkdownContentType, exportToPDF, initFileInputHandlers } from './file-ops.js';
 import { initDocumentSelector, changeDocument, updateDocumentSelector } from './documents.js';
 import { shareToGist, hideGistModal, openGitHubAuth, startDeviceFlow, copyGistUrl, disconnectGitHub } from './gist.js';
 import { toggleLintPanel, validateCode } from './validation.js';
@@ -54,6 +54,7 @@ function exposeGlobalFunctions() {
     // Rendering functions
     globalThis.renderMarkdown = renderMarkdown;
     globalThis.loadWelcomePage = loadWelcomePage;
+    globalThis.clearWelcomePageCache = clearWelcomePageCache;
 
     // Gist/sharing functions
     globalThis.shareToGist = shareToGist;

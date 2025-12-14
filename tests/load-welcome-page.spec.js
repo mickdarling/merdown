@@ -14,7 +14,7 @@ const {
 } = require('./helpers/test-utils');
 
 /**
- * Expected content elements in the sample markdown
+ * Expected content elements in the welcome page markdown
  */
 const EXPECTED_CONTENT = {
   mainHeading: '# Welcome to Merview',
@@ -51,30 +51,30 @@ async function browserLoadWelcomePageAndWait(waitTime) {
 }
 
 /**
- * Tests for Load Sample functionality
+ * Tests for Welcome Page functionality
  *
- * These tests ensure the Load Sample button and loadWelcomePage() function work correctly
+ * These tests ensure the Welcome button and loadWelcomePage() function work correctly
  * to populate the editor with comprehensive demo content including markdown,
  * code blocks, tables, and mermaid diagrams.
  */
-test.describe('Load Sample Functionality', () => {
+test.describe('Welcome Page Functionality', () => {
   test.beforeEach(async ({ page }) => {
     await waitForPageReady(page);
     await waitForGlobalFunction(page, 'loadWelcomePage');
   });
 
-  test.describe('Load Sample Button', () => {
-    test('Load Sample button should exist in toolbar', async ({ page }) => {
+  test.describe('Welcome Button', () => {
+    test('Welcome button should exist in toolbar', async ({ page }) => {
       const loadSampleButton = await page.$('button[onclick="loadWelcomePage()"]');
       expect(loadSampleButton).not.toBeNull();
     });
 
-    test('Load Sample button should have loadWelcomePage onclick handler', async ({ page }) => {
+    test('Welcome button should have loadWelcomePage onclick handler', async ({ page }) => {
       const onclick = await page.$eval('button[onclick="loadWelcomePage()"]', el => el.getAttribute('onclick'));
       expect(onclick).toBe('loadWelcomePage()');
     });
 
-    test('Load Sample button should be visible and clickable', async ({ page }) => {
+    test('Welcome button should be visible and clickable', async ({ page }) => {
       const [isVisible, isEnabled] = await Promise.all([
         page.isVisible('button[onclick="loadWelcomePage()"]'),
         page.isEnabled('button[onclick="loadWelcomePage()"]')
@@ -112,7 +112,7 @@ test.describe('Load Sample Functionality', () => {
     const MIN_LOADED_CONTENT_LENGTH = 0;
     const MIN_SAMPLE_CONTENT_LENGTH = 100;
 
-    test('clicking Load Sample should populate the editor with content', async ({ page }) => {
+    test('clicking Welcome should populate the editor with content', async ({ page }) => {
       await clearCodeMirrorContent(page);
       await page.waitForTimeout(WAIT_TIMES.SHORT);
 
@@ -346,6 +346,60 @@ test.describe('Load Sample Functionality', () => {
     });
   });
 
+  test.describe('Caching', () => {
+    test('loadWelcomePage() should use cached content on subsequent calls', async ({ page }) => {
+      // Clear cache to start fresh
+      await page.evaluate(() => globalThis.clearWelcomePageCache());
+
+      // Track fetch calls
+      let fetchCount = 0;
+      await page.route('**/docs/welcome.md', async route => {
+        fetchCount++;
+        await route.continue();
+      });
+
+      // First call should fetch
+      await page.evaluate(async () => await globalThis.loadWelcomePage());
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+      expect(fetchCount).toBe(1);
+
+      // Second call should use cache (no additional fetch)
+      await page.evaluate(async () => await globalThis.loadWelcomePage());
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+      expect(fetchCount).toBe(1); // Still 1, not 2
+
+      // Third call should also use cache
+      await page.evaluate(async () => await globalThis.loadWelcomePage());
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+      expect(fetchCount).toBe(1); // Still 1
+    });
+
+    test('clearWelcomePageCache() should force re-fetch', async ({ page }) => {
+      // Clear cache to start fresh
+      await page.evaluate(() => globalThis.clearWelcomePageCache());
+
+      // Track fetch calls
+      let fetchCount = 0;
+      await page.route('**/docs/welcome.md', async route => {
+        fetchCount++;
+        await route.continue();
+      });
+
+      // First call should fetch
+      await page.evaluate(async () => await globalThis.loadWelcomePage());
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+      expect(fetchCount).toBe(1);
+
+      // Clear cache
+      await page.evaluate(() => globalThis.clearWelcomePageCache());
+
+      // Next call should fetch again
+      await page.evaluate(async () => await globalThis.loadWelcomePage());
+      await page.waitForTimeout(WAIT_TIMES.SHORT);
+      expect(fetchCount).toBe(2);
+    });
+  });
+
   test.describe('Error Handling', () => {
     test('loadWelcomePage() should handle missing file gracefully', async ({ page }) => {
       // Set up initial content to verify it's preserved on error
@@ -409,8 +463,9 @@ test.describe('Load Sample Functionality', () => {
     });
 
     test('should show error status and load fallback content on fetch failure', async ({ page }) => {
-      // Clear the editor first
+      // Clear the editor and cache first
       await clearCodeMirrorContent(page);
+      await page.evaluate(() => globalThis.clearWelcomePageCache());
       await page.waitForTimeout(WAIT_TIMES.SHORT);
 
       // Track status messages shown

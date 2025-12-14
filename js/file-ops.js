@@ -353,17 +353,39 @@ export function exportToPDF() {
 
 
 /**
+ * Cached welcome page content to avoid repeated network requests
+ * @type {string|null}
+ */
+let cachedWelcomeContent = null;
+
+/**
+ * Clear the welcome page cache (useful for testing)
+ * @returns {void}
+ */
+export function clearWelcomePageCache() {
+    cachedWelcomeContent = null;
+}
+
+/**
  * Load welcome page markdown content
- * Loads the welcome document from docs/welcome.md
+ * Loads the welcome document from docs/welcome.md with caching
+ * to avoid repeated network requests when users click Welcome multiple times.
  */
 export async function loadWelcomePage() {
     try {
-        const response = await fetch('docs/welcome.md');
-        if (!response.ok) {
-            throw new Error(`Failed to load welcome page: ${response.status} ${response.statusText}`);
-        }
+        let content;
 
-        const content = await response.text();
+        // Use cached content if available, otherwise fetch
+        if (cachedWelcomeContent) {
+            content = cachedWelcomeContent;
+        } else {
+            const response = await fetch('docs/welcome.md');
+            if (!response.ok) {
+                throw new Error(`Failed to load welcome page: ${response.status} ${response.statusText}`);
+            }
+            content = await response.text();
+            cachedWelcomeContent = content; // Cache for future use
+        }
 
         const { cmEditor } = state;
         if (cmEditor) {
@@ -388,6 +410,8 @@ export async function loadWelcomePage() {
         showStatus('Error loading welcome page. Using offline fallback.', 'warning');
 
         // Minimal fallback content when fetch fails
+        // NOTE: Keep this in sync with the essential content from docs/welcome.md
+        // This is intentionally minimal - just enough to help users get started
         const fallbackContent = `# Welcome to Merview
 
 A client-side Markdown editor with first-class Mermaid diagram support.
