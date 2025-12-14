@@ -136,8 +136,9 @@ function setupKeyboardShortcuts() {
  * Handle loading content from a remote URL parameter.
  * Resolves relative doc paths and handles private repo tokens.
  * @param {string} remoteURL - The URL to load
+ * @returns {Promise<void>}
  */
-function handleRemoteURLParam(remoteURL) {
+async function handleRemoteURLParam(remoteURL) {
     let resolvedURL = remoteURL;
 
     // Resolve relative doc paths (e.g., "docs/about.md") to full URLs
@@ -147,7 +148,7 @@ function handleRemoteURLParam(remoteURL) {
         } catch (error) {
             console.error('Error resolving doc URL:', error);
             showStatus('Error loading documentation', 'warning');
-            loadSavedContentOrSample();
+            await loadSavedContentOrSample();
             return;
         }
     }
@@ -208,7 +209,7 @@ async function handleURLParameters() {
     // Check for remote URL parameter
     const remoteURL = urlParams.get('url');
     if (remoteURL) {
-        handleRemoteURLParam(remoteURL);
+        await handleRemoteURLParam(remoteURL);
         markSessionInitialized();
         applyStyleParam(urlParams);
         return;
@@ -285,8 +286,9 @@ function initBrandHomeLink() {
 
 /**
  * Initialize the application on DOMContentLoaded
+ * @returns {Promise<void>}
  */
-function initializeApp() {
+async function initializeApp() {
     // Set dynamic copyright year
     const copyrightYear = document.getElementById('copyright-year');
     if (copyrightYear) {
@@ -345,7 +347,13 @@ function initializeApp() {
     setupKeyboardShortcuts();
 
     // Handle URL parameters (this will trigger initial render if content is loaded)
-    handleURLParameters();
+    // Errors are caught and handled within handleURLParameters and its callees
+    try {
+        await handleURLParameters();
+    } catch (error) {
+        console.error('Error during URL parameter handling:', error);
+        showStatus('Error loading content', 'error');
+    }
 }
 
 // Wait for DOM to be ready, then initialize
