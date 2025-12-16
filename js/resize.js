@@ -113,5 +113,8 @@ export function initResizeHandle() {
     document.addEventListener('mouseup', stopResize);
 
     // Restore saved panel widths if they exist
-    restorePanelWidths();
+    // Use requestAnimationFrame to ensure DOM is fully rendered (Issue #285)
+    requestAnimationFrame(() => {
+        restorePanelWidths();
+    });
 }
