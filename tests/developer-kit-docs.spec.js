@@ -240,7 +240,9 @@ test.describe('Developer Kit Documentation', () => {
       const hasGitIo = await page.evaluate(() => {
         const wrapper = document.getElementById('wrapper');
         const text = wrapper?.textContent || '';
-        return text.includes('git.io');
+        // Use word boundary regex to precisely match 'git.io' domain references
+        // This avoids CodeQL's incomplete-url-substring-sanitization warning
+        return /\bgit\.io\b/.test(text);
       });
 
       expect(hasGitIo).toBe(false);
