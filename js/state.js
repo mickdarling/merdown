@@ -46,8 +46,8 @@ export const state = {
     codeIssues: [],                      // Array of detected code issues
 
     // Layout state
-    respectStyleLayout: localStorage.getItem('respect-style-layout') === 'true', // Whether to respect loaded style's layout constraints
-    hrAsPageBreak: localStorage.getItem('hr-page-break') !== 'false', // Whether horizontal rules trigger page breaks in PDF (default: true)
+    respectStyleLayout: localStorage.getItem('respect-style-layout') === 'true', // Whether to respect loaded style's layout constraints (default: false)
+    hrAsPageBreak: localStorage.getItem('hr-page-break') === 'true', // Whether horizontal rules trigger page breaks in PDF (default: false)
     hrPageBreakToggleOption: null,       // Cached reference to HR page break toggle option (performance)
 
     // GitHub Gist OAuth state
