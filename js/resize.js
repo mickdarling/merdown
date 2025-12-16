@@ -14,8 +14,11 @@ import { state } from './state.js';
 // - Keeping it local reduces coupling and makes the code easier to reason about
 let isResizing = false;
 
+// Initialization guard to prevent duplicate event listeners
+let initialized = false;
+
 /**
- * Start resizing - called on mousedown on resize handle
+ * Start resizing - called on mousedown or touchstart on resize handle
  */
 function startResize(e) {
     isResizing = true;
@@ -25,7 +28,7 @@ function startResize(e) {
 }
 
 /**
- * Handle resize - called on mousemove when resizing
+ * Handle resize - called on mousemove or touchmove when resizing
  */
 function handleResize(e) {
     if (!isResizing) return;
@@ -40,7 +43,11 @@ function handleResize(e) {
     // Get container bounds
     const containerRect = container.getBoundingClientRect();
     const containerWidth = containerRect.width;
-    const mouseX = e.clientX - containerRect.left;
+
+    // Get X position from either mouse or touch event
+    // Defensive check for touches array length handles edge cases like multi-touch interference
+    const clientX = e.touches && e.touches.length > 0 ? e.touches[0].clientX : e.clientX;
+    const mouseX = clientX - containerRect.left;
 
     // Calculate percentage width for editor panel
     const editorPercentage = (mouseX / containerWidth) * 100;
@@ -60,10 +67,15 @@ function handleResize(e) {
     // Store the panel widths in state to persist across document changes
     state.editorPanelWidth = clampedPercentage;
     state.previewPanelWidth = 100 - clampedPercentage;
+
+    // Prevent scrolling on touch devices
+    if (e.touches) {
+        e.preventDefault();
+    }
 }
 
 /**
- * Stop resizing - called on mouseup
+ * Stop resizing - called on mouseup or touchend
  */
 function stopResize() {
     if (isResizing) {
@@ -96,9 +108,13 @@ export function restorePanelWidths() {
 
 /**
  * Initialize resize handle functionality
- * Sets up event listeners for panel resizing
+ * Sets up event listeners for panel resizing (mouse and touch)
  */
 export function initResizeHandle() {
+    // Prevent duplicate listeners if called multiple times
+    if (initialized) return;
+    initialized = true;
+
     const elements = getElements();
     const resizeHandle = elements.resizeHandle;
 
@@ -111,6 +127,13 @@ export function initResizeHandle() {
     resizeHandle.addEventListener('mousedown', startResize);
     document.addEventListener('mousemove', handleResize);
     document.addEventListener('mouseup', stopResize);
+
+    // Touch events for resize handle
+    // Use { passive: false } to allow preventDefault() for preventing page scroll
+    resizeHandle.addEventListener('touchstart', startResize, { passive: false });
+    document.addEventListener('touchmove', handleResize, { passive: false });
+    document.addEventListener('touchend', stopResize);
+    document.addEventListener('touchcancel', stopResize);
 
     // Restore saved panel widths if they exist
     // Use requestAnimationFrame to ensure DOM is fully rendered (Issue #285)
