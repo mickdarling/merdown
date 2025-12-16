@@ -37,5 +37,7 @@ max_redirects = 5
 
 # Note: verbose output is controlled via --verbose flag in workflow args
 
-# Include verbatim code blocks (for checking links in code examples)
+# Skip links inside code blocks (```...```)
+# Set to false because code examples often contain placeholder/example paths
+# that don't need to resolve to actual files
 include_verbatim = false
