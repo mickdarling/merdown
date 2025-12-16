@@ -1,0 +1,110 @@
+name: Internal Link Verification
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+  workflow_dispatch: # Allow manual triggering
+
+# Prevent multiple runs on rapid pushes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write  # Allow commenting on PRs
+
+jobs:
+  internal-link-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Validate lychee config exists
+        run: |
+          if [ ! -f .lychee.internal.toml ]; then
+            echo "Error: .lychee.internal.toml not found"
+            exit 1
+          fi
+          echo "Config file found: .lychee.internal.toml"
+
+      - name: Check internal links and anchors
+        id: lychee
+        uses: lycheeverse/lychee-action@a8c4c7cb88f0c7386610c35eb25108e448569cb0 # v2
+        with:
+          # Check all markdown and HTML files across the repo
+          # Using broad patterns since docs are in root, docs/, tests/, cloudflare-worker/
+          # Exclusions are handled in .lychee.internal.toml (node_modules, dist, etc.)
+          args: |
+            --verbose
+            --no-progress
+            '**/*.md'
+            '**/*.html'
+          # Use custom config file for internal link checking
+          lycheeConfig: '.lychee.internal.toml'
+          # Don't fail the build on link errors initially
+          # TODO: Change to 'true' once issue #321 is resolved and existing links are fixed
+          fail: false
+          # Format for better readability
+          format: detailed
+          # Output file for results
+          output: ./lychee-internal-report.md
+
+      - name: Debug lychee outputs
+        if: always()
+        run: |
+          echo "Exit code: '${{ steps.lychee.outputs.exit_code }}'"
+          echo "Outcome: '${{ steps.lychee.outcome }}'"
+          ls -la lychee-internal-report.md 2>/dev/null || echo "No report file found"
+
+      - name: Upload internal link check results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: internal-link-check-report-${{ github.run_id }}
+          path: lychee-internal-report.md
+          retention-days: 30
+
+      - name: Comment PR with results (if links broken)
+        # Use exit_code output instead of outcome since fail: false means outcome is always 'success'
+        if: always() && github.event_name == 'pull_request' && steps.lychee.outputs.exit_code != 0
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const fs = require('fs');
+            let report = '';
+            try {
+              report = fs.readFileSync('./lychee-internal-report.md', 'utf8');
+              if (!report || report.trim().length === 0) {
+                console.log('Report file is empty, skipping comment');
+                return;
+              }
+            } catch (error) {
+              console.log('No report file found, skipping comment');
+              return;
+            }
+
+            const body = `## Internal Link Check Results
+
+The following internal links or anchors appear to be broken:
+
+<details>
+<summary>Click to view report</summary>
+
+\`\`\`
+${report}
+\`\`\`
+
+</details>
+
+Please fix the broken links before merging.`;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
