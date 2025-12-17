@@ -563,7 +563,11 @@ export async function renderMarkdown() {
             try {
                 const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
                 // Sanitize mermaid SVG output for defense-in-depth against XSS
-                element.innerHTML = DOMPurify.sanitize(svg);
+                // Use SVG profile and allow foreignObject (used by mermaid for text rendering)
+                element.innerHTML = DOMPurify.sanitize(svg, {
+                    USE_PROFILES: { svg: true, svgFilters: true },
+                    ADD_TAGS: ['foreignObject']
+                });
             } catch (error) {
                 console.error('Mermaid render error:', error);
                 element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
