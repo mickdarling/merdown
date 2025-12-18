@@ -191,6 +191,7 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render edge labels with special characters', async ({ page }) => {
       // Track console errors during special character rendering
+      // NOTE: Attach listener BEFORE reload to capture all errors (avoids race condition)
       const specialCharErrors = [];
       page.on('console', msg => {
         if (msg.type() === 'error') {
@@ -198,16 +199,14 @@ test.describe('Mermaid Diagram Test Suite', () => {
         }
       });
 
-      // Wait for diagrams to render
+      // Reload page to capture errors from initial render
+      await page.reload();
       await waitForMermaidDiagrams(page);
 
       // The test page includes a diagram with special chars: <>&
       // Check that the content rendered without errors
       const svgWithLabels = await page.locator('.mermaid svg').count();
       expect(svgWithLabels).toBeGreaterThan(0);
-
-      // Trigger re-evaluation to capture any errors
-      await page.waitForTimeout(500);
 
       // Should have no XSS-related or script errors from special characters
       const xssErrors = specialCharErrors.filter(e =>

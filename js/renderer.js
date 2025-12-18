@@ -651,15 +651,16 @@ export async function renderMarkdown() {
                 element.innerHTML = '';
                 element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
             } catch (error) {
-                mermaidErrorCount++;
                 // Only log first error to console to reduce noise
-                if (mermaidErrorCount === 1) {
+                if (mermaidErrorCount === 0) {
                     console.error('Mermaid render error:', error);
                 }
+                mermaidErrorCount++;
                 // Show collapsible error with summary - reduces visual noise
-                element.innerHTML = `<details style="color: #b91c1c; padding: 8px; border: 1px solid #fca5a5; border-radius: 4px; background: #fef2f2;">
-                    <summary style="cursor: pointer; font-weight: 500;">⚠️ Mermaid diagram failed to render</summary>
-                    <pre style="margin-top: 8px; padding: 8px; background: #fff; border-radius: 4px; overflow-x: auto; font-size: 12px; white-space: pre-wrap;">${escapeHtml(error.message)}</pre>
+                element.classList.add('mermaid-error');
+                element.innerHTML = `<details class="mermaid-error-details">
+                    <summary>⚠️ Mermaid diagram failed to render</summary>
+                    <pre class="mermaid-error-message">${escapeHtml(error.message)}</pre>
                 </details>`;
             }
         }

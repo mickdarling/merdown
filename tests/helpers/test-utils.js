@@ -29,10 +29,19 @@ const WAIT_TIMES = {
  * Used in mermaid-diagrams-demo.spec.js for consistent assertions
  */
 const MERMAID_TEST_CONSTANTS = {
-  EXPECTED_DIAGRAM_COUNT: 40,     // Total diagrams in test page (includes all types)
-  MIN_RENDERED_DIAGRAMS: 30,      // Minimum for tests to pass (accounts for version differences)
-  RENDER_TIMEOUT: 15000,          // Max time to wait for diagrams to render
-  CLICK_HANDLER_WAIT: 1000        // Time to wait for click handlers to attach
+  // Total diagrams in test page (including all types + malformed test cases)
+  EXPECTED_DIAGRAM_COUNT: 40,
+  // Minimum successfully rendered diagrams for tests to pass
+  // Tolerance accounts for:
+  // - 3 intentionally malformed diagrams (syntax errors, invalid types)
+  // - Version differences in newer Mermaid features (block diagrams, etc.)
+  // - Potential race conditions in async rendering
+  // 25% tolerance (40 → 30) is intentionally generous for CI stability
+  MIN_RENDERED_DIAGRAMS: 30,
+  // Max time to wait for all diagrams to render (generous for slow CI)
+  RENDER_TIMEOUT: 15000,
+  // Time to wait for Mermaid click handlers to attach after render
+  CLICK_HANDLER_WAIT: 1000
 };
 
 /**
@@ -473,8 +482,8 @@ function setupDialogListener(page) {
 }
 
 /**
- * Wait for Mermaid diagrams to render
- * Replaces arbitrary timeouts with deterministic wait for SVG elements
+ * Wait for Mermaid diagrams to render with actual content
+ * Verifies SVGs exist AND have rendered content (not just empty shells)
  *
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {number} [minCount] - Minimum number of diagrams to wait for
@@ -483,7 +492,19 @@ function setupDialogListener(page) {
  */
 async function waitForMermaidDiagrams(page, minCount = MERMAID_TEST_CONSTANTS.MIN_RENDERED_DIAGRAMS, timeout = MERMAID_TEST_CONSTANTS.RENDER_TIMEOUT) {
   await page.waitForFunction(
-    (min) => document.querySelectorAll('.mermaid svg').length >= min,
+    (min) => {
+      const svgs = document.querySelectorAll('.mermaid svg');
+      if (svgs.length < min) return false;
+      // Verify SVGs have actual content (not empty)
+      let renderedCount = 0;
+      for (const svg of svgs) {
+        // An SVG with content will have child elements (g, path, text, etc.)
+        if (svg.children.length > 0) {
+          renderedCount++;
+        }
+      }
+      return renderedCount >= min;
+    },
     minCount,
     { timeout }
   );
@@ -491,40 +512,41 @@ async function waitForMermaidDiagrams(page, minCount = MERMAID_TEST_CONSTANTS.MI
 
 /**
  * Known acceptable console errors for Mermaid rendering
- * These errors don't indicate actual problems with diagram rendering
+ * These patterns are SPECIFIC to avoid masking critical errors like "Mermaid failed to initialize"
  */
 const MERMAID_ACCEPTABLE_ERRORS = {
   // Resource loading errors (favicon, fonts, etc.)
-  isResourceError: (err) => err.includes('net::ERR') || err.includes('Failed to load'),
-  // 404 errors for optional resources
-  isMissingResource: (err) => err.includes('404'),
-  // Mermaid deprecation warnings (expected with different versions)
-  isDeprecationWarning: (err) => err.includes('deprecated') || err.includes('Warning'),
-  // Mermaid-related errors (render errors, parse errors from malformed diagrams)
-  isMermaidError: (err) => err.toLowerCase().includes('mermaid'),
-  // Parsing errors from malformed diagrams (expected in test page)
-  isParseError: (err) => err.includes('Parse error') || err.includes('Syntax error'),
-  // Diagram-related errors from edge cases
-  isDiagramError: (err) => err.includes('error') && err.includes('diagram')
+  isResourceError: (err) => err.includes('net::ERR') || err.includes('Failed to load resource'),
+  // 404 errors for non-critical resources only
+  isMissingResource: (err) => err.includes('404') && (err.includes('favicon') || err.includes('.woff') || err.includes('.ttf')),
+  // Mermaid deprecation warnings (not errors)
+  isDeprecationWarning: (err) => err.includes('deprecated'),
+  // Specific Mermaid render errors from our code (not initialization failures)
+  isMermaidRenderError: (err) => err.includes('Mermaid render error:'),
+  // Parsing errors from intentionally malformed test diagrams
+  isParseError: (err) => err.includes('Parse error in') || err.includes('Syntax error in text'),
+  // UnknownDiagramError from invalid diagram types in test page
+  isUnknownDiagramError: (err) => err.includes('UnknownDiagramError')
 };
 
 /**
  * Filter console errors to find critical issues
  * Uses whitelist approach - only allows known acceptable errors
+ * IMPORTANT: Patterns are specific to avoid masking critical failures
  *
  * @param {string[]} errors - Array of console error messages
  * @returns {string[]} Array of critical errors (not in acceptable list)
  */
 function filterCriticalErrors(errors) {
   return errors.filter(err => {
-    // Check against all acceptable error patterns
+    // Check against specific acceptable error patterns
     const isAcceptable =
       MERMAID_ACCEPTABLE_ERRORS.isResourceError(err) ||
       MERMAID_ACCEPTABLE_ERRORS.isMissingResource(err) ||
       MERMAID_ACCEPTABLE_ERRORS.isDeprecationWarning(err) ||
-      MERMAID_ACCEPTABLE_ERRORS.isMermaidError(err) ||
+      MERMAID_ACCEPTABLE_ERRORS.isMermaidRenderError(err) ||
       MERMAID_ACCEPTABLE_ERRORS.isParseError(err) ||
-      MERMAID_ACCEPTABLE_ERRORS.isDiagramError(err);
+      MERMAID_ACCEPTABLE_ERRORS.isUnknownDiagramError(err);
 
     return !isAcceptable;
   });
