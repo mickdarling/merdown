@@ -40,6 +40,7 @@ export const state = {
     validationTimeout: null,             // Debounce timeout handle for validation scheduling
     mermaidTheme: 'default',             // Current Mermaid theme ('default' for light, 'dark' for dark backgrounds)
     mermaidThemeMode: 'auto',            // User's theme selection: 'auto' or specific theme name ('default', 'forest', 'dark', 'neutral', 'base')
+    mermaidObserver: null,               // IntersectionObserver for lazy loading Mermaid diagrams (Issue #326)
 
     // Lint panel state
     lintEnabled: false,                  // Whether lint panel is visible
