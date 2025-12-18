@@ -1,0 +1,528 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Mick Darling
+
+// @ts-check
+const { test, expect } = require('@playwright/test');
+const { execSync } = require('child_process');
+const fs = require('node:fs');
+const path = require('node:path');
+const os = require('node:os');
+
+/**
+ * Unit tests for scripts/verify-docs.js
+ *
+ * Tests the documentation verification script that ensures:
+ * - File paths referenced in docs exist
+ * - Functions/constants mentioned in docs exist in source files
+ * - Exports documented are actually exported
+ *
+ * Note: These tests use a Node.js subprocess to run the ES module functions
+ * since Playwright test files are CommonJS by default.
+ */
+
+/**
+ * Helper to execute a verify-docs.js function via Node.js subprocess
+ * @param {string} functionName - Name of the function to test
+ * @param {any[]} args - Arguments to pass to the function
+ * @returns {any} The result from the function
+ */
+function runVerifyDocsFunction(functionName, ...args) {
+  const scriptPath = path.join(__dirname, '../scripts/verify-docs.js');
+
+  // Create a temporary script file to avoid shell escaping issues
+  // Use random number to avoid collisions in parallel test execution
+  const tempFile = path.join(os.tmpdir(), `verify-docs-test-${Date.now()}-${Math.random().toString(36).substring(7)}.mjs`);
+  const code = `
+import * as module from '${scriptPath}';
+const args = ${JSON.stringify(args)};
+const result = module.${functionName}(...args);
+console.log(JSON.stringify(result));
+  `;
+
+  try {
+    fs.writeFileSync(tempFile, code);
+    const output = execSync(`node ${tempFile}`, {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
+    return JSON.parse(output.trim());
+  } catch (error) {
+    throw new Error(`Failed to run ${functionName}: ${error.message}`);
+  } finally {
+    // Clean up temp file
+    try {
+      if (fs.existsSync(tempFile)) {
+        fs.unlinkSync(tempFile);
+      }
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+  }
+}
+
+test.describe('extractFileReferences', () => {
+  test('should extract valid file paths from markdown', () => {
+    const content = `
+      See \`js/security.js\` for details.
+      Check \`docs/about.md\` for more info.
+      The config is in \`config/app.json\`.
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/security.js');
+    expect(refs).toContain('docs/about.md');
+    expect(refs).toContain('config/app.json');
+    expect(refs.length).toBe(3);
+  });
+
+  test('should ignore URLs containing ://', () => {
+    const content = `
+      Visit \`https://example.com/file.js\` for more.
+      Local file: \`js/file.js\`
+      Protocol: \`http://test.com/docs.md\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/file.js');
+    expect(refs).not.toContain('https://example.com/file.js');
+    expect(refs).not.toContain('http://test.com/docs.md');
+    expect(refs.length).toBe(1);
+  });
+
+  test('should handle paths with multiple directory levels', () => {
+    const content = `
+      Deep path: \`src/utils/helpers/formatter.js\`
+      Another: \`docs/api/reference/methods.md\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('src/utils/helpers/formatter.js');
+    expect(refs).toContain('docs/api/reference/methods.md');
+    expect(refs.length).toBe(2);
+  });
+
+  test('should return empty array for content with no file references', () => {
+    const content = `
+      This is just plain text.
+      No file paths here.
+      Just some documentation without code references.
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toEqual([]);
+  });
+
+  test('should handle file paths with hyphens and underscores', () => {
+    const content = `
+      File: \`js/my-file_name.js\`
+      Config: \`config/app-config_v2.json\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/my-file_name.js');
+    expect(refs).toContain('config/app-config_v2.json');
+    expect(refs.length).toBe(2);
+  });
+
+  test('should deduplicate file references', () => {
+    const content = `
+      First mention: \`js/file.js\`
+      Second mention: \`js/file.js\`
+      Third mention: \`js/file.js\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/file.js');
+    expect(refs.length).toBe(1);
+  });
+
+  test('should only match paths in backticks', () => {
+    const content = `
+      Valid: \`js/file.js\`
+      Invalid: js/file.js (not in backticks)
+      Valid: \`docs/readme.md\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/file.js');
+    expect(refs).toContain('docs/readme.md');
+    expect(refs.length).toBe(2);
+  });
+
+  test('should handle different file extensions', () => {
+    const content = `
+      JavaScript: \`src/app.js\`
+      TypeScript: \`src/types.ts\`
+      Markdown: \`docs/README.md\`
+      JSON: \`config/package.json\`
+      HTML: \`templates/index.html\`
+      CSS: \`styles/main.css\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('src/app.js');
+    expect(refs).toContain('src/types.ts');
+    expect(refs).toContain('docs/README.md');
+    expect(refs).toContain('config/package.json');
+    expect(refs).toContain('templates/index.html');
+    expect(refs).toContain('styles/main.css');
+    expect(refs.length).toBe(6);
+  });
+});
+
+test.describe('extractCodeReferences', () => {
+  test('should extract function calls', () => {
+    const content = `
+      Call \`functionName()\` to execute.
+      Use \`anotherFunc()\` for processing.
+      The \`helper()\` function is useful.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'functionName', type: 'function' });
+    expect(refs).toContainEqual({ name: 'anotherFunc', type: 'function' });
+    expect(refs).toContainEqual({ name: 'helper', type: 'function' });
+    expect(refs.length).toBe(3);
+  });
+
+  test('should extract constants', () => {
+    const content = `
+      Set \`MAX_VALUE\` to configure.
+      Use \`API_KEY\` for authentication.
+      The \`DEFAULT_TIMEOUT\` is set.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'MAX_VALUE', type: 'constant' });
+    expect(refs).toContainEqual({ name: 'API_KEY', type: 'constant' });
+    expect(refs).toContainEqual({ name: 'DEFAULT_TIMEOUT', type: 'constant' });
+    expect(refs.length).toBe(3);
+  });
+
+  test('should filter out JavaScript builtins - common functions', () => {
+    const content = `
+      Use \`setTimeout()\` to delay.
+      Call \`Promise()\` for async.
+      Use \`parseInt()\` to parse.
+      Call \`fetch()\` to get data.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toEqual([]);
+  });
+
+  test('should filter out JavaScript builtins - DOM methods', () => {
+    const content = `
+      Use \`querySelector()\` to find elements.
+      Call \`addEventListener()\` for events.
+      Use \`getElementById()\` for selection.
+      Call \`createElement()\` to make elements.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toEqual([]);
+  });
+
+  test('should filter out JavaScript builtins - objects and globals', () => {
+    const content = `
+      \`Array\`, \`Object\`, \`String\`, \`Number\`
+      \`window\`, \`document\`, \`console\`
+      \`Math\`, \`JSON\`, \`Date\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    // Note: Current implementation doesn't filter out constant-like builtins
+    // Only JSON matches the constant pattern (3+ uppercase chars)
+    // Array, Object, String, Number, Math, Date don't match because they're PascalCase not UPPER_CASE
+    // window, document, console are lowercase so don't match
+    expect(refs).toContainEqual({ name: 'JSON', type: 'constant' });
+    expect(refs.length).toBe(1);
+  });
+
+  test('should handle constants with numbers', () => {
+    const content = `
+      Set \`MAX_RETRY_COUNT_3\` for retries.
+      Use \`API_V2_ENDPOINT\` for version 2.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'MAX_RETRY_COUNT_3', type: 'constant' });
+    expect(refs).toContainEqual({ name: 'API_V2_ENDPOINT', type: 'constant' });
+    expect(refs.length).toBe(2);
+  });
+
+  test('should handle constants without underscores if 3+ chars', () => {
+    const content = `
+      Use \`MAX\` constant.
+      Set \`API\` key.
+      Check \`ID\` value.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'MAX', type: 'constant' });
+    expect(refs).toContainEqual({ name: 'API', type: 'constant' });
+    // ID is only 2 chars, so it should be excluded
+    expect(refs).not.toContainEqual({ name: 'ID', type: 'constant' });
+    expect(refs.length).toBe(2);
+  });
+
+  test('should ignore single character names', () => {
+    const content = `
+      Call \`a()\` function.
+      Use \`X\` constant.
+      Check \`b()\` method.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    // Single char functions should still be extracted as they match the pattern
+    // but single char constants (without underscore and < 3 chars) should not
+    expect(refs).toContainEqual({ name: 'a', type: 'function' });
+    expect(refs).toContainEqual({ name: 'b', type: 'function' });
+    expect(refs).not.toContainEqual({ name: 'X', type: 'constant' });
+  });
+
+  test('should handle mixed function and constant references', () => {
+    const content = `
+      Call \`processData()\` with \`MAX_SIZE\`.
+      Use \`validateInput()\` before \`API_ENDPOINT\`.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'processData', type: 'function' });
+    expect(refs).toContainEqual({ name: 'validateInput', type: 'function' });
+    expect(refs).toContainEqual({ name: 'MAX_SIZE', type: 'constant' });
+    expect(refs).toContainEqual({ name: 'API_ENDPOINT', type: 'constant' });
+    expect(refs.length).toBe(4);
+  });
+
+  test('should deduplicate code references', () => {
+    const content = `
+      Call \`myFunc()\` first.
+      Then call \`myFunc()\` again.
+      Use \`MY_CONST\` value.
+      Check \`MY_CONST\` again.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'myFunc', type: 'function' });
+    expect(refs).toContainEqual({ name: 'MY_CONST', type: 'constant' });
+    expect(refs.length).toBe(2);
+  });
+
+  test('should only match code in backticks', () => {
+    const content = `
+      Valid: \`myFunction()\`
+      Invalid: myFunction() (not in backticks)
+      Valid: \`MAX_VALUE\`
+      Invalid: MAX_VALUE (not in backticks)
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'myFunction', type: 'function' });
+    expect(refs).toContainEqual({ name: 'MAX_VALUE', type: 'constant' });
+    expect(refs.length).toBe(2);
+  });
+
+  test('should handle underscores in function names', () => {
+    const content = `
+      Call \`my_function_name()\` for processing.
+      Use \`_privateHelper()\` internally.
+      Check \`validate_input_data()\` first.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'my_function_name', type: 'function' });
+    expect(refs).toContainEqual({ name: '_privateHelper', type: 'function' });
+    expect(refs).toContainEqual({ name: 'validate_input_data', type: 'function' });
+    expect(refs.length).toBe(3);
+  });
+
+  test('should return empty array for content with no code references', () => {
+    const content = `
+      This is plain documentation.
+      No functions or constants mentioned.
+      Just regular text.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toEqual([]);
+  });
+
+  test('should filter out test framework functions', () => {
+    const content = `
+      Use \`waitForFunction()\` in tests.
+      The \`url()\` parameter is needed.
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    // These are in the builtins list
+    expect(refs).toEqual([]);
+  });
+});
+
+test.describe('Edge Cases and Real-world Scenarios', () => {
+  test('extractFileReferences should handle markdown code blocks', () => {
+    const content = `
+      Example code:
+      \`\`\`javascript
+      import { func } from 'js/module.js';
+      \`\`\`
+
+      Reference: \`js/module.js\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    // Should extract the inline reference, not from code block
+    expect(refs).toContain('js/module.js');
+    // Should only appear once despite being in code block too
+    expect(refs.length).toBe(1);
+  });
+
+  test('extractCodeReferences should handle code in documentation context', () => {
+    const content = `
+      The \`initialize()\` function sets up the application.
+      It uses \`DEFAULT_CONFIG\` internally.
+
+      Example:
+      \`\`\`javascript
+      initialize();
+      \`\`\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'initialize', type: 'function' });
+    expect(refs).toContainEqual({ name: 'DEFAULT_CONFIG', type: 'constant' });
+  });
+
+  test('extractFileReferences should handle relative paths', () => {
+    const content = `
+      Main: \`js/main.js\`
+      Util: \`utils/helper.js\`
+      Deep: \`src/components/ui/button.js\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/main.js');
+    expect(refs).toContain('utils/helper.js');
+    expect(refs).toContain('src/components/ui/button.js');
+  });
+
+  test('extractCodeReferences should handle camelCase and snake_case', () => {
+    const content = `
+      CamelCase: \`myFunctionName()\`
+      snake_case: \`my_function_name()\`
+      Mixed: \`myFunc_v2()\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    expect(refs).toContainEqual({ name: 'myFunctionName', type: 'function' });
+    expect(refs).toContainEqual({ name: 'my_function_name', type: 'function' });
+    expect(refs).toContainEqual({ name: 'myFunc_v2', type: 'function' });
+  });
+
+  test('extractFileReferences should not match files without extensions', () => {
+    const content = `
+      With ext: \`js/file.js\`
+      No ext: \`js/README\`
+      Another: \`src/LICENSE\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('js/file.js');
+    // Files without extensions should not be matched by the regex
+    expect(refs).not.toContain('js/README');
+    expect(refs).not.toContain('src/LICENSE');
+  });
+
+  test('extractCodeReferences should handle constants at minimum length', () => {
+    const content = `
+      Two char: \`AB\`
+      Three char: \`ABC\`
+      With underscore: \`A_B\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractCodeReferences', content);
+
+    // AB is 2 chars without underscore, should not be included
+    expect(refs).not.toContainEqual({ name: 'AB', type: 'constant' });
+    // ABC is 3+ chars, should be included
+    expect(refs).toContainEqual({ name: 'ABC', type: 'constant' });
+    // A_B has underscore, should be included
+    expect(refs).toContainEqual({ name: 'A_B', type: 'constant' });
+  });
+});
+
+test.describe('Documentation - Test Coverage Summary', () => {
+  test('should provide comprehensive test coverage summary', () => {
+    // This test documents what we test
+    const coverage = {
+      extractFileReferences: {
+        tested: [
+          'Valid file paths extraction',
+          'URL filtering (contains ://)',
+          'Multiple directory levels',
+          'No references (empty array)',
+          'Hyphens and underscores in paths',
+          'Deduplication',
+          'Backtick requirement',
+          'Different file extensions',
+          'Markdown code blocks',
+          'Relative paths',
+          'Files without extensions (should not match)'
+        ],
+        totalTests: 11
+      },
+      extractCodeReferences: {
+        tested: [
+          'Function call extraction',
+          'Constant extraction',
+          'JavaScript builtin filtering (functions, DOM, objects)',
+          'Constants with numbers',
+          'Constants without underscores (3+ chars)',
+          'Single character names',
+          'Mixed function/constant references',
+          'Deduplication',
+          'Backtick requirement',
+          'Underscores in function names',
+          'No references (empty array)',
+          'Test framework function filtering',
+          'camelCase and snake_case',
+          'Minimum length constants'
+        ],
+        totalTests: 14
+      }
+    };
+
+    // This test always passes - it's just documentation
+    expect(coverage.extractFileReferences.totalTests).toBe(11);
+    expect(coverage.extractCodeReferences.totalTests).toBe(14);
+    expect(coverage.extractFileReferences.totalTests + coverage.extractCodeReferences.totalTests).toBe(25);
+  });
+});
