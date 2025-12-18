@@ -7,6 +7,18 @@
 #
 # The CI workflow checks external links only. For internal link checking,
 # see the internal-link-check workflow.
+#
+# File types checked: Markdown (*.md) and HTML (index.html)
+# JS files are excluded because links in JavaScript are typically:
+#   - Dynamic/computed URLs that can't be statically checked
+#   - Internal module imports (not external links)
+#   - CDN URLs already validated by the browser at runtime
+
+# Verbose output for detailed progress
+verbose = true
+
+# Disable progress bar (cleaner CI output)
+no_progress = true
 
 # Timeout for each request (in seconds)
 timeout = 30
@@ -18,9 +30,11 @@ max_retries = 3
 max_concurrency = 8
 
 # Accept status codes:
-# - 1xx: Informational responses
-# - 2xx: Success responses
-# - 3xx: Redirects (we follow them, but accept if max redirects hit)
+# - 1xx: Informational responses (connection established)
+# - 2xx: Success responses (link works)
+# - 3xx: Redirects - accepted because we follow up to 5 redirects (max_redirects).
+#        If we hit a 3xx after max redirects, the link still exists but moved.
+#        This prevents false positives for legitimate redirect chains.
 # - 429: Rate limited - the link exists but we're being throttled.
 #        This prevents false positives from aggressive rate limiting.
 accept = [100, 101, 102, 103, 200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300, 301, 302, 303, 304, 307, 308, 429]
@@ -38,7 +52,9 @@ exclude = [
     'http://127.0.0.1*',
     'http://0.0.0.0*',
 
-    # Requires authentication (badges, private repos)
+    # SonarCloud API endpoints require authentication
+    # Note: SonarCloud badge URLs in README.md use these endpoints
+    # and will return 401 without auth, so we skip them
     'https://sonarcloud.io/api/*',
 
     # Known flaky services (optional - add if needed)
@@ -58,7 +74,7 @@ exclude_path = [
 user_agent = "Merview-LinkChecker/1.0 (+https://github.com/mickdarling/merview)"
 
 # Cache results to speed up repeated local runs
-# Creates .lycheecache file (add to .gitignore if not already)
+# Creates .lycheecache file (added to .gitignore)
 cache = true
 
 # Include external links only
