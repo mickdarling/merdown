@@ -56,7 +56,8 @@ const EXPECTED_CONTENT = {
   ],
   codeBlocks: ['```javascript', '```python'],
   mermaidElements: ['```mermaid', 'graph LR', 'sequenceDiagram', 'classDiagram'],
-  tableMarkers: ['| Feature | Status |', '|---------|--------|']
+  tableMarkers: ['| Feature | Status |', '|---------|--------|'],
+  minRealFileSize: 2000 // Real welcome.md is ~5KB, fallback is much smaller
 };
 
 /**
@@ -372,6 +373,63 @@ test.describe('Welcome Page Functionality', () => {
       });
 
       expect(wrapperExists).toBe(true);
+    });
+
+    test('welcome page loads from actual docs/welcome.md file (not mocked)', async ({ page }) => {
+      // Clear cache to ensure we fetch the real file (with guard for function availability)
+      await page.evaluate(() => {
+        if (typeof globalThis.clearWelcomePageCache === 'function') {
+          globalThis.clearWelcomePageCache();
+        }
+      });
+
+      // Load welcome page without any mocking - this fetches the real file
+      await page.click('button[onclick="loadWelcomePage()"]');
+
+      // Wait for content to actually load (more reliable than fixed timeout)
+      // Use CONTENT_LOAD * 2.5 as max timeout to handle slow CI environments
+      await page.waitForFunction(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        const cmEditor = cmElement?.CodeMirror;
+        const content = cmEditor?.getValue() || '';
+        return content.includes('# Welcome to Merview');
+      }, { timeout: WAIT_TIMES.CONTENT_LOAD * 2.5 });
+
+      const content = await getCodeMirrorContent(page);
+
+      // Verify main heading and all sub-headings using EXPECTED_CONTENT constant
+      expect(content).toContain(EXPECTED_CONTENT.mainHeading);
+      for (const heading of EXPECTED_CONTENT.subHeadings) {
+        expect(content).toContain(heading);
+      }
+
+      // Verify tagline that proves it's the real file
+      expect(content).toContain('A client-side Markdown editor with first-class Mermaid diagram support.');
+
+      // Verify specific structural elements that prove it's the real file
+      expect(content).toContain('[About Merview](/?url=docs/about.md)');
+      expect(content).toContain('[Developer Kit](/?url=docs/developer-kit.md)');
+      expect(content).toContain('[Theme Guide](/?url=docs/themes.md)');
+      expect(content).toContain('github.com/mickdarling/merview');
+
+      // Verify mermaid diagrams using EXPECTED_CONTENT constant
+      for (const mermaidElement of EXPECTED_CONTENT.mermaidElements) {
+        expect(content).toContain(mermaidElement);
+      }
+
+      // Verify code examples using EXPECTED_CONTENT constant
+      for (const codeBlock of EXPECTED_CONTENT.codeBlocks) {
+        expect(content).toContain(codeBlock);
+      }
+      expect(content).toContain('```markdown');
+
+      // Verify table structure using EXPECTED_CONTENT constant
+      for (const tableMarker of EXPECTED_CONTENT.tableMarkers) {
+        expect(content).toContain(tableMarker);
+      }
+
+      // Verify the content is substantial (real file should be much larger than fallback)
+      expect(content.length).toBeGreaterThan(EXPECTED_CONTENT.minRealFileSize);
     });
   });
 
