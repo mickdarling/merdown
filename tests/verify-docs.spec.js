@@ -3,7 +3,7 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { execSync, spawnSync } = require('node:child_process');
+const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -44,11 +44,19 @@ console.log(JSON.stringify(result));
   try {
     // Write with restrictive permissions (owner read/write only)
     fs.writeFileSync(tempFile, code, { mode: 0o600 });
-    const output = execSync(`node ${tempFile}`, {
+    // Use spawnSync with process.execPath and shell: false to avoid security hotspots
+    // (S4721 - command injection, S4036 - PATH hijacking)
+    const result = spawnSync(process.execPath, [tempFile], {
       encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe']
+      shell: false
     });
-    return JSON.parse(output.trim());
+    if (result.error) {
+      throw result.error;
+    }
+    if (result.status !== 0) {
+      throw new Error(result.stderr || `Process exited with code ${result.status}`);
+    }
+    return JSON.parse(result.stdout.trim());
   } catch (error) {
     throw new Error(`Failed to run ${functionName}: ${error.message}`);
   } finally {
