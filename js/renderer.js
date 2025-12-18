@@ -773,6 +773,7 @@ function setupMermaidLazyLoading(mermaidElements) {
                         // Defensive error handling - lazyRenderMermaid has internal error handling
                         // but this catches any unexpected errors that might slip through
                         console.error('Unexpected error during lazy render:', err);
+                        showStatus('Diagram rendering failed unexpectedly', 'warning');
                     });
                     // Stop observing this element
                     observer.unobserve(element);
@@ -781,6 +782,7 @@ function setupMermaidLazyLoading(mermaidElements) {
         },
         {
             rootMargin: MERMAID_PRELOAD_MARGIN,
+            // Trigger when 1% visible - starts render early for smoother UX
             threshold: 0.01
         }
     );
