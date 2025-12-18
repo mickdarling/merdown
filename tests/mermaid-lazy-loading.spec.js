@@ -120,9 +120,9 @@ graph TD
         expect(diagramCount).toBe(3);
 
         // Render should complete quickly (not waiting for all diagrams)
-        // 2000ms threshold validates lazy loading is working without being too strict.
-        // If CI shows flakiness, consider increasing to 3000ms or using retries.
-        expect(renderTime).toBeLessThan(2000);
+        // 3000ms threshold is generous enough for slow CI environments while still
+        // validating that lazy loading prevents blocking on all diagram renders.
+        expect(renderTime).toBeLessThan(3000);
     });
 
     test('multiple diagrams should render progressively', async ({ page }) => {

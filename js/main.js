@@ -137,8 +137,7 @@ function setupKeyboardShortcuts() {
  * Prevents memory leaks and ensures proper cleanup on navigation
  */
 function setupPageCleanup() {
-    // Use pagehide event for better support on iOS/Safari
-    // Also cleanup on beforeunload for desktop browsers
+    // Cleanup function to release observer resources
     const cleanup = () => {
         // Disconnect Mermaid lazy loading observer
         if (state.mermaidObserver) {
@@ -147,8 +146,18 @@ function setupPageCleanup() {
         }
     };
 
+    // Use pagehide event for better support on iOS/Safari
+    // Also cleanup on beforeunload for desktop browsers
     window.addEventListener('pagehide', cleanup);
     window.addEventListener('beforeunload', cleanup);
+
+    // Also cleanup when tab becomes hidden to reduce memory on mobile browsers
+    // where pagehide may not fire reliably
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            cleanup();
+        }
+    });
 }
 
 /**

@@ -721,7 +721,14 @@ async function lazyRenderMermaid(element) {
         element.setAttribute('aria-label', 'Mermaid diagram');
         mermaidPerfMetrics.recordRenderComplete(startTime);
     } catch (error) {
-        console.error('Mermaid render error:', error);
+        // Limit console noise: log first 3 errors in detail, then suppress
+        // Full error count is shown in status message at the end
+        if (mermaidPerfMetrics.totalErrors < 3) {
+            console.error('Mermaid render error:', error);
+        } else if (mermaidPerfMetrics.totalErrors === 3) {
+            console.error('Mermaid render error:', error);
+            console.warn('[Mermaid] Suppressing further error details. Check status bar for total count.');
+        }
         mermaidPerfMetrics.recordError();
         element.classList.add('mermaid-error');
         element.classList.remove('mermaid-loading');
@@ -752,14 +759,35 @@ function setupMermaidLazyLoading(mermaidElements) {
     mermaidPerfMetrics.reset();
     mermaidPerfMetrics.updatePendingCount(mermaidElements.length);
 
+    // Generate unique ID to track this observer instance and prevent race conditions
+    // when renderMarkdown() is called rapidly in succession
+    const observerGeneration = Date.now();
+    state.mermaidObserverGeneration = observerGeneration;
+
     // Create IntersectionObserver for lazy loading diagrams
     const observer = new IntersectionObserver(
         (entries) => {
+            // Early exit if observer was disconnected or superseded by newer generation
+            if (!state.mermaidObserver || state.mermaidObserverGeneration !== observerGeneration) {
+                return;
+            }
+
             entries.forEach(entry => {
                 if (entry.isIntersecting) {
                     const element = entry.target;
+
+                    // Verify element belongs to this observer generation
+                    if (element.dataset.observerGeneration !== String(observerGeneration)) {
+                        return;
+                    }
+
                     // Render the diagram
                     lazyRenderMermaid(element).then(() => {
+                        // Check observer still valid before updating metrics
+                        if (!state.mermaidObserver || state.mermaidObserverGeneration !== observerGeneration) {
+                            return;
+                        }
+
                         // Update pending count
                         const pendingCount = document.querySelectorAll('.mermaid[data-mermaid-rendered="pending"]').length;
                         mermaidPerfMetrics.updatePendingCount(pendingCount);
@@ -791,6 +819,7 @@ function setupMermaidLazyLoading(mermaidElements) {
     mermaidElements.forEach(element => {
         // Add loading state with visual indicator and accessibility attributes
         element.dataset.mermaidRendered = 'pending';
+        element.dataset.observerGeneration = observerGeneration;
         element.classList.add('mermaid-loading');
         element.setAttribute('aria-busy', 'true');
         element.setAttribute('aria-label', 'Diagram loading...');
@@ -802,7 +831,7 @@ function setupMermaidLazyLoading(mermaidElements) {
 
     // Log initial state
     if (isDebugMermaidPerf()) {
-        console.log(`[Mermaid Perf] Starting lazy load for ${mermaidElements.length} diagrams`);
+        console.log(`[Mermaid Perf] Starting lazy load for ${mermaidElements.length} diagrams (gen: ${observerGeneration})`);
     }
 }
 
