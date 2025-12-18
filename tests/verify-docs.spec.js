@@ -29,9 +29,11 @@ const os = require('node:os');
 function runVerifyDocsFunction(functionName, ...args) {
   const scriptPath = path.join(__dirname, '../scripts/verify-docs.js');
 
-  // Create a temporary script file to avoid shell escaping issues
-  // Use random number to avoid collisions in parallel test execution
-  const tempFile = path.join(os.tmpdir(), `verify-docs-test-${Date.now()}-${Math.random().toString(36).substring(7)}.mjs`);
+  // Create a temporary script file using secure temp directory creation
+  // Uses mkdtempSync to create a unique directory with restricted permissions
+  const crypto = require('node:crypto');
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-docs-test-'));
+  const tempFile = path.join(tempDir, `test-${crypto.randomBytes(16).toString('hex')}.mjs`);
   const code = `
 import * as module from '${scriptPath}';
 const args = ${JSON.stringify(args)};
@@ -40,7 +42,8 @@ console.log(JSON.stringify(result));
   `;
 
   try {
-    fs.writeFileSync(tempFile, code);
+    // Write with restrictive permissions (owner read/write only)
+    fs.writeFileSync(tempFile, code, { mode: 0o600 });
     const output = execSync(`node ${tempFile}`, {
       encoding: 'utf-8',
       stdio: ['pipe', 'pipe', 'pipe']
@@ -49,10 +52,13 @@ console.log(JSON.stringify(result));
   } catch (error) {
     throw new Error(`Failed to run ${functionName}: ${error.message}`);
   } finally {
-    // Clean up temp file
+    // Clean up temp file and directory
     try {
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
+      }
+      if (fs.existsSync(tempDir)) {
+        fs.rmdirSync(tempDir);
       }
     } catch {
       // Cleanup errors are non-critical - temp files will be cleaned by OS

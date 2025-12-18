@@ -312,17 +312,17 @@ function verifyCodeRefs(content, relPath, codeIndex) {
 
 /**
  * Verify export references in content
+ * Matches export statements found in markdown code blocks and verifies
+ * the exported names exist in the codebase.
  * @param {string} content - Markdown content
  * @param {string} relPath - Relative path of the markdown file
  * @param {Object} codeIndex - Code index from buildCodeIndex
  */
 function verifyExportRefs(content, relPath, codeIndex) {
+    // Use RegExp.exec() instead of String.match() for better type safety (SonarCloud S6594)
     const exportPattern = /export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/g;
-    const exportRefs = content.match(exportPattern) || [];
-    for (const ref of exportRefs) {
-        const match = ref.match(/export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/);
-        if (!match) continue;
-
+    let match;
+    while ((match = exportPattern.exec(content)) !== null) {
         const name = match[1];
         if (codeIndex.exports.has(name)) {
             results.exportRefs.passed.push({ file: relPath, name });

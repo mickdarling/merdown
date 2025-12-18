@@ -41,12 +41,5 @@ jobs:
 
       - name: Run documentation verification
         run: node scripts/verify-docs.js
-
-      - name: Upload verification results
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: verification-results
-          path: |
-            scripts/verify-docs.js
-          retention-days: 7
+        # Note: Results are shown in the job logs above. Artifact upload removed as
+        # it was uploading the script file itself rather than verification results.
