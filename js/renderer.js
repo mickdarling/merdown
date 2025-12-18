@@ -562,22 +562,37 @@ export async function renderMarkdown() {
         for (const element of mermaidElements) {
             try {
                 const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
-                // Insert SVG first, then surgically sanitize foreignObject contents
-                // This preserves Mermaid's SVG structure while protecting against XSS
-                element.innerHTML = svg;
+
+                // Sanitize SVG BEFORE insertion to satisfy CodeQL security requirements
+                // Strategy: Parse SVG string, sanitize foreignObject contents, then insert
+                // This prevents any malicious code from executing during innerHTML assignment
+                const parser = new DOMParser();
+                const svgDoc = parser.parseFromString(svg, 'image/svg+xml');
+
+                // Check for parse errors
+                const parseError = svgDoc.querySelector('parsererror');
+                if (parseError) {
+                    throw new Error('SVG parse error: ' + parseError.textContent);
+                }
 
                 // Sanitize HTML content inside foreignObject elements (where XSS risk exists)
                 // The SVG structure itself (paths, rects, transforms) is safe - only the
                 // embedded HTML in foreignObject can contain malicious scripts/handlers
-                element.querySelectorAll('foreignObject').forEach(fo => {
-                    // Sanitize only the HTML inside, preserving safe styling for layout
+                svgDoc.querySelectorAll('foreignObject').forEach(fo => {
                     fo.innerHTML = DOMPurify.sanitize(fo.innerHTML, {
-                        ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'b', 'i', 'strong', 'em'],
-                        ALLOWED_ATTR: ['class', 'style'],
-                        // Allow safe CSS properties needed for Mermaid text positioning
-                        // Block dangerous CSS like expressions, urls, behaviors
+                        // Allow tags Mermaid uses for text rendering
+                        ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'b', 'i', 'strong', 'em', '#text'],
+                        // Allow attributes Mermaid needs: class, style, and xmlns for XHTML namespace
+                        ALLOWED_ATTR: ['class', 'style', 'xmlns'],
+                        // Keep the content structure intact
+                        KEEP_CONTENT: true,
                     });
                 });
+
+                // Now safe to insert - foreignObject contents have been sanitized
+                const sanitizedSvg = svgDoc.documentElement;
+                element.innerHTML = '';
+                element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
             } catch (error) {
                 console.error('Mermaid render error:', error);
                 element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
