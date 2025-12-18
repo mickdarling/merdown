@@ -20,7 +20,9 @@ const {
 
 test.describe('Mermaid Lazy Loading', () => {
     test.beforeEach(async ({ page }) => {
-        // Set explicit viewport size for consistent test behavior
+        // Set explicit viewport size for consistent, deterministic test behavior.
+        // 1280x720 is a common desktop resolution that ensures diagrams placed
+        // 100+ newlines down are reliably outside the viewport + 200px rootMargin.
         await page.setViewportSize({ width: 1280, height: 720 });
         await waitForPageReady(page);
         await waitForGlobalFunction(page, 'openFile');
@@ -119,7 +121,7 @@ graph TD
 
         // Render should complete quickly (not waiting for all diagrams)
         // This is a loose check - main goal is not blocking on all diagram renders
-        expect(renderTime).toBeLessThan(5000);
+        expect(renderTime).toBeLessThan(2000);
     });
 
     test('multiple diagrams should render progressively', async ({ page }) => {

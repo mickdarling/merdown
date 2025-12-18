@@ -26,6 +26,14 @@ function isDebugMermaidPerf() {
 }
 
 /**
+ * Preload margin for lazy loading Mermaid diagrams (Issue #326)
+ * Diagrams start rendering when they're this distance from the viewport.
+ * 200px provides a good balance: far enough to preload before user scrolls to it,
+ * but not so aggressive that we load too many diagrams at once on long pages.
+ */
+const MERMAID_PRELOAD_MARGIN = '200px';
+
+/**
  * Performance tracking for Mermaid lazy loading
  * Tracks render times and error counts when debug-mermaid-perf is enabled
  */
@@ -690,11 +698,13 @@ async function lazyRenderMermaid(element) {
         return;
     }
 
+    // Mark as being rendered to prevent duplicate renders
+    element.dataset.mermaidRendered = 'rendering';
+
+    // Start timing after race condition check and state update (micro-optimization)
     const startTime = mermaidPerfMetrics.recordRenderStart();
 
     try {
-        // Mark as being rendered to prevent duplicate renders
-        element.dataset.mermaidRendered = 'rendering';
 
         // Remove loading indicator
         element.classList.remove('mermaid-loading');
@@ -770,8 +780,7 @@ function setupMermaidLazyLoading(mermaidElements) {
             });
         },
         {
-            // Start loading when diagram is 200px from viewport
-            rootMargin: '200px',
+            rootMargin: MERMAID_PRELOAD_MARGIN,
             threshold: 0.01
         }
     );
