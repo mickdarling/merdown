@@ -108,8 +108,18 @@ function extractFileReferences(content) {
         'sql', 'graphql', 'gql', 'proto', 'env', 'lock', 'log'
     ]);
 
-    // Known root-level project files that don't have a directory path
-    // These are commonly referenced without a path prefix
+    // Known root-level project files that don't have a directory path.
+    //
+    // DESIGN DECISION: Single-segment filenames (no directory path) are only verified
+    // if they appear in this allowlist. This prevents false positives from example
+    // filenames in documentation tutorials, such as:
+    //   - `custom.css` (example in CSS loading guide)
+    //   - `my-theme.css` (example theme filename)
+    //   - `Academia.css` (example style name)
+    //
+    // Files with directory paths like `js/security.js` are always verified since
+    // they clearly reference project structure. To add support for additional
+    // root-level files, add them to this Set.
     const knownRootFiles = new Set([
         'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md',
         'LICENSE', 'LICENSE.md', 'index.html', 'package.json',
@@ -336,6 +346,32 @@ function verifyFileRefs(content, relPath) {
 }
 
 /**
+ * Find similar names in the index (for helpful error messages)
+ * @param {string} name - The name to find similar matches for
+ * @param {Map} indexMap - The index to search in
+ * @param {number} maxSuggestions - Maximum number of suggestions to return
+ * @returns {string[]} Array of similar names with their file locations
+ */
+function findSimilarNames(name, indexMap, maxSuggestions = 3) {
+    const nameLower = name.toLowerCase();
+    const suggestions = [];
+
+    for (const [indexName, files] of indexMap.entries()) {
+        const indexNameLower = indexName.toLowerCase();
+        // Check for substring match or similar prefix
+        if (indexNameLower.includes(nameLower) ||
+            nameLower.includes(indexNameLower) ||
+            indexNameLower.startsWith(nameLower.slice(0, 3))) {
+            suggestions.push({ name: indexName, files });
+        }
+    }
+
+    // Sort by similarity (shorter names first, then alphabetically)
+    suggestions.sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name));
+    return suggestions.slice(0, maxSuggestions);
+}
+
+/**
  * Verify code references (functions/constants) in content
  * @param {string} content - Markdown content
  * @param {string} relPath - Relative path of the markdown file
@@ -346,10 +382,16 @@ function verifyCodeRefs(content, relPath, codeIndex) {
     for (const { name, type } of codeRefs) {
         const indexMap = type === 'function' ? codeIndex.functions : codeIndex.constants;
         if (indexMap.has(name)) {
-            results.codeRefs.passed.push({ file: relPath, name, type });
+            const definedIn = indexMap.get(name);
+            results.codeRefs.passed.push({ file: relPath, name, type, definedIn });
         } else {
-            results.codeRefs.failed.push({ file: relPath, name, type });
+            // Find similar names to suggest
+            const suggestions = findSimilarNames(name, indexMap);
+            results.codeRefs.failed.push({ file: relPath, name, type, suggestions });
             console.log(`  ${COLORS.red}✗ ${type} not found: ${name}${COLORS.reset}`);
+            if (suggestions.length > 0) {
+                console.log(`    ${COLORS.gray}Did you mean: ${suggestions.map(s => `${s.name} (${s.files[0]})`).join(', ')}?${COLORS.reset}`);
+            }
         }
     }
 }

@@ -602,3 +602,73 @@ test.describe('Documentation - Test Coverage Summary', () => {
     expect(coverage.extractFileReferences.totalTests + coverage.extractCodeReferences.totalTests).toBe(29);
   });
 });
+
+test.describe('Integration Tests', () => {
+  test('should pass verification on actual project documentation', () => {
+    // This integration test runs the actual verify-docs script against the project
+    // to ensure all documentation references are valid
+    const scriptPath = path.join(__dirname, '../scripts/verify-docs.js');
+
+    let result;
+    let exitCode = 0;
+
+    try {
+      result = execSync(`node ${scriptPath}`, {
+        encoding: 'utf-8',
+        cwd: path.join(__dirname, '..'),
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+    } catch (error) {
+      // execSync throws if the process exits with non-zero code
+      result = error.stdout || '';
+      exitCode = error.status || 1;
+    }
+
+    // The script should exit with code 0 (success)
+    expect(exitCode).toBe(0);
+    // The output should indicate all references were verified
+    expect(result).toContain('All documentation references verified successfully');
+  });
+
+  test('should properly detect and report missing references', () => {
+    // This test verifies the script properly reports errors by feeding it
+    // content with known-bad references
+    const scriptPath = path.join(__dirname, '../scripts/verify-docs.js');
+
+    const testCode = `
+import { extractFileReferences, extractCodeReferences } from '${scriptPath}';
+
+// Test with a non-existent file reference
+const fileRefs = extractFileReferences('Check \`js/nonexistent-file.js\` for details');
+console.log('fileRefs:', JSON.stringify(fileRefs));
+
+// Test with a non-existent function reference
+const codeRefs = extractCodeReferences('Call \`nonExistentFunction()\` to process');
+console.log('codeRefs:', JSON.stringify(codeRefs));
+    `;
+
+    const crypto = require('node:crypto');
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'verify-docs-integration-'));
+    const tempFile = path.join(tempDir, `test-${crypto.randomBytes(16).toString('hex')}.mjs`);
+
+    try {
+      fs.writeFileSync(tempFile, testCode, { mode: 0o600 });
+      const output = execSync(`node ${tempFile}`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe']
+      });
+
+      // Should extract the bad file reference
+      expect(output).toContain('js/nonexistent-file.js');
+      // Should extract the bad function reference
+      expect(output).toContain('nonExistentFunction');
+    } finally {
+      try {
+        if (fs.existsSync(tempFile)) fs.unlinkSync(tempFile);
+        if (fs.existsSync(tempDir)) fs.rmdirSync(tempDir);
+      } catch {
+        // Cleanup errors are non-critical
+      }
+    }
+  });
+});

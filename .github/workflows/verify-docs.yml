@@ -41,5 +41,3 @@ jobs:
 
       - name: Run documentation verification
         run: node scripts/verify-docs.js
-        # Note: Results are shown in the job logs above. Artifact upload removed as
-        # it was uploading the script file itself rather than verification results.
