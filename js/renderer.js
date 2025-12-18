@@ -526,9 +526,83 @@ function renderYAMLFrontMatter(frontMatter) {
 }
 
 /**
+ * Lazy render a single mermaid diagram when it becomes visible
+ * @param {HTMLElement} element - The mermaid diagram element to render
+ * @returns {Promise<void>}
+ */
+async function lazyRenderMermaid(element) {
+    // Skip if already rendered
+    if (element.dataset.mermaidRendered === 'true') {
+        return;
+    }
+
+    try {
+        // Mark as being rendered to prevent duplicate renders
+        element.dataset.mermaidRendered = 'rendering';
+
+        const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
+        // Sanitize mermaid SVG output for defense-in-depth against XSS
+        // Use SVG profile and allow foreignObject (used by mermaid for text rendering)
+        element.innerHTML = DOMPurify.sanitize(svg, {
+            USE_PROFILES: { svg: true, svgFilters: true },
+            ADD_TAGS: ['foreignObject']
+        });
+
+        // Mark as successfully rendered
+        element.dataset.mermaidRendered = 'true';
+    } catch (error) {
+        console.error('Mermaid render error:', error);
+        element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
+            <strong>Mermaid Error:</strong><br>${escapeHtml(error.message)}
+        </div>`;
+        element.dataset.mermaidRendered = 'error';
+    }
+}
+
+/**
+ * Set up lazy loading for mermaid diagrams using IntersectionObserver
+ * Diagrams are rendered when they become visible in the viewport
+ * @param {NodeList} mermaidElements - The mermaid diagram elements
+ */
+function setupMermaidLazyLoading(mermaidElements) {
+    // Create IntersectionObserver for lazy loading diagrams
+    const observer = new IntersectionObserver(
+        (entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const element = entry.target;
+                    // Render the diagram
+                    lazyRenderMermaid(element);
+                    // Stop observing this element
+                    observer.unobserve(element);
+                }
+            });
+        },
+        {
+            // Start loading when diagram is 200px from viewport
+            rootMargin: '200px',
+            threshold: 0.01
+        }
+    );
+
+    // Observe all mermaid diagrams
+    mermaidElements.forEach(element => {
+        // Add a placeholder/loading state
+        element.dataset.mermaidRendered = 'pending';
+        observer.observe(element);
+    });
+
+    // Store observer in state for cleanup if needed
+    if (state.mermaidObserver) {
+        state.mermaidObserver.disconnect();
+    }
+    state.mermaidObserver = observer;
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
- * and renders all mermaid diagrams in the content.
+ * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
  * @async
  */
 export async function renderMarkdown() {
@@ -556,24 +630,12 @@ export async function renderMarkdown() {
         const combinedHTML = frontMatterHTML + markdownHTML;
         wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
 
-        // Render mermaid diagrams
+        // Set up lazy loading for mermaid diagrams (Issue #326)
+        // Instead of rendering all diagrams immediately (which blocks the UI),
+        // we use IntersectionObserver to render them only when they're visible
         const mermaidElements = wrapper.querySelectorAll('.mermaid');
-
-        for (const element of mermaidElements) {
-            try {
-                const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
-                // Sanitize mermaid SVG output for defense-in-depth against XSS
-                // Use SVG profile and allow foreignObject (used by mermaid for text rendering)
-                element.innerHTML = DOMPurify.sanitize(svg, {
-                    USE_PROFILES: { svg: true, svgFilters: true },
-                    ADD_TAGS: ['foreignObject']
-                });
-            } catch (error) {
-                console.error('Mermaid render error:', error);
-                element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
-                    <strong>Mermaid Error:</strong><br>${escapeHtml(error.message)}
-                </div>`;
-            }
+        if (mermaidElements.length > 0) {
+            setupMermaidLazyLoading(mermaidElements);
         }
 
         // Attach event listeners for mermaid expand functionality
