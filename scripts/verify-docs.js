@@ -279,9 +279,12 @@ async function verifyMarkdownFile(mdFile, codeIndex, isSessionNote = false) {
 
     console.log(`${COLORS.blue}Checking ${relPath}...${COLORS.reset}`);
 
-    // For session notes, only verify file references (skip historical code refs)
-    // Session notes document past changes and may reference old/removed code
-    const skipCodeVerification = isSessionNote;
+    // Skip all verification for session notes (historical documentation)
+    // Session notes document past changes and may reference old/removed code and files
+    if (isSessionNote) {
+        console.log(`  ${COLORS.gray}(Skipping verification for session note)${COLORS.reset}`);
+        return;
+    }
 
     // Verify file references
     const fileRefs = extractFileReferences(content);
@@ -293,11 +296,6 @@ async function verifyMarkdownFile(mdFile, codeIndex, isSessionNote = false) {
             results.fileRefs.failed.push({ file: relPath, ref });
             console.log(`  ${COLORS.red}✗ File not found: ${ref}${COLORS.reset}`);
         }
-    }
-
-    if (skipCodeVerification) {
-        console.log(`  ${COLORS.gray}(Skipping code verification for session note)${COLORS.reset}`);
-        return;
     }
 
     // Verify code references (functions/constants)
