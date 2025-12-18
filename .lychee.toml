@@ -1,5 +1,12 @@
 # Lychee link checker configuration
 # Documentation: https://lychee.cli.rs/usage/config/
+#
+# Usage:
+#   - CI: Runs automatically on push/PR and weekly via GitHub Actions
+#   - Local: Run `npm run check:links` to check links before committing
+#
+# The CI workflow checks external links only. For internal link checking,
+# see the internal-link-check workflow.
 
 # Timeout for each request (in seconds)
 timeout = 30
@@ -10,7 +17,12 @@ max_retries = 3
 # Maximum number of concurrent network requests
 max_concurrency = 8
 
-# Accept status codes (2xx = success, 429 = rate limited)
+# Accept status codes:
+# - 1xx: Informational responses
+# - 2xx: Success responses
+# - 3xx: Redirects (we follow them, but accept if max redirects hit)
+# - 429: Rate limited - the link exists but we're being throttled.
+#        This prevents false positives from aggressive rate limiting.
 accept = [100, 101, 102, 103, 200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300, 301, 302, 303, 304, 307, 308, 429]
 
 # Exclude private IP addresses and localhost
@@ -42,11 +54,18 @@ exclude_path = [
     '.git/',
 ]
 
-# User agent to use for requests
-user_agent = "Mozilla/5.0 (compatible; Lychee/1.0; +https://github.com/lycheeverse/lychee)"
+# User agent - identifies requests as coming from this project's CI
+user_agent = "Merview-LinkChecker/1.0 (+https://github.com/mickdarling/merview)"
+
+# Cache results to speed up repeated local runs
+# Creates .lycheecache file (add to .gitignore if not already)
+cache = true
 
 # Include external links only
 include_verbatim = false
 
 # Follow redirects
 max_redirects = 5
+
+# Output file for results (used by CI workflow)
+output = "lychee-report.md"

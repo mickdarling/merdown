@@ -36,6 +36,8 @@ jobs:
             'index.html'
           # Use custom config file
           lycheeConfig: '.lychee.toml'
+          # Explicit output file for artifact upload
+          output: 'lychee-report.md'
           # Continue on error - don't fail the build
           fail: false
 
