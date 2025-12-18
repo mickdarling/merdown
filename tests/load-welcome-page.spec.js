@@ -373,6 +373,52 @@ test.describe('Welcome Page Functionality', () => {
 
       expect(wrapperExists).toBe(true);
     });
+
+    test('welcome page loads from actual docs/welcome.md file (not mocked)', async ({ page }) => {
+      // Clear cache to ensure we fetch the real file
+      await page.evaluate(() => globalThis.clearWelcomePageCache());
+
+      // Load welcome page without any mocking - this fetches the real file
+      await page.click('button[onclick="loadWelcomePage()"]');
+      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+      const content = await getCodeMirrorContent(page);
+
+      // Verify key content sections from actual docs/welcome.md
+      // These assertions would fail if the file path is wrong or content is missing
+      expect(content).toContain('# Welcome to Merview');
+      expect(content).toContain('A client-side Markdown editor with first-class Mermaid diagram support.');
+      expect(content).toContain('## Quick Links');
+      expect(content).toContain('## Getting Started');
+      expect(content).toContain('## Feature Showcase');
+      expect(content).toContain('## Tips');
+      expect(content).toContain('## Open Source');
+
+      // Verify specific structural elements that prove it's the real file
+      expect(content).toContain('[About Merview](/?url=docs/about.md)');
+      expect(content).toContain('[Developer Kit](/?url=docs/developer-kit.md)');
+      expect(content).toContain('[Theme Guide](/?url=docs/themes.md)');
+      expect(content).toContain('github.com/mickdarling/merview');
+
+      // Verify mermaid diagrams are present
+      expect(content).toContain('```mermaid');
+      expect(content).toContain('graph LR');
+      expect(content).toContain('sequenceDiagram');
+      expect(content).toContain('classDiagram');
+
+      // Verify code examples
+      expect(content).toContain('```javascript');
+      expect(content).toContain('```python');
+      expect(content).toContain('```markdown');
+
+      // Verify table structure
+      expect(content).toContain('| Feature | Status |');
+      expect(content).toContain('|---------|--------|');
+
+      // Verify the content is substantial (real file should be much larger than fallback)
+      const MIN_REAL_FILE_SIZE = 2000; // Real welcome.md is ~5KB
+      expect(content.length).toBeGreaterThan(MIN_REAL_FILE_SIZE);
+    });
   });
 
   test.describe('Caching', () => {
