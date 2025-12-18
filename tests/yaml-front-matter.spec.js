@@ -604,7 +604,7 @@ title: Style Test
       const hasProperStyling = await page.$eval(
         '.yaml-front-matter',
         el => {
-          const styles = window.getComputedStyle(el);
+          const styles = globalThis.getComputedStyle(el);
           // Check that critical styling properties are set (from CSS rules)
           return styles.border !== 'none' &&
                  styles.borderRadius !== '0px' &&
