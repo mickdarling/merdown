@@ -740,7 +740,7 @@ block-beta
     block:server:1
         columns 1
         API
-        DB[(Database)]
+        Database
     end
 
     client --> server
