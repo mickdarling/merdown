@@ -72,7 +72,9 @@ const JS_FUNCTION_PATTERNS = [
     /export\s+const\s+([a-zA-Z_]\w*)\s*=\s*\([^)]*\)\s*=>/g
 ];
 const JS_CONSTANT_PATTERN = /const\s+([A-Z][A-Z0-9_]+)\s*=/g;
-const JS_EXPORT_BLOCK_PATTERN = /export\s+\{\s*([^}]+)\s*\}/g;
+// Note: Avoid \s* around [^}]+ to prevent ReDoS from overlapping quantifiers (S5852)
+// The captured content is trimmed in code anyway
+const JS_EXPORT_BLOCK_PATTERN = /export\s+\{([^}]+)\}/g;
 const JS_EXPORT_DIRECT_PATTERN = /export\s+(?:function|const)\s+([a-zA-Z_]\w*)/g;
 
 /**
