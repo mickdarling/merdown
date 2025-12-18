@@ -1,6 +1,7 @@
 /**
  * Test for issue #327: Mermaid diagram edge labels should not be struck through by arrows
- * Verifies that edge labels have proper background rectangles with full opacity
+ * Verifies that DOMPurify preserves style attributes and foreignObject HTML content
+ * required for proper text positioning in Mermaid diagrams
  */
 
 const { test, expect } = require('@playwright/test');
@@ -11,7 +12,7 @@ test.describe('Mermaid Edge Labels', () => {
         await page.waitForLoadState('networkidle');
     });
 
-    test('edge label foreignObjects should have background', async ({ page }) => {
+    test('edge label foreignObjects should preserve style attributes', async ({ page }) => {
         // Load test markdown with edge labels
         const markdown = `
 # Test Edge Labels
@@ -31,24 +32,40 @@ graph LR
         // Wait for Mermaid to render
         await page.waitForSelector('.mermaid svg', { timeout: 5000 });
 
-        // Verify edge label foreignObjects have a background (our CSS fix)
-        const foreignObjectBackground = await page.evaluate(() => {
-            const foreignObject = document.querySelector('.mermaid svg .edgeLabel foreignObject');
-            if (!foreignObject) return null;
-            const computedStyle = window.getComputedStyle(foreignObject);
+        // Verify edge label foreignObjects exist and have inline styles preserved
+        const styleInfo = await page.evaluate(() => {
+            const foreignObjects = document.querySelectorAll('.mermaid svg .edgeLabel foreignObject');
+            if (foreignObjects.length === 0) return null;
+
+            let hasStyleAttr = false;
+            let hasHtmlContent = false;
+
+            foreignObjects.forEach(fo => {
+                // Check for style attribute on foreignObject or its children
+                if (fo.hasAttribute('style') || fo.querySelector('[style]')) {
+                    hasStyleAttr = true;
+                }
+                // Check for HTML elements inside foreignObject (div, span)
+                if (fo.querySelector('div') || fo.querySelector('span')) {
+                    hasHtmlContent = true;
+                }
+            });
+
             return {
-                backgroundColor: computedStyle.backgroundColor,
-                hasBackground: computedStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
-                              computedStyle.backgroundColor !== 'transparent'
+                count: foreignObjects.length,
+                hasStyleAttr,
+                hasHtmlContent
             };
         });
 
-        // Should have a background color (not transparent)
-        expect(foreignObjectBackground).not.toBeNull();
-        expect(foreignObjectBackground.hasBackground).toBe(true);
+        // Should have foreignObjects with style attributes and HTML content
+        expect(styleInfo).not.toBeNull();
+        expect(styleInfo.count).toBeGreaterThan(0);
+        expect(styleInfo.hasStyleAttr).toBe(true);
+        expect(styleInfo.hasHtmlContent).toBe(true);
     });
 
-    test('sponsor page diagram should render with edge labels', async ({ page }) => {
+    test('sponsor page diagram should render with properly positioned edge labels', async ({ page }) => {
         // Load the sponsor page
         await page.goto('http://localhost:8080/?url=docs/sponsor.md');
         await page.waitForLoadState('networkidle');
@@ -60,43 +77,49 @@ graph LR
         const edgeLabels = await page.locator('.mermaid svg .edgeLabel').count();
         expect(edgeLabels).toBeGreaterThan(0);
 
-        // Verify edge label foreignObjects have backgrounds
-        const foreignObjectBackground = await page.evaluate(() => {
-            const foreignObject = document.querySelector('.mermaid svg .edgeLabel foreignObject');
-            if (!foreignObject) return null;
-            const computedStyle = window.getComputedStyle(foreignObject);
-            return {
-                backgroundColor: computedStyle.backgroundColor,
-                hasBackground: computedStyle.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
-                              computedStyle.backgroundColor !== 'transparent'
-            };
-        });
+        // Verify foreignObjects have preserved styles for proper positioning
+        const hasPreservedStyles = await page.evaluate(() => {
+            const foreignObjects = document.querySelectorAll('.mermaid svg .edgeLabel foreignObject');
+            if (foreignObjects.length === 0) return false;
 
-        expect(foreignObjectBackground).not.toBeNull();
-        expect(foreignObjectBackground.hasBackground).toBe(true);
-    });
-
-    test('edge label CSS fix should be applied', async ({ page }) => {
-        // Verify the CSS fix is present in the page
-        const cssRuleExists = await page.evaluate(() => {
-            const styleSheets = Array.from(document.styleSheets);
-            for (const sheet of styleSheets) {
-                try {
-                    const rules = Array.from(sheet.cssRules || []);
-                    for (const rule of rules) {
-                        if (rule.selectorText &&
-                            rule.selectorText.includes('.mermaid svg .edgeLabel rect')) {
-                            return true;
-                        }
-                    }
-                } catch (e) {
-                    // Skip stylesheets we can't access (CORS)
-                    continue;
+            // Check if any foreignObject or its children have style attributes
+            for (const fo of foreignObjects) {
+                if (fo.hasAttribute('style') || fo.querySelector('[style]')) {
+                    return true;
                 }
             }
             return false;
         });
 
-        expect(cssRuleExists).toBe(true);
+        expect(hasPreservedStyles).toBe(true);
+    });
+
+    test('DOMPurify config should preserve SVG attributes for text positioning', async ({ page }) => {
+        // Load a simple test diagram
+        const markdown = `
+\`\`\`mermaid
+graph LR
+    A -->|Test| B
+\`\`\`
+        `;
+
+        await page.evaluate((md) => {
+            const editor = document.querySelector('.CodeMirror').CodeMirror;
+            editor.setValue(md);
+        }, markdown);
+
+        await page.waitForSelector('.mermaid svg', { timeout: 5000 });
+
+        // Verify SVG has style attributes (not stripped by DOMPurify)
+        const svgHasStyles = await page.evaluate(() => {
+            const svg = document.querySelector('.mermaid svg');
+            if (!svg) return false;
+
+            // Check if SVG or its descendants have style attributes
+            const elementsWithStyle = svg.querySelectorAll('[style]');
+            return elementsWithStyle.length > 0;
+        });
+
+        expect(svgHasStyles).toBe(true);
     });
 });
