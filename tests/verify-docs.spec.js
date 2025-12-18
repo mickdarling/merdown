@@ -609,9 +609,10 @@ test.describe('Integration Tests', () => {
     // to ensure all documentation references are valid
     const scriptPath = path.join(__dirname, '../scripts/verify-docs.js');
 
-    // Use spawnSync with shell: false to avoid security hotspot (S4721)
-    // The script path is entirely controlled by this test code
-    const spawnResult = spawnSync('node', [scriptPath], {
+    // Use spawnSync with shell: false and absolute node path to avoid security hotspots
+    // (S4721 - command injection, S4036 - PATH hijacking)
+    // process.execPath is the absolute path to the currently running node binary
+    const spawnResult = spawnSync(process.execPath, [scriptPath], {
       encoding: 'utf-8',
       cwd: path.join(__dirname, '..'),
       shell: false
@@ -649,9 +650,9 @@ console.log('codeRefs:', JSON.stringify(codeRefs));
 
     try {
       fs.writeFileSync(tempFile, testCode, { mode: 0o600 });
-      // Use spawnSync with shell: false to avoid security hotspot (S4721)
-      // The temp file path is generated with crypto.randomBytes, controlled by test code
-      const spawnResult = spawnSync('node', [tempFile], {
+      // Use spawnSync with shell: false and absolute node path to avoid security hotspots
+      // (S4721 - command injection, S4036 - PATH hijacking)
+      const spawnResult = spawnSync(process.execPath, [tempFile], {
         encoding: 'utf-8',
         shell: false
       });
