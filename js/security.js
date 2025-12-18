@@ -304,17 +304,19 @@ export function isAllowedMarkdownURL(url) {
 
         // Check for homograph attacks BEFORE URL parsing (browser converts to punycode)
         // This catches mixed-script attacks like rаw.githubusercontent.com (Cyrillic 'а' U+0430)
+        //
+        // Why we check for mixed scripts, not all non-ASCII:
+        // - Pure international domains (例え.jp, 中文.com) are legitimate and should be allowed
+        // - The security risk is MIXED scripts where attackers substitute lookalike characters
+        //   from different alphabets (e.g., Cyrillic 'а' looks like Latin 'a')
+        // - containsHomoglyphs() detects when Latin letters are mixed with Cyrillic/Greek lookalikes
+        // - This allows legitimate IDN domains while blocking homograph attacks
+        //
+        // Note: We intentionally do NOT block all non-ASCII hostnames as that would prevent
+        // users from loading content from legitimate international domains.
         const rawHostname = extractHostnameFromString(url);
         if (rawHostname && containsHomoglyphs(rawHostname)) {
             console.warn('Markdown URL blocked: hostname contains mixed-script homoglyphs (possible homograph attack)');
-            return false;
-        }
-
-        // Block ANY non-ASCII characters in hostname (IDN homograph attack prevention)
-        // This includes pure international domains like 例え.com or 中文.com
-        // While paths can contain international characters, hostnames must be ASCII-only
-        if (rawHostname && /[\u0080-\uFFFF]/.test(rawHostname)) {
-            console.warn('Markdown URL blocked: hostname contains non-ASCII characters (IDN homograph attack prevention)');
             return false;
         }
 

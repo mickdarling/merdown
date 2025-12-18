@@ -601,14 +601,20 @@ title: Style Test
 
       // Check that CSS styling is applied (via computed styles, not inline styles)
       // The yaml-front-matter class applies styling through CSS rules in index.html
+      // Using more robust checks that work across different browsers
       const hasProperStyling = await page.$eval(
         '.yaml-front-matter',
         el => {
           const styles = globalThis.getComputedStyle(el);
-          // Check that critical styling properties are set (from CSS rules)
-          return styles.border !== 'none' &&
-                 styles.borderRadius !== '0px' &&
-                 styles.backgroundColor !== 'rgba(0, 0, 0, 0)';
+          // Check for presence of expected values rather than absence of defaults
+          // This handles browser differences in default value representation
+          const hasBorder = styles.borderWidth && styles.borderWidth !== '0px' &&
+                           styles.borderStyle && styles.borderStyle !== 'none';
+          const hasBorderRadius = parseFloat(styles.borderRadius) > 0;
+          const hasBackground = styles.backgroundColor &&
+                               styles.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
+                               styles.backgroundColor !== 'transparent';
+          return hasBorder && hasBorderRadius && hasBackground;
         }
       );
       expect(hasProperStyling).toBe(true);
