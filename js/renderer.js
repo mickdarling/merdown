@@ -526,6 +526,90 @@ function renderYAMLFrontMatter(frontMatter) {
 }
 
 /**
+ * Sanitize Mermaid SVG using two-pass approach
+ * Extracts foreignObject content, sanitizes SVG structure, then re-injects sanitized HTML.
+ * This preserves edge labels while blocking XSS attacks.
+ * @param {string} svg - Raw SVG string from Mermaid
+ * @returns {Element} Sanitized SVG DOM element ready for insertion
+ * @throws {Error} If SVG is invalid or parsing fails
+ */
+function sanitizeMermaidSvg(svg) {
+    // PASS 1: Extract foreignObject content using regex (no DOM parsing of raw content)
+    const savedForeignObjectContent = new Map();
+    let markedSvg = svg;
+    const foRegex = /<foreignObject([^>]*)>([\s\S]*?)<\/foreignObject>/gi;
+    let match;
+    let foIndex = 0;
+
+    while ((match = foRegex.exec(svg)) !== null) {
+        savedForeignObjectContent.set(foIndex, match[2]);
+        markedSvg = markedSvg.replace(
+            match[0],
+            `<foreignObject${match[1]} data-fo-idx="${foIndex}"></foreignObject>`
+        );
+        foIndex++;
+    }
+
+    // Fix Mermaid bug: xlink:href without xmlns:xlink declaration
+    if (markedSvg.includes('xlink:href') && !markedSvg.includes('xmlns:xlink')) {
+        markedSvg = markedSvg.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+
+    // Validate SVG content
+    if (!markedSvg || (!markedSvg.startsWith('<svg') && !markedSvg.startsWith('<SVG'))) {
+        throw new Error('Mermaid SVG generation failed: Invalid output');
+    }
+
+    // PASS 2: Sanitize SVG structure
+    let sanitizedSvgString = DOMPurify.sanitize(markedSvg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['foreignObject'],
+        ADD_ATTR: [
+            'xmlns', 'xmlns:xlink', 'xlink:href', 'href',
+            'style', 'class', 'transform', 'x', 'y', 'width', 'height',
+            'data-fo-idx',
+        ],
+        ADD_URI_SAFE_ATTR: ['xlink:href', 'href'],
+    });
+
+    // Ensure xmlns:xlink namespace is declared after sanitization
+    if (sanitizedSvgString.includes('xlink:href') && !sanitizedSvgString.includes('xmlns:xlink')) {
+        sanitizedSvgString = sanitizedSvgString.replace(
+            '<svg',
+            '<svg xmlns:xlink="http://www.w3.org/1999/xlink"'
+        );
+    }
+
+    // Parse the sanitized SVG
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(sanitizedSvgString, 'image/svg+xml');
+    const parseError = svgDoc.querySelector('parsererror');
+    if (parseError) {
+        throw new Error('SVG parse error: ' + parseError.textContent);
+    }
+
+    // PASS 3: Re-inject saved foreignObject content with HTML sanitization
+    svgDoc.querySelectorAll('foreignObject').forEach(fo => {
+        const idx = Number.parseInt(fo.dataset.foIdx, 10);
+        if (savedForeignObjectContent.has(idx)) {
+            const sanitizedHtml = DOMPurify.sanitize(savedForeignObjectContent.get(idx), {
+                ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'b', 'i', 'strong', 'em'],
+                ALLOWED_ATTR: ['class', 'style', 'xmlns'],
+                KEEP_CONTENT: true,
+            });
+            // Strip external url() to prevent data exfiltration (preserve local #refs)
+            fo.innerHTML = sanitizedHtml.replaceAll(
+                /url\s*\(\s*['"]?(https?:|data:|javascript:|blob:)[^)]*\)/gi,
+                ''
+            );
+        }
+        delete fo.dataset.foIdx;
+    });
+
+    return svgDoc.documentElement;
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and renders all mermaid diagrams in the content.
@@ -562,12 +646,9 @@ export async function renderMarkdown() {
         for (const element of mermaidElements) {
             try {
                 const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
-                // Sanitize mermaid SVG output for defense-in-depth against XSS
-                // Use SVG profile and allow foreignObject (used by mermaid for text rendering)
-                element.innerHTML = DOMPurify.sanitize(svg, {
-                    USE_PROFILES: { svg: true, svgFilters: true },
-                    ADD_TAGS: ['foreignObject']
-                });
+                const sanitizedSvg = sanitizeMermaidSvg(svg);
+                element.innerHTML = '';
+                element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
             } catch (error) {
                 console.error('Mermaid render error:', error);
                 element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">

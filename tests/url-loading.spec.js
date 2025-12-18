@@ -18,7 +18,7 @@ const MAX_URL_LENGTH = 2048;
  * - Enforce HTTPS-only
  * - Block URLs with embedded credentials
  * - Block URLs exceeding length limits
- * - Block non-ASCII hostnames (IDN homograph attacks)
+ * - Block mixed-script homograph attacks (e.g., Latin + Cyrillic lookalikes)
  * - Handle errors gracefully
  */
 
@@ -177,9 +177,9 @@ test.describe('URL Loading', () => {
       expect(isAllowed).toBe(false);
     });
 
-    test('should allow legitimate IDN domains (non-homograph)', async ({ page }) => {
-      // URL with legitimate German umlaut (not a homograph attack)
-      // This is a legitimate internationalized domain name
+    test('should allow legitimate IDN domains (pure international script)', async ({ page }) => {
+      // URL with legitimate German umlaut is allowed - it's a pure script, not mixed
+      // We only block mixed-script homograph attacks (e.g., Latin + Cyrillic lookalikes)
       const unicodeUrl = 'https://müller.com/file.md';
 
       const isAllowed = await testUrlValidation(page, unicodeUrl);
@@ -712,12 +712,12 @@ test.describe('URL Loading', () => {
       expect(isAllowed).toBe(true);
     });
 
-    test('should reject URL with international characters in HOSTNAME (security)', async ({ page }) => {
-      // While paths with international chars are OK, hostnames should be blocked
-      // This prevents IDN homograph attacks
+    test('should allow URL with pure international characters in HOSTNAME', async ({ page }) => {
+      // Pure international hostnames are allowed (consistent script)
+      // Only mixed-script homograph attacks are blocked
       const urlWithIntlHostname = 'https://例え.com/file.md';
       const isAllowed = await testUrlValidation(page, urlWithIntlHostname);
-      expect(isAllowed).toBe(false);
+      expect(isAllowed).toBe(true);
     });
 
     test('should reject URL with Cyrillic in hostname but allow in path', async ({ page }) => {
