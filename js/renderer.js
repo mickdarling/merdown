@@ -7,7 +7,7 @@ import { state } from './state.js';
 import { getElements } from './dom.js';
 import { saveMarkdownContent } from './storage.js';
 import { updateSessionContent, isSessionsInitialized } from './sessions.js';
-import { escapeHtml, slugify } from './utils.js';
+import { escapeHtml, slugify, showStatus } from './utils.js';
 import { validateCode } from './validation.js';
 
 // Debug flag for Mermaid theme investigation (#168)
@@ -610,6 +610,51 @@ function sanitizeMermaidSvg(svg) {
 }
 
 /**
+ * Render all Mermaid diagrams in the wrapper element
+ * @param {HTMLElement} wrapper - Container element with .mermaid elements
+ * @returns {Promise<number>} Number of diagrams that failed to render
+ */
+async function renderMermaidDiagrams(wrapper) {
+    const mermaidElements = wrapper.querySelectorAll('.mermaid');
+    let errorCount = 0;
+
+    for (const element of mermaidElements) {
+        try {
+            const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
+            const sanitizedSvg = sanitizeMermaidSvg(svg);
+            element.innerHTML = '';
+            element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
+        } catch (error) {
+            if (errorCount === 0) {
+                console.error('Mermaid render error:', error);
+            }
+            errorCount++;
+            element.classList.add('mermaid-error');
+            element.innerHTML = `<details class="mermaid-error-details">
+                <summary>⚠️ Mermaid diagram failed to render</summary>
+                <pre class="mermaid-error-message">${escapeHtml(error.message)}</pre>
+            </details>`;
+        }
+    }
+
+    return errorCount;
+}
+
+/**
+ * Attach event listeners for Mermaid expand functionality
+ * DOMPurify strips inline handlers, so we attach them programmatically
+ * @param {HTMLElement} wrapper - Container element
+ */
+function attachMermaidEventListeners(wrapper) {
+    wrapper.querySelectorAll('.mermaid-expand-btn[data-expand-target]').forEach(btn => {
+        btn.addEventListener('click', () => expandMermaid(btn.dataset.expandTarget));
+    });
+    wrapper.querySelectorAll('.mermaid[id]').forEach(el => {
+        el.addEventListener('dblclick', () => expandMermaid(el.id));
+    });
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and renders all mermaid diagrams in the content.
@@ -640,31 +685,14 @@ export async function renderMarkdown() {
         const combinedHTML = frontMatterHTML + markdownHTML;
         wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
 
-        // Render mermaid diagrams
-        const mermaidElements = wrapper.querySelectorAll('.mermaid');
-
-        for (const element of mermaidElements) {
-            try {
-                const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
-                const sanitizedSvg = sanitizeMermaidSvg(svg);
-                element.innerHTML = '';
-                element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
-            } catch (error) {
-                console.error('Mermaid render error:', error);
-                element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
-                    <strong>Mermaid Error:</strong><br>${escapeHtml(error.message)}
-                </div>`;
-            }
+        // Render mermaid diagrams (extracted to reduce cognitive complexity)
+        const mermaidErrorCount = await renderMermaidDiagrams(wrapper);
+        if (mermaidErrorCount > 0) {
+            showStatus(`${mermaidErrorCount} Mermaid diagram${mermaidErrorCount > 1 ? 's' : ''} failed to render`, 'warning');
         }
 
-        // Attach event listeners for mermaid expand functionality
-        // (DOMPurify strips inline onclick/ondblclick handlers, so we attach programmatically)
-        wrapper.querySelectorAll('.mermaid-expand-btn[data-expand-target]').forEach(btn => {
-            btn.addEventListener('click', () => expandMermaid(btn.dataset.expandTarget));
-        });
-        wrapper.querySelectorAll('.mermaid[id]').forEach(el => {
-            el.addEventListener('dblclick', () => expandMermaid(el.id));
-        });
+        // Attach mermaid expand/fullscreen event listeners
+        attachMermaidEventListeners(wrapper);
 
         // Save to localStorage (legacy) and update session
         saveMarkdownContent(markdown);
@@ -673,13 +701,11 @@ export async function renderMarkdown() {
         }
 
         // Trigger validation if lint panel is enabled (debounced)
-        // This ensures the lint panel updates in real-time as content changes
         if (state.lintEnabled) {
             scheduleValidation();
         }
 
         // RESTORE STATE: Restore YAML metadata panel state after re-render (#268 fix)
-        // This preserves the open/closed state automatically for ALL re-renders
         if (yamlPanelWasOpen !== undefined) {
             const details = wrapper?.querySelector('.yaml-front-matter');
             if (details) {
