@@ -375,24 +375,34 @@ test.describe('Welcome Page Functionality', () => {
     });
 
     test('welcome page loads from actual docs/welcome.md file (not mocked)', async ({ page }) => {
-      // Clear cache to ensure we fetch the real file
-      await page.evaluate(() => globalThis.clearWelcomePageCache());
+      // Clear cache to ensure we fetch the real file (with guard for function availability)
+      await page.evaluate(() => {
+        if (typeof globalThis.clearWelcomePageCache === 'function') {
+          globalThis.clearWelcomePageCache();
+        }
+      });
 
       // Load welcome page without any mocking - this fetches the real file
       await page.click('button[onclick="loadWelcomePage()"]');
-      await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+      // Wait for content to actually load (more reliable than fixed timeout)
+      await page.waitForFunction(() => {
+        const cmElement = document.querySelector('.CodeMirror');
+        const cmEditor = cmElement?.CodeMirror;
+        const content = cmEditor?.getValue() || '';
+        return content.includes('# Welcome to Merview');
+      }, { timeout: 5000 });
 
       const content = await getCodeMirrorContent(page);
 
-      // Verify key content sections from actual docs/welcome.md
-      // These assertions would fail if the file path is wrong or content is missing
-      expect(content).toContain('# Welcome to Merview');
+      // Verify main heading and all sub-headings using EXPECTED_CONTENT constant
+      expect(content).toContain(EXPECTED_CONTENT.mainHeading);
+      for (const heading of EXPECTED_CONTENT.subHeadings) {
+        expect(content).toContain(heading);
+      }
+
+      // Verify tagline that proves it's the real file
       expect(content).toContain('A client-side Markdown editor with first-class Mermaid diagram support.');
-      expect(content).toContain('## Quick Links');
-      expect(content).toContain('## Getting Started');
-      expect(content).toContain('## Feature Showcase');
-      expect(content).toContain('## Tips');
-      expect(content).toContain('## Open Source');
 
       // Verify specific structural elements that prove it's the real file
       expect(content).toContain('[About Merview](/?url=docs/about.md)');
@@ -400,20 +410,21 @@ test.describe('Welcome Page Functionality', () => {
       expect(content).toContain('[Theme Guide](/?url=docs/themes.md)');
       expect(content).toContain('github.com/mickdarling/merview');
 
-      // Verify mermaid diagrams are present
-      expect(content).toContain('```mermaid');
-      expect(content).toContain('graph LR');
-      expect(content).toContain('sequenceDiagram');
-      expect(content).toContain('classDiagram');
+      // Verify mermaid diagrams using EXPECTED_CONTENT constant
+      for (const mermaidElement of EXPECTED_CONTENT.mermaidElements) {
+        expect(content).toContain(mermaidElement);
+      }
 
-      // Verify code examples
-      expect(content).toContain('```javascript');
-      expect(content).toContain('```python');
+      // Verify code examples using EXPECTED_CONTENT constant
+      for (const codeBlock of EXPECTED_CONTENT.codeBlocks) {
+        expect(content).toContain(codeBlock);
+      }
       expect(content).toContain('```markdown');
 
-      // Verify table structure
-      expect(content).toContain('| Feature | Status |');
-      expect(content).toContain('|---------|--------|');
+      // Verify table structure using EXPECTED_CONTENT constant
+      for (const tableMarker of EXPECTED_CONTENT.tableMarkers) {
+        expect(content).toContain(tableMarker);
+      }
 
       // Verify the content is substantial (real file should be much larger than fallback)
       const MIN_REAL_FILE_SIZE = 2000; // Real welcome.md is ~5KB
