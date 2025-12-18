@@ -1,0 +1,87 @@
+# Lychee link checker configuration
+# Documentation: https://lychee.cli.rs/usage/config/
+#
+# Usage:
+#   - CI: Runs automatically on push/PR and weekly via GitHub Actions
+#   - Local: Run `npm run check:links` to check links before committing
+#
+# The CI workflow checks external links only. For internal link checking,
+# see the internal-link-check workflow.
+#
+# File types checked: Markdown (*.md) and HTML (index.html)
+# JS files are excluded because links in JavaScript are typically:
+#   - Dynamic/computed URLs that can't be statically checked
+#   - Internal module imports (not external links)
+#   - CDN URLs already validated by the browser at runtime
+
+# Verbose output for detailed progress
+verbose = true
+
+# Disable progress bar (cleaner CI output)
+no_progress = true
+
+# Timeout for each request (in seconds)
+timeout = 30
+
+# Maximum number of retries per link
+max_retries = 3
+
+# Maximum number of concurrent network requests
+max_concurrency = 8
+
+# Accept status codes:
+# - 1xx: Informational responses (connection established)
+# - 2xx: Success responses (link works)
+# - 3xx: Redirects - accepted because we follow up to 5 redirects (max_redirects).
+#        If we hit a 3xx after max redirects, the link still exists but moved.
+#        This prevents false positives for legitimate redirect chains.
+# - 429: Rate limited - the link exists but we're being throttled.
+#        This prevents false positives from aggressive rate limiting.
+accept = [100, 101, 102, 103, 200, 201, 202, 203, 204, 205, 206, 207, 208, 226, 300, 301, 302, 303, 304, 307, 308, 429]
+
+# Exclude private IP addresses and localhost
+exclude_all_private = true
+
+# Exclude mail addresses from checking
+exclude_mail = true
+
+# Exclude specific patterns
+exclude = [
+    # Localhost and local network
+    'http://localhost*',
+    'http://127.0.0.1*',
+    'http://0.0.0.0*',
+
+    # SonarCloud API endpoints require authentication
+    # Note: SonarCloud badge URLs in README.md use these endpoints
+    # and will return 401 without auth, so we skip them
+    'https://sonarcloud.io/api/*',
+
+    # Known flaky services (optional - add if needed)
+    # 'https://twitter.com/*',
+]
+
+# Exclude these directories from being scanned
+exclude_path = [
+    'node_modules/',
+    'cloudflare-worker/node_modules/',
+    'playwright-report/',
+    'test-results/',
+    '.git/',
+]
+
+# User agent - identifies requests as coming from this project's CI
+user_agent = "Merview-LinkChecker/1.0 (+https://github.com/mickdarling/merview)"
+
+# Cache results to speed up repeated local runs
+# Creates .lycheecache file (added to .gitignore)
+cache = true
+
+# Include external links only
+include_verbatim = false
+
+# Follow redirects
+max_redirects = 5
+
+# Output file for results (used by CI workflow)
+output = "lychee-report.md"
