@@ -13,35 +13,35 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   link-check:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Check external links
         uses: lycheeverse/lychee-action@a8c4c7cb88f0c7386610c35eb25108e448569cb0 # v2
         with:
           # Check all markdown and HTML files
+          # All other settings (timeout, retries, exclusions) come from .lychee.toml
           args: |
             --verbose
             --no-progress
-            --exclude-all-private
-            --timeout 30
-            --max-retries 3
-            --accept 100..=103,200..=299
-            --exclude-mail
-            './**/*.md'
-            './**/*.html'
-          # Use custom config file if it exists
+            '**/*.md'
+            'index.html'
+          # Use custom config file
           lycheeConfig: '.lychee.toml'
           # Continue on error - don't fail the build
           fail: false
 
       - name: Upload link check results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: link-check-report
           path: lychee-report.md
