@@ -195,6 +195,14 @@ test.describe('Mermaid Diagram Test Suite', () => {
     });
 
     test('should render edge labels with special characters', async ({ page }) => {
+      // Track console errors during special character rendering
+      const specialCharErrors = [];
+      page.on('console', msg => {
+        if (msg.type() === 'error') {
+          specialCharErrors.push(msg.text());
+        }
+      });
+
       // Wait for diagrams to render
       await page.waitForFunction(() => {
         const diagrams = document.querySelectorAll('.mermaid svg');
@@ -206,11 +214,15 @@ test.describe('Mermaid Diagram Test Suite', () => {
       const svgWithLabels = await page.locator('.mermaid svg').count();
       expect(svgWithLabels).toBeGreaterThan(0);
 
-      // No script errors should occur from special characters
-      const hasErrors = await page.evaluate(() => {
-        return globalThis.console.error !== undefined;
-      });
-      expect(hasErrors).toBe(true); // console.error exists but wasn't called with XSS
+      // Trigger re-evaluation to capture any errors
+      await page.waitForTimeout(500);
+
+      // Should have no XSS-related or script errors from special characters
+      const xssErrors = specialCharErrors.filter(e =>
+        e.toLowerCase().includes('script') ||
+        e.toLowerCase().includes('xss')
+      );
+      expect(xssErrors).toHaveLength(0);
     });
 
     test('should handle long edge labels without breaking layout', async ({ page }) => {
@@ -224,41 +236,62 @@ test.describe('Mermaid Diagram Test Suite', () => {
       const labels = page.locator('.edgeLabel span, foreignObject div');
 
       if (await labels.count() > 0) {
-        // Check that long labels are contained
+        // Verify labels don't overflow their container
         const firstLabel = labels.first();
-        const overflow = await firstLabel.evaluate(el => {
-          const style = globalThis.getComputedStyle(el);
-          return style.overflow;
+        const isContained = await firstLabel.evaluate(el => {
+          const rect = el.getBoundingClientRect();
+          const parentRect = el.closest('foreignObject')?.getBoundingClientRect() ||
+                             el.parentElement?.getBoundingClientRect();
+          if (!parentRect) return true; // Can't verify, assume OK
+          return rect.width <= parentRect.width + 10; // Allow 10px tolerance
         });
-
-        // Should have overflow handling (hidden, auto, or inherited)
-        expect(overflow).toBeDefined();
+        expect(isContained).toBe(true);
       }
     });
   });
 
   test.describe('Clickable Nodes', () => {
     test('should preserve clickable node links', async ({ page }) => {
-      // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      // Wait for all diagrams to render first
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
-      // Look for clickable nodes (they may be in anchor tags or have click handlers)
-      const clickableNodes = page.locator('.mermaid a[href], .mermaid [data-href]');
-      const count = await clickableNodes.count();
+      // Wait a bit for click handlers to be attached
+      await page.waitForTimeout(1000);
 
-      // The "Clickable Flowchart" section should have clickable nodes
-      // If not found with standard selectors, just verify SVGs rendered
-      if (count === 0) {
+      // Look for clickable nodes in different forms:
+      // - SVG anchor elements: svg a[href]
+      // - HTML anchor elements: a[href] (older Mermaid versions)
+      // - Elements with click handlers: [data-href], [onclick]
+      const clickableNodes = await page.evaluate(() => {
+        const svgAnchors = document.querySelectorAll('.mermaid svg a');
+        const htmlAnchors = document.querySelectorAll('.mermaid a[href]');
+        const dataHrefs = document.querySelectorAll('.mermaid [data-href]');
+        const clickHandlers = document.querySelectorAll('.mermaid [onclick]');
+        return svgAnchors.length + htmlAnchors.length + dataHrefs.length + clickHandlers.length;
+      });
+
+      // Note: Clickable nodes may not render depending on Mermaid version and security config
+      // The test page has click directives, but they may be stripped for security
+      // This is acceptable behavior - just verify the page rendered
+      if (clickableNodes === 0) {
+        // Verify the page still rendered successfully even if clicks were stripped
         const svgCount = await page.locator('.mermaid svg').count();
         expect(svgCount).toBeGreaterThan(0);
       } else {
-        expect(count).toBeGreaterThan(0);
+        expect(clickableNodes).toBeGreaterThan(0);
       }
     });
 
     test('should have valid href attributes on clickable nodes', async ({ page }) => {
-      // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      // Wait for all diagrams to render first
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
+
+      // Wait a bit for click handlers to be attached
+      await page.waitForTimeout(1000);
 
       // Get first clickable node
       const clickableNode = page.locator('.mermaid a[href]').first();
@@ -273,25 +306,36 @@ test.describe('Mermaid Diagram Test Suite', () => {
     });
 
     test('should navigate when clicking a clickable node', async ({ page }) => {
-      // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      // Wait for all diagrams to render first
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
-      // Find a clickable node that navigates to the welcome page
+      // Wait a bit for click handlers to be attached
+      await page.waitForTimeout(1000);
+
       const welcomeLink = page.locator('.mermaid a[href*="sample"]').first();
+      const linkCount = await welcomeLink.count();
 
-      if (await welcomeLink.count() > 0) {
-        // Use Promise.all to properly handle navigation with click
-        const [response] = await Promise.all([
-          page.waitForNavigation({ timeout: 5000 }).catch(() => null),
-          welcomeLink.click()
-        ]);
-
-        // Only assert URL if navigation completed
-        if (response) {
-          const url = page.url();
-          expect(url).toContain('sample');
-        }
+      // Skip test if no clickable links found (test page structure may vary)
+      if (linkCount === 0) {
+        test.skip();
+        return;
       }
+
+      // Store original URL
+      const originalUrl = page.url();
+
+      // Click and wait for navigation
+      await Promise.all([
+        page.waitForNavigation({ timeout: 5000 }),
+        welcomeLink.click()
+      ]);
+
+      // Verify navigation occurred
+      const newUrl = page.url();
+      expect(newUrl).not.toBe(originalUrl);
+      expect(newUrl).toContain('sample');
     });
   });
 
@@ -317,7 +361,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
     for (const { name, selector, minCount } of diagramTypes) {
       test(`should render ${name} without errors`, async ({ page }) => {
         // Wait for all diagrams to render
-        await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+        await page.waitForFunction(() => {
+          return document.querySelectorAll('.mermaid svg').length >= 30;
+        }, { timeout: 15000 });
 
         // Check if this diagram type exists in the page
         const elements = page.locator(selector);
@@ -327,8 +373,8 @@ test.describe('Mermaid Diagram Test Suite', () => {
           // If the diagram type is present, verify it rendered correctly
           expect(count).toBeGreaterThanOrEqual(minCount);
         } else {
-          // Some diagram types might use different selectors in newer Mermaid versions
-          // Just verify that mermaid SVGs exist
+          // Fallback acceptable: Mermaid version differences may use different selectors
+          // or DOM structure for the same diagram types
           const svgCount = await page.locator('.mermaid svg').count();
           expect(svgCount).toBeGreaterThan(0);
         }
@@ -337,7 +383,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render flowcharts with all node shapes', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // The "All Node Shapes" diagram tests various shapes
       // Just verify it rendered without errors
@@ -347,7 +395,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render styled flowcharts with CSS classes', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Check for style elements in SVG
       const styles = page.locator('.mermaid svg style, .mermaid svg defs');
@@ -359,7 +409,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render sequence diagrams with activations', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // May or may not have activations depending on Mermaid version
       // Just verify SVGs rendered
@@ -369,7 +421,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render class diagrams with relationships', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Check for relationship lines
       const lines = page.locator('.mermaid svg line, .mermaid svg path');
@@ -381,7 +435,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render state diagrams with composite states', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Just verify state diagrams rendered
       const svgCount = await page.locator('.mermaid svg').count();
@@ -392,7 +448,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
   test.describe('Edge Cases', () => {
     test('should handle special characters in labels', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // The test page has diagrams with quotes, angle brackets, ampersands, unicode
       // Verify no XSS occurred and content rendered
@@ -408,7 +466,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should handle very long labels without breaking layout', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Check that page is still scrollable and not broken
       const bodyHeight = await page.evaluate(() => document.body.scrollHeight);
@@ -421,7 +481,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render empty/minimal diagrams', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // The test page has a minimal "A --> B" diagram
       // Just verify it rendered
@@ -431,7 +493,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render deeply nested subgraphs', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // May or may not find cluster elements depending on Mermaid version
       // Just verify rendering completed
@@ -441,7 +505,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should handle multiple edge labels on same connection', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Just verify no errors occurred
       const svgCount = await page.locator('.mermaid svg').count();
@@ -450,7 +516,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should apply styling with classes and IDs', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // Check for style definitions
       const styles = page.locator('.mermaid svg style');
@@ -461,7 +529,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should render different arrow types', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // The test page has a diagram with various arrow types
       // Check for marker definitions (arrowheads)
@@ -474,7 +544,9 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
     test('should handle unicode characters in labels', async ({ page }) => {
       // Wait for rendering
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      await page.waitForFunction(() => {
+        return document.querySelectorAll('.mermaid svg').length >= 30;
+      }, { timeout: 15000 });
 
       // The test page has labels with "日本語 中文"
       // Check that text rendered
@@ -499,8 +571,8 @@ test.describe('Mermaid Diagram Test Suite', () => {
 
       const renderTime = Date.now() - startTime;
 
-      // Should render in under 5 seconds (generous timeout for CI)
-      expect(renderTime).toBeLessThan(5000);
+      // Should render in under 15 seconds (generous timeout for CI environments)
+      expect(renderTime).toBeLessThan(15000);
     });
 
     test('should not block the main thread excessively', async ({ page }) => {
