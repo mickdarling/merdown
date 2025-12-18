@@ -3,7 +3,7 @@
 
 // @ts-check
 const { test, expect } = require('@playwright/test');
-const { execSync } = require('child_process');
+const { execSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
@@ -54,8 +54,8 @@ console.log(JSON.stringify(result));
       if (fs.existsSync(tempFile)) {
         fs.unlinkSync(tempFile);
       }
-    } catch (cleanupError) {
-      // Ignore cleanup errors
+    } catch {
+      // Cleanup errors are non-critical - temp files will be cleaned by OS
     }
   }
 }

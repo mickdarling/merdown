@@ -219,6 +219,35 @@ function parseJavaScriptFile(filePath) {
  * @param {string} jsDir - Directory containing JS files
  * @returns {Promise<Object>} Index of all definitions
  */
+/**
+ * Add items from a Set to an index Map
+ * @param {Map} indexMap - The index map to add to
+ * @param {Set} items - Items to add
+ * @param {string} filePath - File path to associate with items
+ */
+function addToIndex(indexMap, items, filePath) {
+    for (const item of items) {
+        if (!indexMap.has(item)) {
+            indexMap.set(item, []);
+        }
+        indexMap.get(item).push(filePath);
+    }
+}
+
+/**
+ * Process a single JavaScript file and add its definitions to the index
+ * @param {string} fullPath - Full path to the JS file
+ * @param {Object} index - The code index to update
+ */
+function indexJavaScriptFile(fullPath, index) {
+    const defs = parseJavaScriptFile(fullPath);
+    const relPath = relative(ROOT_DIR, fullPath);
+
+    addToIndex(index.functions, defs.functions, relPath);
+    addToIndex(index.constants, defs.constants, relPath);
+    addToIndex(index.exports, defs.exports, relPath);
+}
+
 async function buildCodeIndex(jsDir) {
     const index = {
         functions: new Map(),  // name -> files[]
@@ -235,36 +264,73 @@ async function buildCodeIndex(jsDir) {
             if (entry.isDirectory()) {
                 await indexDirectory(fullPath);
             } else if (entry.isFile() && entry.name.endsWith('.js')) {
-                const defs = parseJavaScriptFile(fullPath);
-                const relPath = relative(ROOT_DIR, fullPath);
-
-                // Add to index
-                for (const func of defs.functions) {
-                    if (!index.functions.has(func)) {
-                        index.functions.set(func, []);
-                    }
-                    index.functions.get(func).push(relPath);
-                }
-
-                for (const constant of defs.constants) {
-                    if (!index.constants.has(constant)) {
-                        index.constants.set(constant, []);
-                    }
-                    index.constants.get(constant).push(relPath);
-                }
-
-                for (const exp of defs.exports) {
-                    if (!index.exports.has(exp)) {
-                        index.exports.set(exp, []);
-                    }
-                    index.exports.get(exp).push(relPath);
-                }
+                indexJavaScriptFile(fullPath, index);
             }
         }
     }
 
     await indexDirectory(jsDir);
     return index;
+}
+
+/**
+ * Verify file references in content
+ * @param {string} content - Markdown content
+ * @param {string} relPath - Relative path of the markdown file
+ */
+function verifyFileRefs(content, relPath) {
+    const fileRefs = extractFileReferences(content);
+    for (const ref of fileRefs) {
+        const fullPath = join(ROOT_DIR, ref);
+        if (existsSync(fullPath)) {
+            results.fileRefs.passed.push({ file: relPath, ref });
+        } else {
+            results.fileRefs.failed.push({ file: relPath, ref });
+            console.log(`  ${COLORS.red}✗ File not found: ${ref}${COLORS.reset}`);
+        }
+    }
+}
+
+/**
+ * Verify code references (functions/constants) in content
+ * @param {string} content - Markdown content
+ * @param {string} relPath - Relative path of the markdown file
+ * @param {Object} codeIndex - Code index from buildCodeIndex
+ */
+function verifyCodeRefs(content, relPath, codeIndex) {
+    const codeRefs = extractCodeReferences(content);
+    for (const { name, type } of codeRefs) {
+        const indexMap = type === 'function' ? codeIndex.functions : codeIndex.constants;
+        if (indexMap.has(name)) {
+            results.codeRefs.passed.push({ file: relPath, name, type });
+        } else {
+            results.codeRefs.failed.push({ file: relPath, name, type });
+            console.log(`  ${COLORS.red}✗ ${type} not found: ${name}${COLORS.reset}`);
+        }
+    }
+}
+
+/**
+ * Verify export references in content
+ * @param {string} content - Markdown content
+ * @param {string} relPath - Relative path of the markdown file
+ * @param {Object} codeIndex - Code index from buildCodeIndex
+ */
+function verifyExportRefs(content, relPath, codeIndex) {
+    const exportPattern = /export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/g;
+    const exportRefs = content.match(exportPattern) || [];
+    for (const ref of exportRefs) {
+        const match = ref.match(/export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/);
+        if (!match) continue;
+
+        const name = match[1];
+        if (codeIndex.exports.has(name)) {
+            results.exportRefs.passed.push({ file: relPath, name });
+        } else {
+            results.exportRefs.failed.push({ file: relPath, name });
+            console.log(`  ${COLORS.red}✗ Export not found: ${name}${COLORS.reset}`);
+        }
+    }
 }
 
 /**
@@ -280,52 +346,38 @@ async function verifyMarkdownFile(mdFile, codeIndex, isSessionNote = false) {
     console.log(`${COLORS.blue}Checking ${relPath}...${COLORS.reset}`);
 
     // Skip all verification for session notes (historical documentation)
-    // Session notes document past changes and may reference old/removed code and files
     if (isSessionNote) {
         console.log(`  ${COLORS.gray}(Skipping verification for session note)${COLORS.reset}`);
         return;
     }
 
-    // Verify file references
-    const fileRefs = extractFileReferences(content);
-    for (const ref of fileRefs) {
-        const fullPath = join(ROOT_DIR, ref);
-        if (existsSync(fullPath)) {
-            results.fileRefs.passed.push({ file: relPath, ref });
-        } else {
-            results.fileRefs.failed.push({ file: relPath, ref });
-            console.log(`  ${COLORS.red}✗ File not found: ${ref}${COLORS.reset}`);
-        }
-    }
+    verifyFileRefs(content, relPath);
+    verifyCodeRefs(content, relPath, codeIndex);
+    verifyExportRefs(content, relPath, codeIndex);
+}
 
-    // Verify code references (functions/constants)
-    const codeRefs = extractCodeReferences(content);
-    for (const { name, type } of codeRefs) {
-        const found = type === 'function'
-            ? codeIndex.functions.has(name)
-            : codeIndex.constants.has(name);
+/**
+ * Print a category summary (passed/failed counts)
+ * @param {string} title - Category title
+ * @param {Object} category - Category object with passed/failed arrays
+ */
+function printCategorySummary(title, category) {
+    console.log(`\n${COLORS.yellow}${title}:${COLORS.reset}`);
+    console.log(`  ${COLORS.green}✓ Passed: ${category.passed.length}${COLORS.reset}`);
+    console.log(`  ${COLORS.red}✗ Failed: ${category.failed.length}${COLORS.reset}`);
+}
 
-        if (found) {
-            results.codeRefs.passed.push({ file: relPath, name, type });
-        } else {
-            results.codeRefs.failed.push({ file: relPath, name, type });
-            console.log(`  ${COLORS.red}✗ ${type} not found: ${name}${COLORS.reset}`);
-        }
-    }
-
-    // Verify that documented exports exist (if any export syntax found)
-    const exportRefs = content.match(/export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/g) || [];
-    for (const ref of exportRefs) {
-        const match = ref.match(/export\s+(?:function|const|class)\s+([a-zA-Z_]\w*)/);
-        if (match) {
-            const name = match[1];
-            if (codeIndex.exports.has(name)) {
-                results.exportRefs.passed.push({ file: relPath, name });
-            } else {
-                results.exportRefs.failed.push({ file: relPath, name });
-                console.log(`  ${COLORS.red}✗ Export not found: ${name}${COLORS.reset}`);
-            }
-        }
+/**
+ * Print failed references for a category
+ * @param {string} title - Section title
+ * @param {Array} failures - Array of failure objects
+ * @param {Function} formatter - Function to format each failure
+ */
+function printFailures(title, failures, formatter) {
+    if (failures.length === 0) return;
+    console.log(`\n${COLORS.red}${title}:${COLORS.reset}`);
+    for (const item of failures) {
+        console.log(`  ${formatter(item)}`);
     }
 }
 
@@ -337,19 +389,12 @@ function printSummary() {
     console.log(`${COLORS.blue}Verification Summary${COLORS.reset}`);
     console.log('='.repeat(60));
 
-    console.log(`\n${COLORS.yellow}File References:${COLORS.reset}`);
-    console.log(`  ${COLORS.green}✓ Passed: ${results.fileRefs.passed.length}${COLORS.reset}`);
-    console.log(`  ${COLORS.red}✗ Failed: ${results.fileRefs.failed.length}${COLORS.reset}`);
-
-    console.log(`\n${COLORS.yellow}Code References (Functions/Constants):${COLORS.reset}`);
-    console.log(`  ${COLORS.green}✓ Passed: ${results.codeRefs.passed.length}${COLORS.reset}`);
-    console.log(`  ${COLORS.red}✗ Failed: ${results.codeRefs.failed.length}${COLORS.reset}`);
+    printCategorySummary('File References', results.fileRefs);
+    printCategorySummary('Code References (Functions/Constants)', results.codeRefs);
 
     const hasExports = results.exportRefs.passed.length > 0 || results.exportRefs.failed.length > 0;
     if (hasExports) {
-        console.log(`\n${COLORS.yellow}Export References:${COLORS.reset}`);
-        console.log(`  ${COLORS.green}✓ Passed: ${results.exportRefs.passed.length}${COLORS.reset}`);
-        console.log(`  ${COLORS.red}✗ Failed: ${results.exportRefs.failed.length}${COLORS.reset}`);
+        printCategorySummary('Export References', results.exportRefs);
     }
 
     const totalFailed = results.fileRefs.failed.length +
@@ -358,28 +403,9 @@ function printSummary() {
 
     if (totalFailed > 0) {
         console.log(`\n${COLORS.red}❌ Verification failed with ${totalFailed} error(s)${COLORS.reset}`);
-
-        // Show failed references
-        if (results.fileRefs.failed.length > 0) {
-            console.log(`\n${COLORS.red}Failed File References:${COLORS.reset}`);
-            for (const { file, ref } of results.fileRefs.failed) {
-                console.log(`  ${file}: ${ref}`);
-            }
-        }
-
-        if (results.codeRefs.failed.length > 0) {
-            console.log(`\n${COLORS.red}Failed Code References:${COLORS.reset}`);
-            for (const { file, name, type } of results.codeRefs.failed) {
-                console.log(`  ${file}: ${name} (${type})`);
-            }
-        }
-
-        if (results.exportRefs.failed.length > 0) {
-            console.log(`\n${COLORS.red}Failed Export References:${COLORS.reset}`);
-            for (const { file, name } of results.exportRefs.failed) {
-                console.log(`  ${file}: ${name}`);
-            }
-        }
+        printFailures('Failed File References', results.fileRefs.failed, ({ file, ref }) => `${file}: ${ref}`);
+        printFailures('Failed Code References', results.codeRefs.failed, ({ file, name, type }) => `${file}: ${name} (${type})`);
+        printFailures('Failed Export References', results.exportRefs.failed, ({ file, name }) => `${file}: ${name}`);
     } else {
         console.log(`\n${COLORS.green}✅ All documentation references verified successfully!${COLORS.reset}`);
     }
