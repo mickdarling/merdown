@@ -390,7 +390,9 @@ function verifyCodeRefs(content, relPath, codeIndex) {
             results.codeRefs.failed.push({ file: relPath, name, type, suggestions });
             console.log(`  ${COLORS.red}✗ ${type} not found: ${name}${COLORS.reset}`);
             if (suggestions.length > 0) {
-                console.log(`    ${COLORS.gray}Did you mean: ${suggestions.map(s => `${s.name} (${s.files[0]})`).join(', ')}?${COLORS.reset}`);
+                // Build suggestion text without nested template literals (SonarCloud S6617)
+                const suggestionText = suggestions.map(s => s.name + ' (' + s.files[0] + ')').join(', ');
+                console.log(`    ${COLORS.gray}Did you mean: ${suggestionText}?${COLORS.reset}`);
             }
         }
     }
