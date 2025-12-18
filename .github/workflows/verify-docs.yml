@@ -40,7 +40,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          # No npm cache needed - script uses only Node.js built-ins
 
       - name: Run documentation verification
         run: node scripts/verify-docs.js

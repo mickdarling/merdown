@@ -212,12 +212,13 @@ function extractCodeReferences(content) {
         }
     }
 
-    // Match constants: `ALL_CAPS_NAME` (at least 2 chars, all uppercase with underscores)
-    const constantRegex = /`([A-Z][A-Z0-9_]+)`/g;
+    // Match constants: `ALL_CAPS_NAME` (min 3 chars, or 2+ with underscore)
+    // Requires minimum 3 chars to avoid matching HTML abbreviations like ID, IP, UI
+    const constantRegex = /`([A-Z][A-Z0-9_]{2,})`/g;
     while ((match = constantRegex.exec(content)) !== null) {
         const name = match[1];
-        // Only constants with at least one underscore or 2+ chars
-        if (name.length >= 2 && (name.includes('_') || name.length > 2)) {
+        // Include if: has underscore (like A_B), or 3+ chars without underscore (like MAX, API)
+        if (name.includes('_') || name.length >= 3) {
             refs.add(JSON.stringify({ name, type: 'constant' }));
         }
     }
