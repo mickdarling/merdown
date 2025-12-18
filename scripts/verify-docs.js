@@ -73,26 +73,70 @@ async function findMarkdownFiles(dir, exclude = ['node_modules', '.git']) {
 /**
  * Extract file path references from markdown content
  * Matches patterns like:
- * - `js/security.js`
- * - `docs/about.md`
- * - `index.html`
+ * - `js/security.js` (path with directory)
+ * - `docs/about.md` (nested path)
+ * - `node_modules/pkg.name/file.js` (dots in directory names)
+ *
+ * Single-segment files (no directory) like `index.html` are only matched if they're
+ * known root-level project files, to avoid false positives from example filenames
+ * in documentation like `custom.css` or `my-theme.css`.
+ *
  * @param {string} content - Markdown content
  * @returns {string[]} Array of referenced file paths
  */
 function extractFileReferences(content) {
     const refs = new Set();
 
-    // Match code blocks with file paths (backtick enclosed)
-    // Matches: `js/file.js`, `docs/file.md`, `index.html`
-    const codePathRegex = /`([\w-]+\/[\w/-]+\.[a-zA-Z]+)`/g;
+    // Known file extensions to include (allowlist approach prevents false positives
+    // from object property access like `URL.username` or domain names like `example.com`)
+    const validExtensions = new Set([
+        // Code files
+        'js', 'mjs', 'cjs', 'ts', 'tsx', 'jsx',
+        'py', 'rb', 'go', 'rs', 'java', 'c', 'h', 'cpp', 'hpp', 'cs',
+        'php', 'pl', 'pm', 'swift', 'kt', 'scala', 'lua', 'r',
+        // Web files
+        'html', 'htm', 'css', 'scss', 'sass', 'less', 'vue', 'svelte',
+        // Config/data files
+        'json', 'yaml', 'yml', 'toml', 'xml', 'ini', 'cfg', 'conf',
+        // Documentation
+        'md', 'mdx', 'txt', 'rst', 'adoc',
+        // Shell scripts
+        'sh', 'bash', 'zsh', 'fish', 'ps1', 'bat', 'cmd',
+        // Assets
+        'svg', 'png', 'jpg', 'jpeg', 'gif', 'ico', 'webp',
+        // Other
+        'sql', 'graphql', 'gql', 'proto', 'env', 'lock', 'log'
+    ]);
+
+    // Known root-level project files that don't have a directory path
+    // These are commonly referenced without a path prefix
+    const knownRootFiles = new Set([
+        'README.md', 'SECURITY.md', 'CONTRIBUTING.md', 'CHANGELOG.md',
+        'LICENSE', 'LICENSE.md', 'index.html', 'package.json',
+        'tsconfig.json', 'Dockerfile', 'docker-compose.yml'
+    ]);
+
+    // Match file paths with or without directories (backtick enclosed)
+    // - `(?:[\w.-]+\/)*` matches zero or more directory segments (allows dots in dir names)
+    // - `[\w.-]+` matches the filename (allows dots for things like file.min.js)
+    // - `\.([a-zA-Z]+)` captures the extension
+    const codePathRegex = /`((?:[\w.-]+\/)*[\w.-]+\.([a-zA-Z]+))`/g;
     let match;
 
     while ((match = codePathRegex.exec(content)) !== null) {
         const path = match[1];
-        // Only include paths that look like files (have extension)
-        // Exclude URLs (contain ://)
-        if (!path.includes('://') && /\.[a-zA-Z]+$/.test(path)) {
-            refs.add(path);
+        const ext = match[2].toLowerCase();
+        const hasDirectory = path.includes('/');
+
+        // Only include if:
+        // 1. Has valid file extension (not a URL/domain/property access)
+        // 2. Not a URL (contains ://)
+        // 3. Either has a directory path OR is a known root-level file
+        //    (single-segment files like `custom.css` are likely examples in docs)
+        if (!path.includes('://') && validExtensions.has(ext)) {
+            if (hasDirectory || knownRootFiles.has(path)) {
+                refs.add(path);
+            }
         }
     }
 

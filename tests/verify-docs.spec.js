@@ -467,6 +467,72 @@ test.describe('Edge Cases and Real-world Scenarios', () => {
     expect(refs).not.toContain('src/LICENSE');
   });
 
+  test('extractFileReferences should filter out domain names', () => {
+    const content = `
+      Visit \`example.com\` for more.
+      Check \`github.io\` for hosting.
+      See \`mysite.org\` for details.
+      Real file: \`js/security.js\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    // Domain names should be filtered out
+    expect(refs).not.toContain('example.com');
+    expect(refs).not.toContain('github.io');
+    expect(refs).not.toContain('mysite.org');
+    // Real file paths should still be included
+    expect(refs).toContain('js/security.js');
+  });
+
+  test('extractFileReferences should filter out object property access', () => {
+    const content = `
+      Use \`URL.username\` to get the user.
+      Check \`URL.password\` for auth.
+      Call \`state.renderMarkdown\` to render.
+      Real file: \`docs/about.md\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    // Object property access should be filtered out
+    expect(refs).not.toContain('URL.username');
+    expect(refs).not.toContain('URL.password');
+    expect(refs).not.toContain('state.renderMarkdown');
+    // Real file paths should still be included
+    expect(refs).toContain('docs/about.md');
+  });
+
+  test('extractFileReferences should filter out example filenames without paths', () => {
+    const content = `
+      Download \`custom.css\` for styling.
+      Create \`my-theme.css\` for themes.
+      Example: \`Academia.css\`
+      Real file: \`styles/main.css\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    // Example filenames without paths should be filtered out
+    expect(refs).not.toContain('custom.css');
+    expect(refs).not.toContain('my-theme.css');
+    expect(refs).not.toContain('Academia.css');
+    // File paths with directories should be included
+    expect(refs).toContain('styles/main.css');
+  });
+
+  test('extractFileReferences should handle paths with dots in directory names', () => {
+    const content = `
+      Module: \`node_modules/pkg.name/index.js\`
+      Another: \`vendor/lib.v2/main.js\`
+    `;
+
+    const refs = runVerifyDocsFunction('extractFileReferences', content);
+
+    expect(refs).toContain('node_modules/pkg.name/index.js');
+    expect(refs).toContain('vendor/lib.v2/main.js');
+  });
+
   test('extractCodeReferences should handle constants at minimum length', () => {
     const content = `
       Two char: \`AB\`
@@ -501,9 +567,13 @@ test.describe('Documentation - Test Coverage Summary', () => {
           'Different file extensions',
           'Markdown code blocks',
           'Relative paths',
-          'Files without extensions (should not match)'
+          'Files without extensions (should not match)',
+          'Domain name filtering (example.com, github.io)',
+          'Object property access filtering (URL.username)',
+          'Example filename filtering (no path prefix)',
+          'Paths with dots in directory names'
         ],
-        totalTests: 11
+        totalTests: 15
       },
       extractCodeReferences: {
         tested: [
@@ -527,8 +597,8 @@ test.describe('Documentation - Test Coverage Summary', () => {
     };
 
     // This test always passes - it's just documentation
-    expect(coverage.extractFileReferences.totalTests).toBe(11);
+    expect(coverage.extractFileReferences.totalTests).toBe(15);
     expect(coverage.extractCodeReferences.totalTests).toBe(14);
-    expect(coverage.extractFileReferences.totalTests + coverage.extractCodeReferences.totalTests).toBe(25);
+    expect(coverage.extractFileReferences.totalTests + coverage.extractCodeReferences.totalTests).toBe(29);
   });
 });
