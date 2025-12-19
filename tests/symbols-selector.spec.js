@@ -33,9 +33,9 @@ test.describe('Symbols Selector', () => {
     ]);
   });
 
-  test('should have placeholder "Mermaid..." as first option', async ({ page }) => {
+  test('should have placeholder "Insert..." as first option', async ({ page }) => {
     const firstOption = await page.$eval('#symbolsSelector option:first-child', el => el.textContent);
-    expect(firstOption).toBe('Mermaid...');
+    expect(firstOption).toBe('Insert...');
   });
 
   test('should have mermaid block option', async ({ page }) => {
