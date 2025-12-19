@@ -1371,14 +1371,36 @@
                             <option value="">Document...</option>
                         </optgroup>
                     </select>
-                    <select class="panel-selector" id="symbolsSelector" onchange="insertSpecialCharacter(this.value)" title="Insert special characters for Mermaid diagrams">
-                        <optgroup label="Insert Symbol">
-                            <option value="">Symbols...</option>
+                    <select class="panel-selector" id="symbolsSelector" onchange="insertSpecialCharacter(this.value)" title="Insert Mermaid snippets and special characters">
+                        <optgroup label="Mermaid Block">
+                            <option value="">Mermaid...</option>
+                            <option value="```mermaid&#10;&#10;```">``` mermaid block</option>
+                        </optgroup>
+                        <optgroup label="Diagram Types">
+                            <option value="graph LR&#10;    ">graph LR (left → right)</option>
+                            <option value="graph RL&#10;    ">graph RL (right → left)</option>
+                            <option value="graph TD&#10;    ">graph TD (top → down)</option>
+                            <option value="graph BT&#10;    ">graph BT (bottom → top)</option>
+                            <option value="flowchart LR&#10;    ">flowchart LR</option>
+                            <option value="flowchart TD&#10;    ">flowchart TD</option>
+                            <option value="sequenceDiagram&#10;    ">sequenceDiagram</option>
+                            <option value="classDiagram&#10;    ">classDiagram</option>
+                            <option value="stateDiagram-v2&#10;    ">stateDiagram</option>
+                            <option value="erDiagram&#10;    ">erDiagram</option>
+                            <option value="gantt&#10;    ">gantt</option>
+                            <option value="pie&#10;    ">pie chart</option>
+                            <option value="gitGraph&#10;    ">gitGraph</option>
+                            <option value="mindmap&#10;    ">mindmap</option>
+                            <option value="timeline&#10;    ">timeline</option>
+                        </optgroup>
+                        <optgroup label="Special Characters">
                             <option value="#quot;">" double quote</option>
                             <option value="#apos;">' single quote</option>
                             <option value="#lt;">&lt; less than</option>
                             <option value="#gt;">&gt; greater than</option>
                             <option value="#amp;">&amp; ampersand</option>
+                        </optgroup>
+                        <optgroup label="Arrows">
                             <option value="-->">&rarr; right arrow</option>
                             <option value="<--">&larr; left arrow</option>
                             <option value="<-->">&harr; both arrows</option>

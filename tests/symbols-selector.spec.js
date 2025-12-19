@@ -15,30 +15,55 @@ test.describe('Symbols Selector', () => {
     expect(selector).not.toBeNull();
   });
 
-  test('should have correct optgroup label', async ({ page }) => {
-    const label = await page.$eval('#symbolsSelector optgroup', el => el.getAttribute('label'));
-    expect(label).toBe('Insert Symbol');
-  });
-
-  test('should have placeholder "Symbols..." as first option', async ({ page }) => {
-    const firstOption = await page.$eval('#symbolsSelector option:first-child', el => el.textContent);
-    expect(firstOption).toBe('Symbols...');
-  });
-
-  test('should have all required symbol options', async ({ page }) => {
-    const options = await page.$$eval('#symbolsSelector option', els =>
-      els.map(el => ({ value: el.value, text: el.textContent }))
+  test('should have correct optgroup labels', async ({ page }) => {
+    const labels = await page.$$eval('#symbolsSelector optgroup', els =>
+      els.map(el => el.getAttribute('label'))
     );
+    expect(labels).toEqual(['Mermaid Block', 'Diagram Types', 'Special Characters', 'Arrows']);
+  });
 
-    // Remove the placeholder option
-    const symbolOptions = options.slice(1);
+  test('should have placeholder "Mermaid..." as first option', async ({ page }) => {
+    const firstOption = await page.$eval('#symbolsSelector option:first-child', el => el.textContent);
+    expect(firstOption).toBe('Mermaid...');
+  });
 
-    expect(symbolOptions).toEqual([
+  test('should have mermaid block option', async ({ page }) => {
+    const mermaidOption = await page.$eval('#symbolsSelector optgroup[label="Mermaid Block"] option:nth-child(2)',
+      el => el.textContent
+    );
+    expect(mermaidOption).toBe('``` mermaid block');
+  });
+
+  test('should have diagram type options', async ({ page }) => {
+    const diagramOptions = await page.$$eval('#symbolsSelector optgroup[label="Diagram Types"] option',
+      els => els.map(el => el.textContent)
+    );
+    expect(diagramOptions).toContain('graph LR (left → right)');
+    expect(diagramOptions).toContain('sequenceDiagram');
+    expect(diagramOptions).toContain('classDiagram');
+    expect(diagramOptions).toContain('erDiagram');
+    expect(diagramOptions).toContain('gantt');
+    expect(diagramOptions).toContain('pie chart');
+  });
+
+  test('should have special character options', async ({ page }) => {
+    const charOptions = await page.$$eval('#symbolsSelector optgroup[label="Special Characters"] option',
+      els => els.map(el => ({ value: el.value, text: el.textContent }))
+    );
+    expect(charOptions).toEqual([
       { value: '#quot;', text: '" double quote' },
       { value: '#apos;', text: '\' single quote' },
       { value: '#lt;', text: '< less than' },
       { value: '#gt;', text: '> greater than' },
-      { value: '#amp;', text: '& ampersand' },
+      { value: '#amp;', text: '& ampersand' }
+    ]);
+  });
+
+  test('should have arrow options', async ({ page }) => {
+    const arrowOptions = await page.$$eval('#symbolsSelector optgroup[label="Arrows"] option',
+      els => els.map(el => ({ value: el.value, text: el.textContent }))
+    );
+    expect(arrowOptions).toEqual([
       { value: '-->', text: '→ right arrow' },
       { value: '<--', text: '← left arrow' },
       { value: '<-->', text: '↔ both arrows' }
@@ -166,7 +191,7 @@ test.describe('Symbols Selector', () => {
 
   test('should have appropriate title attribute', async ({ page }) => {
     const title = await page.$eval('#symbolsSelector', el => el.getAttribute('title'));
-    expect(title).toBe('Insert special characters for Mermaid diagrams');
+    expect(title).toBe('Insert Mermaid snippets and special characters');
   });
 
   test('should use panel-selector CSS class', async ({ page }) => {
