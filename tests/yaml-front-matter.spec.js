@@ -610,7 +610,7 @@ title: Style Test
           // This handles browser differences in default value representation
           const hasBorder = styles.borderWidth && styles.borderWidth !== '0px' &&
                            styles.borderStyle && styles.borderStyle !== 'none';
-          const hasBorderRadius = parseFloat(styles.borderRadius) > 0;
+          const hasBorderRadius = Number.parseFloat(styles.borderRadius) > 0;
           const hasBackground = styles.backgroundColor &&
                                styles.backgroundColor !== 'rgba(0, 0, 0, 0)' &&
                                styles.backgroundColor !== 'transparent';

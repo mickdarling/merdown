@@ -4,7 +4,6 @@
 // @ts-check
 const { test, expect } = require('@playwright/test');
 const {
-  waitForPageReady,
   WAIT_TIMES,
   MERMAID_TEST_CONSTANTS,
   waitForMermaidDiagrams,
