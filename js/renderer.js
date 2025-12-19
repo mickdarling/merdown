@@ -12,17 +12,48 @@ import { updateSessionContent, isSessionsInitialized } from './sessions.js';
 import { escapeHtml, slugify, showStatus, isRelativeUrl, resolveRelativeUrl, isMarkdownUrl } from './utils.js';
 import { validateCode } from './validation.js';
 
-// Debug flag for Mermaid theme investigation (#168)
-// Enable via: localStorage.setItem('debug-mermaid-theme', 'true')
-// Note: Checked at runtime so changes take effect immediately without page refresh
+/**
+ * Debug flag for Mermaid theme investigation (#168)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-mermaid-theme', 'true')
+ */
 function isDebugMermaidTheme() {
     return localStorage.getItem('debug-mermaid-theme') === 'true';
 }
 
-// Debug flag for Mermaid performance tracking (#326)
-// Enable via: localStorage.setItem('debug-mermaid-perf', 'true')
+/**
+ * Debug flag for Mermaid performance tracking (#326)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-mermaid-perf', 'true')
+ */
 function isDebugMermaidPerf() {
     return localStorage.getItem('debug-mermaid-perf') === 'true';
+}
+
+/**
+ * Debug flag for URL resolution tracking (#345)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-url-resolution', 'true')
+ */
+function isDebugUrlResolution() {
+    return localStorage.getItem('debug-url-resolution') === 'true';
+}
+
+/**
+ * Check if a URL is same-origin as the current page
+ * @param {string} url - URL to check (absolute URLs only)
+ * @returns {boolean} True if same-origin, false if cross-origin, invalid, or relative
+ */
+function isSameOriginUrl(url) {
+    // Relative URLs can't be same-origin checked - they need resolution first
+    if (!url || isRelativeUrl(url)) {
+        return false;
+    }
+    try {
+        return new URL(url).origin === globalThis.location.origin;
+    } catch {
+        return false;
+    }
 }
 
 /**
@@ -165,32 +196,87 @@ renderer.heading = function(text, level) {
 };
 
 /**
+ * Resolve relative URL if loaded from a remote (non-same-origin) source
+ *
+ * Same-origin URLs (e.g., localhost) are NOT resolved because:
+ * - For local docs at /?url=docs/about.md with link ./guide.md
+ * - The link should remain relative so the click handler can intercept it
+ * - And navigate to /?url=docs/guide.md (not resolve against localhost)
+ *
+ * Remote URLs (e.g., GitHub raw) ARE resolved because:
+ * - Relative links need to become absolute to fetch from the correct location
+ * - ./other.md in a GitHub file should resolve to the same GitHub directory
+ *
+ * @param {string} relativeUrl - The potentially relative URL to resolve
+ * @returns {string|null} Resolved absolute URL, or null if:
+ *   - No source URL loaded (state.loadedFromURL not set)
+ *   - URL is already absolute (not relative)
+ *   - Loaded from same-origin (local docs should keep relative links)
+ *   - Resolution fails (invalid URL)
+ */
+function resolveRemoteUrl(relativeUrl) {
+    if (!state.loadedFromURL || !isRelativeUrl(relativeUrl)) {
+        return null;
+    }
+    try {
+        if (isSameOriginUrl(state.loadedFromURL)) {
+            if (isDebugUrlResolution()) {
+                console.log('[URL Resolution] Skipping same-origin:', relativeUrl);
+            }
+            return null;
+        }
+        const resolved = resolveRelativeUrl(relativeUrl, state.loadedFromURL);
+        if (isDebugUrlResolution()) {
+            console.log('[URL Resolution] Resolved:', relativeUrl, '→', resolved);
+        }
+        return resolved;
+    } catch (error) {
+        if (isDebugUrlResolution()) {
+            console.warn('[URL Resolution] Failed for:', relativeUrl, error);
+        }
+        return null;
+    }
+}
+
+/**
  * Custom link renderer to resolve relative URLs against the source document URL (Issue #345)
  * When content is loaded from a remote URL (state.loadedFromURL), relative links
  * like "./other.md" or "../folder/file.md" are resolved to absolute URLs.
  * Markdown links get special data attributes for in-app navigation.
+ *
+ * Security Note: The 'text' parameter may contain HTML from markdown inline formatting
+ * (e.g., [**bold**](url) becomes text="<strong>bold</strong>"). We sanitize it here
+ * for defense-in-depth, though DOMPurify also sanitizes the entire output in renderMarkdown().
  */
 renderer.link = function(href, title, text) {
-    // Resolve relative URLs if we have a source URL context
-    let resolvedHref = href;
-    if (state.loadedFromURL && isRelativeUrl(href)) {
-        const resolved = resolveRelativeUrl(href, state.loadedFromURL);
-        if (resolved) {
-            resolvedHref = resolved;
-        }
-    }
+    const resolvedHref = resolveRemoteUrl(href) || href;
 
     // Build attributes
     const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
 
-    // Check if this is a markdown link that should open in Merview
-    if (isMarkdownUrl(resolvedHref)) {
+    // Security: Defense-in-depth sanitization of link text
+    // The 'text' parameter may contain HTML from markdown inline formatting (e.g., **bold** → <strong>)
+    // While DOMPurify.sanitize() is also called on the entire rendered output in renderMarkdown(),
+    // we sanitize here as well because:
+    // 1. Catches XSS earlier in the pipeline, before string concatenation
+    // 2. Protects against future refactoring that might bypass the final sanitization
+    // 3. Ensures each component is independently secure (defense-in-depth principle)
+    // Fallback to href if text is empty (ensures clickable, accessible links)
+    const safeText = DOMPurify.sanitize(text || href || 'Link');
+
+    // Check if this is a remote markdown link that should open in Merview
+    // Root-relative URLs (starting with /) are excluded from in-app navigation because:
+    // 1. They already work correctly with browser's native navigation
+    // 2. URLs like /?url=docs/about.md or /docs/file.md should load directly
+    // 3. Wrapping them in ?url= would create malformed URLs like /?url=/?url=...
+    // Only relative paths (./other.md) and absolute remote URLs need special handling
+    if (isMarkdownUrl(resolvedHref) && !resolvedHref.startsWith('/')) {
         // Add data attribute for JavaScript click handler to intercept
-        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${text}</a>`;
+        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${safeText}</a>`;
     }
 
     // External or non-markdown links open normally
-    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${text}</a>`;
+    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${safeText}</a>`;
 };
 
 /**
@@ -199,14 +285,7 @@ renderer.link = function(href, title, text) {
  * like "./images/diagram.png" are resolved to absolute URLs so images display correctly.
  */
 renderer.image = function(href, title, text) {
-    // Resolve relative URLs if we have a source URL context
-    let resolvedHref = href;
-    if (state.loadedFromURL && isRelativeUrl(href)) {
-        const resolved = resolveRelativeUrl(href, state.loadedFromURL);
-        if (resolved) {
-            resolvedHref = resolved;
-        }
-    }
+    const resolvedHref = resolveRemoteUrl(href) || href;
 
     // Build attributes
     const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
@@ -927,10 +1006,39 @@ function attachMarkdownLinkHandlers(wrapper) {
             e.preventDefault();
             const url = link.getAttribute('href');
             if (url) {
+                // Determine the target URL for ?url= parameter
+                let targetUrl = url;
+
+                // For relative URLs (./other.md, ../README.md), resolve against source document
+                // This handles same-origin docs loaded via ?url=docs/guide.md
+                if (state.loadedFromURL && isRelativeUrl(url)) {
+                    try {
+                        // Resolve relative URL against the source document
+                        const resolved = resolveRelativeUrl(url, state.loadedFromURL);
+                        if (resolved) {
+                            // Extract just the path for same-origin URLs
+                            if (isSameOriginUrl(resolved)) {
+                                // Same-origin: use path without origin (e.g., "docs/other.md")
+                                targetUrl = new URL(resolved).pathname.replace(/^\//, '');
+                            } else {
+                                // Remote: use full resolved URL
+                                targetUrl = resolved;
+                            }
+                        }
+                    } catch {
+                        // Resolution failed - use original URL
+                    }
+                }
+
                 // Navigate within Merview by updating the URL parameter
                 // This triggers a page load with the new content
                 const newUrl = new URL(globalThis.location.href);
-                newUrl.search = `?url=${encodeURIComponent(url)}`;
+                // Intentionally replace the entire query string rather than preserving other params.
+                // Rationale: The ?url= param is the primary content source. Other params like ?style=
+                // are user preferences that should persist in localStorage, not the URL. Keeping the
+                // URL clean also makes sharing links easier. If we need to preserve specific params
+                // in the future (e.g., ?style=), we can use URLSearchParams selectively.
+                newUrl.search = `?url=${encodeURIComponent(targetUrl)}`;
                 globalThis.location.href = newUrl.toString();
             }
         });

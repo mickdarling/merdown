@@ -156,10 +156,22 @@ export function isValidMarkdownContentType(contentType) {
  * - 10 MB content size limit (prevents loading extremely large files)
  * - Content-Type validation (blocks executable/binary content)
  *
- * @param {string} url - The URL to load markdown from
+ * @param {string} url - The URL to load markdown from (may be resolved/normalized)
+ * @param {string} [displayUrl] - Optional URL to show in address bar (preserves original user-provided URL)
  * @returns {Promise<boolean>} True if successful, false on error
+ *
+ * @example
+ * // Basic usage - URL shown in address bar matches fetched URL
+ * await loadMarkdownFromURL('https://example.com/docs/guide.md');
+ * // Address bar: ?url=https://example.com/docs/guide.md
+ *
+ * @example
+ * // With displayUrl - preserve user's original relative path in address bar
+ * await loadMarkdownFromURL('https://example.com/docs/guide.md', 'docs/guide.md');
+ * // Address bar: ?url=docs/guide.md (cleaner for sharing)
+ * // Fetch uses: https://example.com/docs/guide.md (fully resolved)
  */
-export async function loadMarkdownFromURL(url) {
+export async function loadMarkdownFromURL(url, displayUrl) {
     // Normalize GitHub URLs (gist.github.com and github.com/blob) to raw URLs
     const normalizedUrl = normalizeGitHubContentUrl(url);
 
@@ -216,8 +228,9 @@ export async function loadMarkdownFromURL(url) {
         state.loadedFromURL = normalizedUrl; // Track URL source
 
         // Persist the original URL (not normalized) in address bar for sharing (Issue #204)
-        // Use the original URL parameter so users can copy/share the exact URL they provided
-        setURLParameter(url);
+        // Use displayUrl if provided (preserves relative doc paths like "docs/about.md"),
+        // otherwise fall back to the url parameter
+        setURLParameter(displayUrl || url);
 
         // Update document selector to show the new name
         if (typeof globalThis.updateDocumentSelector === 'function') {
