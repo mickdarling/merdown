@@ -41,13 +41,14 @@ function isDebugUrlResolution() {
 
 /**
  * Check if a URL is same-origin as the current page
- * @param {string} url - URL to check (must be absolute or parseable with a base)
+ * @param {string} url - URL to check (absolute URLs only)
  * @returns {boolean} True if same-origin, false if cross-origin, invalid, or relative
- * @note Relative URLs (./file.md, ../dir/file.md) return false because new URL()
- *       throws without a base. This is intentional - callers should use isRelativeUrl()
- *       to check for relative URLs before calling this function.
  */
 function isSameOriginUrl(url) {
+    // Relative URLs can't be same-origin checked - they need resolution first
+    if (!url || isRelativeUrl(url)) {
+        return false;
+    }
     try {
         return new URL(url).origin === globalThis.location.origin;
     } catch {
