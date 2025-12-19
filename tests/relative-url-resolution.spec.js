@@ -272,6 +272,69 @@ test.describe('Relative URL Resolution', () => {
             expect(imgSrc).toBe('//cdn.example.com/image.png');
         });
 
+        test('protocol-relative URLs with query strings and anchors', async ({ page }) => {
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            await page.evaluate(() => {
+                globalThis.state.loadedFromURL = 'https://example.com/docs/test.md';
+
+                const testContent = `# Test
+[With query](//cdn.example.com/file.md?v=1.0)
+[With anchor](//cdn.example.com/file.md#section)
+[With both](//cdn.example.com/file.md?v=1.0#top)
+`;
+                if (globalThis.setEditorContent) {
+                    globalThis.setEditorContent(testContent);
+                }
+            });
+
+            await page.waitForTimeout(500);
+
+            const links = await page.locator('#wrapper a').all();
+            expect(links.length).toBe(3);
+
+            // Query string preserved
+            expect(await links[0].getAttribute('href')).toBe('//cdn.example.com/file.md?v=1.0');
+            // Anchor preserved
+            expect(await links[1].getAttribute('href')).toBe('//cdn.example.com/file.md#section');
+            // Both query and anchor preserved
+            expect(await links[2].getAttribute('href')).toBe('//cdn.example.com/file.md?v=1.0#top');
+        });
+
+        test('URLs with query strings or anchors are not marked as markdown links', async ({ page }) => {
+            // isMarkdownUrl() checks if URL ends with '.md' - query strings and anchors break this.
+            // ./other.md?query ends with "query", ./other.md#section ends with "section"
+            // This is by design: simple suffix check avoids URL parsing overhead.
+            // These links will still work, just won't get in-app navigation treatment.
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            await page.evaluate(() => {
+                globalThis.state.loadedFromURL = 'https://example.com/docs/guide.md';
+
+                const testContent = `# Test
+[With query](./other.md?tab=overview)
+[With anchor](./other.md#section)
+[Plain markdown](./another.md)
+`;
+                if (globalThis.setEditorContent) {
+                    globalThis.setEditorContent(testContent);
+                }
+            });
+
+            await page.waitForTimeout(500);
+
+            // Only plain .md URL gets data-merview-link attribute
+            const mviewLinks = await page.locator('#wrapper a[data-merview-link="true"]').all();
+            expect(mviewLinks.length).toBe(1);
+            expect(await mviewLinks[0].getAttribute('href')).toBe('https://example.com/docs/another.md');
+
+            // All links should still have resolved hrefs (just not marked for in-app nav)
+            const allLinks = await page.locator('#wrapper a').all();
+            expect(allLinks.length).toBe(3);
+        });
+
         test('multiple parent directory traversals should work', async ({ page }) => {
             await page.goto('/');
             await page.waitForLoadState('networkidle');
@@ -334,6 +397,50 @@ test.describe('Relative URL Resolution', () => {
             const img = page.locator('#wrapper img').first();
             const imgSrc = await img.getAttribute('src');
             expect(imgSrc).toBe('./images/logo.png'); // NOT resolved
+        });
+
+        test('same-origin link clicks should navigate with ?url= parameter', async ({ page }) => {
+            // When clicking a same-origin relative link, the click handler should
+            // resolve the path and wrap it in ?url= for proper in-app navigation
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            const origin = await page.evaluate(() => globalThis.location.origin);
+
+            await page.evaluate((testOrigin) => {
+                globalThis.state.loadedFromURL = `${testOrigin}/docs/guide.md`;
+
+                const testContent = `# Test
+[Other document](./other.md)
+`;
+                if (globalThis.setEditorContent) {
+                    globalThis.setEditorContent(testContent);
+                }
+            }, origin);
+
+            await page.waitForTimeout(500);
+
+            // Get the link
+            const link = page.locator('#wrapper a[data-merview-link="true"]').first();
+            expect(await link.count()).toBe(1);
+
+            // Intercept navigation to verify the target URL
+            let navigatedUrl = null;
+            await page.route('**/*', (route, request) => {
+                navigatedUrl = request.url();
+                route.abort(); // Don't actually navigate
+            });
+
+            // Click the link
+            await link.click();
+
+            // Give it a moment to trigger navigation
+            await page.waitForTimeout(100);
+
+            // Verify navigation target is ?url=docs/other.md (resolved relative to docs/guide.md)
+            // URL encoding turns "/" into "%2F"
+            expect(navigatedUrl).toContain('?url=');
+            expect(navigatedUrl).toMatch(/\?url=.*docs(%2F|\/)other\.md/);
         });
     });
 });

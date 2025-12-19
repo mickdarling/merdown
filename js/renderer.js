@@ -227,8 +227,13 @@ renderer.link = function(href, title, text) {
     // Build attributes
     const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
 
-    // Security: Sanitize link text to prevent XSS from raw HTML in markdown
-    // Uses DOMPurify inline to preserve legitimate formatting while removing dangerous content
+    // Security: Defense-in-depth sanitization of link text
+    // The 'text' parameter may contain HTML from markdown inline formatting (e.g., **bold** → <strong>)
+    // While DOMPurify.sanitize() is also called on the entire rendered output in renderMarkdown(),
+    // we sanitize here as well because:
+    // 1. Catches XSS earlier in the pipeline, before string concatenation
+    // 2. Protects against future refactoring that might bypass the final sanitization
+    // 3. Ensures each component is independently secure (defense-in-depth principle)
     const safeText = DOMPurify.sanitize(text || '');
 
     // Check if this is a remote markdown link that should open in Merview
@@ -969,16 +974,29 @@ function attachMarkdownLinkHandlers(wrapper) {
             e.preventDefault();
             const url = link.getAttribute('href');
             if (url) {
-                // Safety: Don't double-wrap URLs that already have ?url= or are same-origin
-                try {
-                    const urlObj = new URL(url, globalThis.location.origin);
-                    if (urlObj.origin === globalThis.location.origin) {
-                        // Same-origin URL - just navigate directly
-                        globalThis.location.href = url;
-                        return;
+                // Determine the target URL for ?url= parameter
+                let targetUrl = url;
+
+                // For relative URLs (./other.md, ../README.md), resolve against source document
+                // This handles same-origin docs loaded via ?url=docs/guide.md
+                if (state.loadedFromURL && isRelativeUrl(url)) {
+                    try {
+                        // Resolve relative URL against the source document
+                        const resolved = resolveRelativeUrl(url, state.loadedFromURL);
+                        if (resolved) {
+                            // Extract just the path for same-origin URLs
+                            const resolvedUrlObj = new URL(resolved);
+                            if (resolvedUrlObj.origin === globalThis.location.origin) {
+                                // Same-origin: use path without origin (e.g., "docs/other.md")
+                                targetUrl = resolvedUrlObj.pathname.replace(/^\//, '');
+                            } else {
+                                // Remote: use full resolved URL
+                                targetUrl = resolved;
+                            }
+                        }
+                    } catch {
+                        // Resolution failed - use original URL
                     }
-                } catch {
-                    // Invalid URL - continue with wrapping
                 }
 
                 // Navigate within Merview by updating the URL parameter
@@ -989,7 +1007,7 @@ function attachMarkdownLinkHandlers(wrapper) {
                 // are user preferences that should persist in localStorage, not the URL. Keeping the
                 // URL clean also makes sharing links easier. If we need to preserve specific params
                 // in the future (e.g., ?style=), we can use URLSearchParams selectively.
-                newUrl.search = `?url=${encodeURIComponent(url)}`;
+                newUrl.search = `?url=${encodeURIComponent(targetUrl)}`;
                 globalThis.location.href = newUrl.toString();
             }
         });
