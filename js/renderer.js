@@ -125,6 +125,7 @@ const mermaidPerfMetrics = {
 };
 
 // Initialize Mermaid with security settings (theme set dynamically)
+// Note: htmlLabels is set via directive injection in lazyRenderMermaid (Issue #342)
 mermaid.initialize({
     startOnLoad: false,
     theme: state.mermaidTheme,
@@ -839,7 +840,35 @@ async function lazyRenderMermaid(element) {
         // Remove loading indicator
         element.classList.remove('mermaid-loading');
 
-        const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
+        // Inject init directive to force SVG text labels (Issue #342)
+        // This prevents CSS inheritance issues with themes like Academic/Newspaper
+        // Prepend directive - Mermaid requires directives at the start of the diagram
+        let diagramCode = element.textContent.trim();
+
+        // Merge our htmlLabels setting with any existing init directive
+        // Use JSON parsing for robustness (avoids trailing comma and injection issues)
+        const directiveRegex = /^%%\{init:\s*(\{[\s\S]*?\})\s*\}%%/;
+        const directiveMatch = directiveRegex.exec(diagramCode);
+        if (directiveMatch) {
+            try {
+                const config = JSON.parse(directiveMatch[1]);
+                config.flowchart = config.flowchart || {};
+                config.flowchart.htmlLabels = false;
+                diagramCode = diagramCode.replace(
+                    /^%%\{init:\s*\{[\s\S]*?\}\s*\}%%/,
+                    `%%{init: ${JSON.stringify(config)}}%%`
+                );
+            } catch {
+                // If parsing fails, prepend our directive (may result in duplicate but won't break)
+                // Debug: console.debug('Mermaid directive parse failed, using fallback:', directiveMatch[0]);
+                diagramCode = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n' + diagramCode;
+            }
+        } else {
+            // No existing directive, prepend ours
+            diagramCode = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n' + diagramCode;
+        }
+
+        const { svg } = await mermaid.render(element.id + '-svg', diagramCode);
         // Use two-pass sanitization for better security
         const sanitizedSvg = sanitizeMermaidSvg(svg);
         element.innerHTML = '';

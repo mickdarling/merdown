@@ -693,9 +693,9 @@
 
         /*
          * Isolate Mermaid diagrams from preview theme typography.
-         * Uses #wrapper prefix for specificity to override theme styles.
-         * Without this isolation, theme properties cascade into SVG text elements,
-         * causing Mermaid to miscalculate bounding boxes and render incorrectly.
+         * Primary fix: htmlLabels:false directive injected in renderer.js forces
+         * SVG text instead of foreignObject HTML, preventing CSS inheritance.
+         * This CSS provides additional isolation for SVG text elements.
          * See: https://github.com/mickdarling/merview/issues/172
          * See: https://github.com/mickdarling/merview/issues/342
          */
@@ -777,7 +777,7 @@
             white-space: pre-wrap;
         }
 
-        /* Ensure SVG text elements don't inherit conflicting typography - Issue #342 */
+        /* Ensure SVG text elements don't inherit conflicting typography */
         #wrapper .mermaid svg,
         #wrapper .mermaid svg text,
         #wrapper .mermaid svg tspan,
