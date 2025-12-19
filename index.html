@@ -689,15 +689,26 @@
 
         .mermaid {
             text-align: center;
-            /*
-             * Prevent preview style typography from affecting SVG text rendering.
-             * Without this isolation, line-height values from preview styles (e.g.,
-             * Monospace's 1.8) cascade into SVG text elements, causing Mermaid to
-             * miscalculate bounding boxes and clip text at the bottom of nodes.
-             * See: https://github.com/mickdarling/merview/issues/172
-             */
+        }
+
+        /*
+         * Isolate Mermaid diagrams from preview theme typography.
+         * Uses #wrapper prefix for specificity to override theme styles.
+         * Without this isolation, theme properties cascade into SVG text elements,
+         * causing Mermaid to miscalculate bounding boxes and render incorrectly.
+         * See: https://github.com/mickdarling/merview/issues/172
+         * See: https://github.com/mickdarling/merview/issues/342
+         */
+        #wrapper .mermaid,
+        .mermaid {
             line-height: 1;
-            font-size: initial;
+            font-size: 1rem;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            letter-spacing: normal;
+            word-spacing: normal;
+            text-transform: none;
+            font-style: normal;
+            font-weight: normal;
         }
 
         /* Mermaid loading state - Issue #326 */
@@ -766,11 +777,17 @@
             white-space: pre-wrap;
         }
 
-        /* Ensure SVG text elements don't inherit conflicting line-height */
+        /* Ensure SVG text elements don't inherit conflicting typography - Issue #342 */
+        #wrapper .mermaid svg,
+        #wrapper .mermaid svg text,
+        #wrapper .mermaid svg tspan,
         .mermaid svg,
         .mermaid svg text,
         .mermaid svg tspan {
             line-height: 1;
+            letter-spacing: normal;
+            word-spacing: normal;
+            text-transform: none;
         }
 
         .mermaid-expand-btn {
