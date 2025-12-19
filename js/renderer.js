@@ -210,7 +210,7 @@ renderer.heading = function(text, level) {
  * @returns {string|null} Resolved absolute URL, or null if:
  *   - No source URL loaded (state.loadedFromURL not set)
  *   - URL is already absolute (not relative)
- *   - Same-origin URL (should remain relative for in-app navigation)
+ *   - Loaded from same-origin (local docs should keep relative links)
  *   - Resolution fails (invalid URL)
  */
 function resolveRemoteUrl(relativeUrl) {

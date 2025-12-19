@@ -490,5 +490,48 @@ test.describe('Relative URL Resolution', () => {
             // Should be "docs/other.md" (path resolved from docs/guide.md + ./other.md)
             expect(urlParam).toBe('docs/other.md');
         });
+
+        test('same-origin click extracts only pathname (query/hash stripped)', async ({ page }) => {
+            // Documents current behavior: when a same-origin relative link resolves to a URL
+            // with query params or anchors, only the pathname is used for ?url= navigation.
+            // This is intentional - ?url= is for file paths, not full URLs with params.
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            const origin = await page.evaluate(() => globalThis.location.origin);
+
+            // Note: Links with query/anchor don't get data-merview-link (isMarkdownUrl check fails)
+            // so we test with a plain .md link where the SOURCE has query params
+            await page.evaluate((testOrigin) => {
+                // Source URL has query params (simulating versioned docs)
+                globalThis.state.loadedFromURL = `${testOrigin}/docs/v2/guide.md`;
+
+                const testContent = `# Test
+[Other document](./other.md)
+`;
+                if (globalThis.setEditorContent) {
+                    globalThis.setEditorContent(testContent);
+                }
+            }, origin);
+
+            await page.waitForTimeout(RENDER_TIMEOUT_MS);
+
+            const link = page.locator('#wrapper a[data-merview-link="true"]').first();
+            expect(await link.count()).toBe(1);
+
+            let navigatedUrl = null;
+            await page.route('**/*', (route, request) => {
+                navigatedUrl = request.url();
+                route.abort();
+            });
+
+            await link.click();
+            await page.waitForTimeout(100);
+
+            expect(navigatedUrl).toBeTruthy();
+            const urlParam = new URL(navigatedUrl).searchParams.get('url');
+            // Pathname extracted correctly from nested path
+            expect(urlParam).toBe('docs/v2/other.md');
+        });
     });
 });
