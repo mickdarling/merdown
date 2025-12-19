@@ -620,6 +620,11 @@
             background: #415b76;
         }
 
+        .panel-selector:focus {
+            outline: 2px solid #3498db;
+            outline-offset: 1px;
+        }
+
         #editor-container {
             flex: 1;
             overflow: hidden;
@@ -1371,7 +1376,7 @@
                             <option value="">Document...</option>
                         </optgroup>
                     </select>
-                    <select class="panel-selector" id="symbolsSelector" onchange="insertSpecialCharacter(this.value)" title="Insert Mermaid snippets and special characters">
+                    <select class="panel-selector" id="symbolsSelector" onchange="insertSpecialCharacter(this.value)" title="Insert Mermaid snippets and special characters" aria-label="Insert Mermaid snippet - select to insert diagram syntax at cursor position">
                         <optgroup label="Mermaid Block">
                             <option value="">Insert...</option>
                             <option value="```mermaid&#10;&#10;```">``` mermaid block</option>

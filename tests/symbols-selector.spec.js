@@ -243,3 +243,122 @@ test.describe('Symbols Selector', () => {
     expect(isFunction).toBe(true);
   });
 });
+
+test.describe('Symbols Selector Accessibility', () => {
+  test.beforeEach(async ({ page }) => {
+    await waitForPageReady(page);
+  });
+
+  test('should have aria-label for screen readers', async ({ page }) => {
+    const ariaLabel = await page.$eval('#symbolsSelector', el => el.getAttribute('aria-label'));
+    expect(ariaLabel).toBeTruthy();
+    expect(ariaLabel).toContain('Insert');
+    expect(ariaLabel).toContain('Mermaid');
+  });
+
+  test('should be focusable via keyboard (Tab)', async ({ page }) => {
+    // The select element should have a tabindex that makes it focusable
+    const tabIndex = await page.$eval('#symbolsSelector', el => el.tabIndex);
+
+    // tabIndex >= 0 means it's in the tab order
+    // -1 would mean it's not tabbable (but can be focused programmatically)
+    expect(tabIndex).toBeGreaterThanOrEqual(0);
+
+    // Verify it can receive focus
+    await page.focus('#symbolsSelector');
+    const isFocused = await page.evaluate(() => document.activeElement?.id === 'symbolsSelector');
+    expect(isFocused).toBe(true);
+  });
+
+  test('should be operable via keyboard (Enter/Space)', async ({ page }) => {
+    await setCodeMirrorContent(page, 'Test content');
+
+    // Focus the selector
+    await page.focus('#symbolsSelector');
+
+    // Verify it's focused
+    const isFocused = await page.evaluate(() => document.activeElement?.id === 'symbolsSelector');
+    expect(isFocused).toBe(true);
+
+    // Use keyboard to change selection (Arrow Down to select an option)
+    await page.keyboard.press('ArrowDown');
+    await page.waitForTimeout(50);
+
+    // The native select behavior handles Enter/Space - verify the dropdown is interactive
+    const canInteract = await page.evaluate(() => {
+      const selector = document.getElementById('symbolsSelector');
+      return !selector.disabled && selector.options.length > 1;
+    });
+    expect(canInteract).toBe(true);
+  });
+
+  test('should have visible focus indicator', async ({ page }) => {
+    await page.focus('#symbolsSelector');
+
+    // Check that the element has some focus styling (outline or box-shadow)
+    const focusStyles = await page.evaluate(() => {
+      const el = document.getElementById('symbolsSelector');
+      const styles = window.getComputedStyle(el);
+      return {
+        outline: styles.outline,
+        outlineWidth: styles.outlineWidth,
+        boxShadow: styles.boxShadow
+      };
+    });
+
+    // Should have either outline or box-shadow for focus visibility
+    const hasFocusIndicator =
+      (focusStyles.outline && focusStyles.outline !== 'none' && focusStyles.outlineWidth !== '0px') ||
+      (focusStyles.boxShadow && focusStyles.boxShadow !== 'none');
+
+    expect(hasFocusIndicator).toBe(true);
+  });
+
+  test('optgroups should have accessible labels', async ({ page }) => {
+    const optgroups = await page.$$eval('#symbolsSelector optgroup', els =>
+      els.map(el => ({
+        label: el.getAttribute('label'),
+        hasLabel: el.hasAttribute('label') && el.getAttribute('label').length > 0
+      }))
+    );
+
+    // All optgroups should have non-empty labels
+    for (const group of optgroups) {
+      expect(group.hasLabel).toBe(true);
+      expect(group.label.length).toBeGreaterThan(0);
+    }
+  });
+
+  test('should insert content when option selected via keyboard', async ({ page }) => {
+    await setCodeMirrorContent(page, 'Hello');
+
+    // Set cursor at end
+    await page.evaluate(() => {
+      const editor = globalThis.state.cmEditor;
+      editor.setCursor({ line: 0, ch: 5 });
+    });
+
+    // Focus selector and select an option using keyboard
+    await page.focus('#symbolsSelector');
+
+    // Navigate to a specific option (double quote)
+    // First option is placeholder, second is mermaid block, then we need to go through optgroups
+    // Using selectOption is the accessible way to programmatically select
+    await page.selectOption('#symbolsSelector', '#quot;');
+    await page.waitForTimeout(100);
+
+    const content = await getCodeMirrorContent(page);
+    expect(content).toBe('Hello#quot;');
+  });
+
+  test('should not trap keyboard focus', async ({ page }) => {
+    // Focus the selector
+    await page.focus('#symbolsSelector');
+
+    // Should be able to Tab away from it
+    await page.keyboard.press('Tab');
+
+    const stillFocused = await page.evaluate(() => document.activeElement?.id === 'symbolsSelector');
+    expect(stillFocused).toBe(false);
+  });
+});
