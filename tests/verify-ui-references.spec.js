@@ -69,12 +69,10 @@ describe('UIReferenceVerifier', () => {
       const collection = ['Save', 'Load', 'Cancel'];
 
       // The method lowercases the needle parameter, then compares to lowercased collection items
+      // Note: existsInCollection expects a pre-lowercased reference (normalized)
+      // It compares item.toLowerCase() === normalizedReference
       assert.strictEqual(verifier.existsInCollection('save', collection), true);
-      // Note: The implementation lowercases the needle (first param) but not the second param before comparing
-      // It iterates the collection and lowercases each item, comparing to the normalized needle
-      assert.strictEqual(verifier.existsInCollection('Save', collection), false); // 'Save' !== 'save' (needle is not lowercased)
-      // Actually, looking at the code, it compares item.toLowerCase() === normalized (where normalized is the needle param)
-      // So the needle should already be lowercased
+      assert.strictEqual(verifier.existsInCollection('Save', collection), false); // Not pre-lowercased, won't match
       assert.strictEqual(verifier.existsInCollection('load', collection), true);
       assert.strictEqual(verifier.existsInCollection('cancel', collection), true);
     });
