@@ -48,27 +48,32 @@ function insertSpecialCharacter(text) {
     const { cmEditor } = state;
     if (!cmEditor) return;
 
-    // Get current cursor position
-    const cursor = cmEditor.getCursor();
+    try {
+        // Get current cursor position
+        const cursor = cmEditor.getCursor();
 
-    // Insert the text at cursor position
-    cmEditor.replaceRange(text, cursor);
+        // Insert the text at cursor position
+        cmEditor.replaceRange(text, cursor);
 
-    // Move cursor after inserted text, handling multi-line insertions
-    const lines = text.split('\n');
-    const lineCount = lines.length;
-    const lastLineLength = lines[lineCount - 1].length;
+        // Move cursor after inserted text, handling multi-line insertions
+        const lines = text.split('\n');
+        const lineCount = lines.length;
+        const lastLineLength = lines[lineCount - 1].length;
 
-    const newCursor = {
-        line: cursor.line + lineCount - 1,
-        ch: lineCount === 1 ? cursor.ch + lastLineLength : lastLineLength
-    };
-    cmEditor.setCursor(newCursor);
+        const newCursor = {
+            line: cursor.line + lineCount - 1,
+            ch: lineCount === 1 ? cursor.ch + lastLineLength : lastLineLength
+        };
+        cmEditor.setCursor(newCursor);
 
-    // Focus the editor
-    cmEditor.focus();
+        // Focus the editor
+        cmEditor.focus();
+    } catch (error) {
+        console.error('Failed to insert Mermaid snippet:', error);
+        showStatus('Error inserting snippet', 'warning');
+    }
 
-    // Reset the dropdown back to placeholder
+    // Reset the dropdown back to placeholder (always, even on error)
     const selector = document.getElementById('symbolsSelector');
     if (selector) {
         selector.value = '';

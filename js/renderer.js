@@ -585,6 +585,18 @@ function parseYAMLFrontMatter(markdown) {
  * @returns {Object} Parsed YAML object with security checks applied
  */
 function parseSimpleYAML(yamlText) {
+    // Early validation for empty/invalid input
+    if (!yamlText || typeof yamlText !== 'string') {
+        return {};
+    }
+
+    // Enforce overall size limit before processing to prevent resource exhaustion
+    const maxTotalLength = YAML_SECURITY_LIMITS.MAX_VALUE_LENGTH * YAML_SECURITY_LIMITS.MAX_KEYS;
+    if (yamlText.length > maxTotalLength) {
+        console.warn(`YAML security: Content exceeds max total length (${maxTotalLength}), truncating`);
+        yamlText = yamlText.substring(0, maxTotalLength);
+    }
+
     const result = {};
     const lines = yamlText.split('\n');
     let currentArray = null;

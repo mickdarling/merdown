@@ -104,8 +104,12 @@ test.describe('Mermaid Diagram Test Suite', () => {
         }
       });
 
-      // Wait for content to fully render
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      // Wait for diagrams to finish rendering (deterministic wait)
+      await page.waitForFunction(
+        () => document.querySelectorAll('.mermaid[data-mermaid-rendered="true"]').length > 0 ||
+              document.readyState === 'complete',
+        { timeout: 15000 }
+      );
 
       // Use centralized filter helper for consistency
       const criticalErrors = filterCriticalErrors(errors);
@@ -115,8 +119,12 @@ test.describe('Mermaid Diagram Test Suite', () => {
     });
 
     test('should render most diagram SVGs successfully', async ({ page }) => {
-      // Wait for rendering to complete
-      await page.waitForTimeout(WAIT_TIMES.CONTENT_LOAD);
+      // Diagrams already rendered in beforeEach via forceRenderAllMermaidDiagrams
+      // Verify SVG elements are present (deterministic check)
+      await page.waitForFunction(
+        () => document.querySelectorAll('.mermaid svg').length > 0,
+        { timeout: 5000 }
+      );
 
       // Get all mermaid containers
       const mermaidContainers = await page.locator('.mermaid').count();
