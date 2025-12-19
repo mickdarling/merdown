@@ -900,9 +900,17 @@ test.describe('URL Input Modal', () => {
     });
 
     test('modal description should be properly associated via aria-describedby', async ({ page }) => {
-      const descId = await getElementAttribute(page, '#urlModal', 'aria-describedby');
-      const descExists = await page.$(`#${descId}`);
-      expect(descExists).not.toBeNull();
+      const descIds = await getElementAttribute(page, '#urlModal', 'aria-describedby');
+      // Per ARIA spec, aria-describedby can reference multiple elements via space-separated IDs
+      // This allows combining a general description with context-specific information
+      // See: https://www.w3.org/TR/wai-aria-1.2/#aria-describedby
+      const idArray = descIds.split(' ');
+
+      // Verify all referenced description elements exist in the DOM
+      for (const id of idArray) {
+        const descExists = await page.$(`#${id}`);
+        expect(descExists).not.toBeNull();
+      }
     });
 
     test('error region should announce changes', async ({ page }) => {

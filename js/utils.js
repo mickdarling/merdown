@@ -228,3 +228,94 @@ export function clearURLParameter() {
         console.error('Error clearing URL parameter:', error);
     }
 }
+
+/**
+ * Check if a URL is relative (not absolute) and should be resolved
+ * @param {string} url - URL to check
+ * @returns {boolean} True if the URL is relative and should be resolved
+ */
+export function isRelativeUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+
+    // Anchor links (starting with #) should not be resolved - they're page-internal
+    if (url.startsWith('#')) return false;
+
+    // Root-relative URLs (starting with /) should not be resolved - they're absolute paths
+    // Examples: /docs/about.md, /?sample, /?url=...
+    if (url.startsWith('/')) return false;
+
+    // Absolute URLs start with protocol (http://, https://, etc.) or protocol-relative (//)
+    // Also check for data: URIs, javascript:, mailto:, tel:, and other URI schemes
+    const absolutePatterns = /^([a-z][a-z0-9+.-]*:|\/\/)/i;
+    return !absolutePatterns.test(url);
+}
+
+/**
+ * Extract the base URL (directory) from a full URL
+ * For https://example.com/path/to/file.md returns https://example.com/path/to/
+ * @param {string} url - Full URL to extract base from
+ * @returns {string|null} Base URL (directory) or null if invalid
+ */
+export function getBaseUrl(url) {
+    if (!url || typeof url !== 'string') return null;
+
+    try {
+        const urlObj = new URL(url);
+        // Get the path and remove the filename (everything after last /)
+        const pathParts = urlObj.pathname.split('/');
+        pathParts.pop(); // Remove the filename
+        urlObj.pathname = pathParts.join('/') + '/';
+        // Return just origin + pathname (no query string or hash)
+        return urlObj.origin + urlObj.pathname;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Resolve a relative URL against a base URL
+ * Handles ./, ../, and simple relative paths
+ *
+ * @param {string} relativeUrl - Relative URL to resolve (e.g., "./other.md", "../folder/file.md")
+ * @param {string} baseUrl - Base URL to resolve against (can be a file URL, directory is inferred)
+ * @returns {string|null} Resolved absolute URL or null if resolution fails
+ *
+ * @example
+ * resolveRelativeUrl('./other.md', 'https://example.com/docs/guide.md')
+ * // Returns: 'https://example.com/docs/other.md'
+ *
+ * @example
+ * resolveRelativeUrl('../README.md', 'https://example.com/docs/guide.md')
+ * // Returns: 'https://example.com/README.md'
+ */
+export function resolveRelativeUrl(relativeUrl, baseUrl) {
+    if (!relativeUrl || !baseUrl) return null;
+
+    // If it's already absolute, return as-is
+    if (!isRelativeUrl(relativeUrl)) {
+        return relativeUrl;
+    }
+
+    try {
+        // The URL constructor's second parameter handles base URL resolution directly.
+        // It correctly infers the directory from a file URL (e.g., /docs/guide.md → /docs/)
+        // and resolves relative paths (./, ../, simple names) against it.
+        const resolved = new URL(relativeUrl, baseUrl);
+        return resolved.href;
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Check if a URL points to a markdown file
+ * @param {string} url - URL to check
+ * @returns {boolean} True if the URL appears to be a markdown file
+ */
+export function isMarkdownUrl(url) {
+    if (!url || typeof url !== 'string') return false;
+
+    // Check file extension (case-insensitive)
+    const lowerUrl = url.toLowerCase();
+    return lowerUrl.endsWith('.md') || lowerUrl.endsWith('.markdown');
+}

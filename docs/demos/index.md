@@ -12,6 +12,8 @@ graph TD
     A --> C[International Text]
     A --> D[YAML Front Matter]
     A --> E[Error Handling]
+    A --> F[Mermaid Diagrams]
+    A --> G[Mermaid Errors]
 
     B --> B1[JSON Linting]
     B --> B2[HTML Validation]
@@ -26,7 +28,15 @@ graph TD
 
     E --> E1[CORS Errors]
     E --> E2[Network Issues]
-    E --> E3[Mermaid Errors]
+    E --> E3[Content Errors]
+
+    F --> F1[All Diagram Types]
+    F --> F2[Edge Cases]
+    F --> F3[Regression Tests]
+
+    G --> G1[Syntax Errors]
+    G --> G2[Error Recovery]
+    G --> G3[Debugging Tips]
 ```
 
 ---
@@ -81,6 +91,30 @@ Understand how Merview handles problems gracefully:
 
 ---
 
+### Mermaid Diagram Test Suite
+
+**[View Demo →](/?url=docs/demos/mermaid-diagrams.md)**
+
+Comprehensive test page for all Mermaid diagram types:
+- Flowcharts, sequence, class, state, ER diagrams
+- Gantt, pie, quadrant, git graph, mindmaps
+- Timeline, sankey, XY charts, block diagrams
+- Edge cases: labels, clickable nodes, special characters
+
+---
+
+### Mermaid Error Examples
+
+**[View Demo →](/?url=docs/demos/mermaid-errors.md)**
+
+Learn how Merview handles Mermaid syntax errors:
+- Common syntax errors and fixes
+- Missing arrows, invalid types, unclosed blocks
+- Side-by-side error and corrected examples
+- Debugging tips and error recovery testing
+
+---
+
 ## Quick Links
 
 | Demo | Focus | Key Features |
@@ -89,6 +123,8 @@ Understand how Merview handles problems gracefully:
 | [International Text](/?url=docs/demos/international-text.md) | Unicode Support | CJK, RTL, Cyrillic scripts |
 | [YAML Front Matter](/?url=docs/demos/yaml-front-matter.md) | Document Metadata | Collapsible panel, security |
 | [Error Handling](/?url=docs/demos/error-handling.md) | Troubleshooting | CORS, timeouts, validation |
+| [Mermaid Diagrams](/?url=docs/demos/mermaid-diagrams.md) | Regression Testing | All diagram types, edge cases |
+| [Mermaid Errors](/?url=docs/demos/mermaid-errors.md) | Error Examples | Syntax errors, debugging, recovery |
 
 ---
 

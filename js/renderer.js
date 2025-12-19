@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Mick Darling
 /**
  * renderer.js - Markdown and Mermaid rendering module for Merview
  * Handles converting markdown to HTML with syntax highlighting and mermaid diagrams
@@ -7,17 +9,123 @@ import { state } from './state.js';
 import { getElements } from './dom.js';
 import { saveMarkdownContent } from './storage.js';
 import { updateSessionContent, isSessionsInitialized } from './sessions.js';
-import { escapeHtml, slugify } from './utils.js';
+import { escapeHtml, slugify, showStatus, isRelativeUrl, resolveRelativeUrl, isMarkdownUrl } from './utils.js';
 import { validateCode } from './validation.js';
 
-// Debug flag for Mermaid theme investigation (#168)
-// Enable via: localStorage.setItem('debug-mermaid-theme', 'true')
-// Note: Checked at runtime so changes take effect immediately without page refresh
+/**
+ * Debug flag for Mermaid theme investigation (#168)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-mermaid-theme', 'true')
+ */
 function isDebugMermaidTheme() {
     return localStorage.getItem('debug-mermaid-theme') === 'true';
 }
 
+/**
+ * Debug flag for Mermaid performance tracking (#326)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-mermaid-perf', 'true')
+ */
+function isDebugMermaidPerf() {
+    return localStorage.getItem('debug-mermaid-perf') === 'true';
+}
+
+/**
+ * Debug flag for URL resolution tracking (#345)
+ * @returns {boolean} True if debug mode enabled
+ * @example localStorage.setItem('debug-url-resolution', 'true')
+ */
+function isDebugUrlResolution() {
+    return localStorage.getItem('debug-url-resolution') === 'true';
+}
+
+/**
+ * Check if a URL is same-origin as the current page
+ * @param {string} url - URL to check (absolute URLs only)
+ * @returns {boolean} True if same-origin, false if cross-origin, invalid, or relative
+ */
+function isSameOriginUrl(url) {
+    // Relative URLs can't be same-origin checked - they need resolution first
+    if (!url || isRelativeUrl(url)) {
+        return false;
+    }
+    try {
+        return new URL(url).origin === globalThis.location.origin;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Preload margin for lazy loading Mermaid diagrams (Issue #326)
+ * Diagrams start rendering when they're this distance from the viewport.
+ * 200px provides a good balance: far enough to preload before user scrolls to it,
+ * but not so aggressive that we load too many diagrams at once on long pages.
+ */
+const MERMAID_PRELOAD_MARGIN = '200px';
+
+/**
+ * Performance tracking for Mermaid lazy loading
+ * Tracks render times and error counts when debug-mermaid-perf is enabled
+ */
+const mermaidPerfMetrics = {
+    firstRenderTime: null,
+    totalRendered: 0,
+    totalPending: 0,
+    totalErrors: 0,
+    renderTimes: [],
+
+    reset() {
+        this.firstRenderTime = null;
+        this.totalRendered = 0;
+        this.totalPending = 0;
+        this.totalErrors = 0;
+        this.renderTimes = [];
+    },
+
+    recordRenderStart() {
+        if (!this.firstRenderTime) {
+            this.firstRenderTime = performance.now();
+        }
+        return performance.now();
+    },
+
+    recordRenderComplete(startTime) {
+        const duration = performance.now() - startTime;
+        this.renderTimes.push(duration);
+        this.totalRendered++;
+        if (isDebugMermaidPerf()) {
+            console.log(`[Mermaid Perf] Diagram rendered in ${duration.toFixed(2)}ms`);
+        }
+    },
+
+    recordError() {
+        this.totalErrors++;
+    },
+
+    updatePendingCount(count) {
+        this.totalPending = count;
+    },
+
+    logSummary() {
+        if (isDebugMermaidPerf() && this.renderTimes.length > 0) {
+            const avgTime = this.renderTimes.reduce((a, b) => a + b, 0) / this.renderTimes.length;
+            const timeToFirst = this.firstRenderTime ? `${(performance.now() - this.firstRenderTime).toFixed(2)}ms ago` : 'N/A';
+            console.log('[Mermaid Perf Summary]', {
+                timeToFirstRender: timeToFirst,
+                totalRendered: this.totalRendered,
+                totalPending: this.totalPending,
+                totalErrors: this.totalErrors,
+                averageRenderTime: `${avgTime.toFixed(2)}ms`,
+                minRenderTime: `${Math.min(...this.renderTimes).toFixed(2)}ms`,
+                maxRenderTime: `${Math.max(...this.renderTimes).toFixed(2)}ms`
+            });
+        }
+    }
+};
+
 // Initialize Mermaid with security settings (theme set dynamically)
+// Note: htmlLabels is set via directive injection in lazyRenderMermaid (Issue #342)
 mermaid.initialize({
     startOnLoad: false,
     theme: state.mermaidTheme,
@@ -86,6 +194,105 @@ const renderer = new marked.Renderer();
 renderer.heading = function(text, level) {
     const slug = slugify(text);
     return `<h${level} id="${slug}">${text}</h${level}>\n`;
+};
+
+/**
+ * Resolve relative URL if loaded from a remote (non-same-origin) source
+ *
+ * Same-origin URLs (e.g., localhost) are NOT resolved because:
+ * - For local docs at /?url=docs/about.md with link ./guide.md
+ * - The link should remain relative so the click handler can intercept it
+ * - And navigate to /?url=docs/guide.md (not resolve against localhost)
+ *
+ * Remote URLs (e.g., GitHub raw) ARE resolved because:
+ * - Relative links need to become absolute to fetch from the correct location
+ * - ./other.md in a GitHub file should resolve to the same GitHub directory
+ *
+ * @param {string} relativeUrl - The potentially relative URL to resolve
+ * @returns {string|null} Resolved absolute URL, or null if:
+ *   - No source URL loaded (state.loadedFromURL not set)
+ *   - URL is already absolute (not relative)
+ *   - Loaded from same-origin (local docs should keep relative links)
+ *   - Resolution fails (invalid URL)
+ */
+function resolveRemoteUrl(relativeUrl) {
+    if (!state.loadedFromURL || !isRelativeUrl(relativeUrl)) {
+        return null;
+    }
+    try {
+        if (isSameOriginUrl(state.loadedFromURL)) {
+            if (isDebugUrlResolution()) {
+                console.log('[URL Resolution] Skipping same-origin:', relativeUrl);
+            }
+            return null;
+        }
+        const resolved = resolveRelativeUrl(relativeUrl, state.loadedFromURL);
+        if (isDebugUrlResolution()) {
+            console.log('[URL Resolution] Resolved:', relativeUrl, '→', resolved);
+        }
+        return resolved;
+    } catch (error) {
+        if (isDebugUrlResolution()) {
+            console.warn('[URL Resolution] Failed for:', relativeUrl, error);
+        }
+        return null;
+    }
+}
+
+/**
+ * Custom link renderer to resolve relative URLs against the source document URL (Issue #345)
+ * When content is loaded from a remote URL (state.loadedFromURL), relative links
+ * like "./other.md" or "../folder/file.md" are resolved to absolute URLs.
+ * Markdown links get special data attributes for in-app navigation.
+ *
+ * Security Note: The 'text' parameter may contain HTML from markdown inline formatting
+ * (e.g., [**bold**](url) becomes text="<strong>bold</strong>"). We sanitize it here
+ * for defense-in-depth, though DOMPurify also sanitizes the entire output in renderMarkdown().
+ */
+renderer.link = function(href, title, text) {
+    const resolvedHref = resolveRemoteUrl(href) || href;
+
+    // Build attributes
+    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+
+    // Security: Defense-in-depth sanitization of link text
+    // The 'text' parameter may contain HTML from markdown inline formatting (e.g., **bold** → <strong>)
+    // While DOMPurify.sanitize() is also called on the entire rendered output in renderMarkdown(),
+    // we sanitize here as well because:
+    // 1. Catches XSS earlier in the pipeline, before string concatenation
+    // 2. Protects against future refactoring that might bypass the final sanitization
+    // 3. Ensures each component is independently secure (defense-in-depth principle)
+    // Fallback to href if text is empty (ensures clickable, accessible links)
+    const safeText = DOMPurify.sanitize(text || href || 'Link');
+
+    // Check if this is a remote markdown link that should open in Merview
+    // Root-relative URLs (starting with /) are excluded from in-app navigation because:
+    // 1. They already work correctly with browser's native navigation
+    // 2. URLs like /?url=docs/about.md or /docs/file.md should load directly
+    // 3. Wrapping them in ?url= would create malformed URLs like /?url=/?url=...
+    // Only relative paths (./other.md) and absolute remote URLs need special handling
+    if (isMarkdownUrl(resolvedHref) && !resolvedHref.startsWith('/')) {
+        // Add data attribute for JavaScript click handler to intercept
+        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${safeText}</a>`;
+    }
+
+    // External or non-markdown links open normally
+    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${safeText}</a>`;
+};
+
+/**
+ * Custom image renderer to resolve relative image URLs against the source document URL (Issue #345)
+ * When content is loaded from a remote URL (state.loadedFromURL), relative image paths
+ * like "./images/diagram.png" are resolved to absolute URLs so images display correctly.
+ */
+renderer.image = function(href, title, text) {
+    const resolvedHref = resolveRemoteUrl(href) || href;
+
+    // Build attributes
+    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+    const altAttr = text ? ` alt="${escapeHtml(text)}"` : ' alt=""';
+
+    return `<img src="${escapeHtml(resolvedHref)}"${altAttr}${titleAttr}>`;
 };
 
 /**
@@ -378,6 +585,18 @@ function parseYAMLFrontMatter(markdown) {
  * @returns {Object} Parsed YAML object with security checks applied
  */
 function parseSimpleYAML(yamlText) {
+    // Early validation for empty/invalid input
+    if (!yamlText || typeof yamlText !== 'string') {
+        return {};
+    }
+
+    // Enforce overall size limit before processing to prevent resource exhaustion
+    const maxTotalLength = YAML_SECURITY_LIMITS.MAX_VALUE_LENGTH * YAML_SECURITY_LIMITS.MAX_KEYS;
+    if (yamlText.length > maxTotalLength) {
+        console.warn(`YAML security: Content exceeds max total length (${maxTotalLength}), truncating`);
+        yamlText = yamlText.substring(0, maxTotalLength);
+    }
+
     const result = {};
     const lines = yamlText.split('\n');
     let currentArray = null;
@@ -526,9 +745,366 @@ function renderYAMLFrontMatter(frontMatter) {
 }
 
 /**
+ * Sanitize Mermaid SVG using two-pass approach
+ * Extracts foreignObject content, sanitizes SVG structure, then re-injects sanitized HTML.
+ * This preserves edge labels while blocking XSS attacks.
+ * @param {string} svg - Raw SVG string from Mermaid
+ * @returns {Element} Sanitized SVG DOM element ready for insertion
+ * @throws {Error} If SVG is invalid or parsing fails
+ */
+function sanitizeMermaidSvg(svg) {
+    // PASS 1: Extract foreignObject content using regex (no DOM parsing of raw content)
+    const savedForeignObjectContent = new Map();
+    let markedSvg = svg;
+    const foRegex = /<foreignObject([^>]*)>([\s\S]*?)<\/foreignObject>/gi;
+    let match;
+    let foIndex = 0;
+
+    while ((match = foRegex.exec(svg)) !== null) {
+        savedForeignObjectContent.set(foIndex, match[2]);
+        markedSvg = markedSvg.replace(
+            match[0],
+            `<foreignObject${match[1]} data-fo-idx="${foIndex}"></foreignObject>`
+        );
+        foIndex++;
+    }
+
+    // Fix Mermaid bug: xlink:href without xmlns:xlink declaration
+    if (markedSvg.includes('xlink:href') && !markedSvg.includes('xmlns:xlink')) {
+        markedSvg = markedSvg.replace('<svg', '<svg xmlns:xlink="http://www.w3.org/1999/xlink"');
+    }
+
+    // Validate SVG content
+    if (!markedSvg || (!markedSvg.startsWith('<svg') && !markedSvg.startsWith('<SVG'))) {
+        throw new Error('Mermaid SVG generation failed: Invalid output');
+    }
+
+    // PASS 2: Sanitize SVG structure
+    let sanitizedSvgString = DOMPurify.sanitize(markedSvg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+        ADD_TAGS: ['foreignObject'],
+        ADD_ATTR: [
+            'xmlns', 'xmlns:xlink', 'xlink:href', 'href',
+            'style', 'class', 'transform', 'x', 'y', 'width', 'height',
+            'data-fo-idx',
+        ],
+        ADD_URI_SAFE_ATTR: ['xlink:href', 'href'],
+    });
+
+    // Ensure xmlns:xlink namespace is declared after sanitization
+    if (sanitizedSvgString.includes('xlink:href') && !sanitizedSvgString.includes('xmlns:xlink')) {
+        sanitizedSvgString = sanitizedSvgString.replace(
+            '<svg',
+            '<svg xmlns:xlink="http://www.w3.org/1999/xlink"'
+        );
+    }
+
+    // Parse the sanitized SVG
+    const parser = new DOMParser();
+    const svgDoc = parser.parseFromString(sanitizedSvgString, 'image/svg+xml');
+    const parseError = svgDoc.querySelector('parsererror');
+    if (parseError) {
+        throw new Error('SVG parse error: ' + parseError.textContent);
+    }
+
+    // PASS 3: Re-inject saved foreignObject content with HTML sanitization
+    svgDoc.querySelectorAll('foreignObject').forEach(fo => {
+        const idx = Number.parseInt(fo.dataset.foIdx, 10);
+        if (savedForeignObjectContent.has(idx)) {
+            const sanitizedHtml = DOMPurify.sanitize(savedForeignObjectContent.get(idx), {
+                ALLOWED_TAGS: ['div', 'span', 'p', 'br', 'b', 'i', 'strong', 'em'],
+                ALLOWED_ATTR: ['class', 'style', 'xmlns'],
+                KEEP_CONTENT: true,
+            });
+            // Strip external url() to prevent data exfiltration (preserve local #refs)
+            fo.innerHTML = sanitizedHtml.replaceAll(
+                /url\s*\(\s*['"]?(https?:|data:|javascript:|blob:)[^)]*\)/gi,
+                ''
+            );
+        }
+        delete fo.dataset.foIdx;
+    });
+
+    return svgDoc.documentElement;
+}
+
+/**
+ * Lazy render a single mermaid diagram when it becomes visible
+ * Uses the improved two-pass sanitization for security
+ * @param {HTMLElement} element - The mermaid diagram element to render
+ * @returns {Promise<void>}
+ */
+async function lazyRenderMermaid(element) {
+    // Skip if already rendered or currently rendering (race condition guard)
+    if (element.dataset.mermaidRendered === 'true' ||
+        element.dataset.mermaidRendered === 'rendering') {
+        return;
+    }
+
+    // Mark as being rendered to prevent duplicate renders
+    element.dataset.mermaidRendered = 'rendering';
+
+    // Start timing after race condition check and state update (micro-optimization)
+    const startTime = mermaidPerfMetrics.recordRenderStart();
+
+    try {
+
+        // Remove loading indicator
+        element.classList.remove('mermaid-loading');
+
+        // Inject init directive to force SVG text labels (Issue #342)
+        // This prevents CSS inheritance issues with themes like Academic/Newspaper
+        // Prepend directive - Mermaid requires directives at the start of the diagram
+        let diagramCode = element.textContent.trim();
+
+        // Merge our htmlLabels setting with any existing init directive
+        // Use JSON parsing for robustness (avoids trailing comma and injection issues)
+        const directiveRegex = /^%%\{init:\s*(\{[\s\S]*?\})\s*\}%%/;
+        const directiveMatch = directiveRegex.exec(diagramCode);
+        if (directiveMatch) {
+            try {
+                const config = JSON.parse(directiveMatch[1]);
+                config.flowchart = config.flowchart || {};
+                config.flowchart.htmlLabels = false;
+                diagramCode = diagramCode.replace(
+                    /^%%\{init:\s*\{[\s\S]*?\}\s*\}%%/,
+                    `%%{init: ${JSON.stringify(config)}}%%`
+                );
+            } catch {
+                // If parsing fails, prepend our directive (may result in duplicate but won't break)
+                // Debug: console.debug('Mermaid directive parse failed, using fallback:', directiveMatch[0]);
+                diagramCode = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n' + diagramCode;
+            }
+        } else {
+            // No existing directive, prepend ours
+            diagramCode = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n' + diagramCode;
+        }
+
+        const { svg } = await mermaid.render(element.id + '-svg', diagramCode);
+        // Use two-pass sanitization for better security
+        const sanitizedSvg = sanitizeMermaidSvg(svg);
+        element.innerHTML = '';
+        element.appendChild(element.ownerDocument.importNode(sanitizedSvg, true));
+
+        // Mark as successfully rendered and update accessibility attributes
+        element.dataset.mermaidRendered = 'true';
+        element.removeAttribute('aria-busy');
+        element.setAttribute('aria-label', 'Mermaid diagram');
+        mermaidPerfMetrics.recordRenderComplete(startTime);
+    } catch (error) {
+        // Limit console noise: log first 3 errors in detail, then suppress
+        // Full error count is shown in status message at the end
+        if (mermaidPerfMetrics.totalErrors < 3) {
+            console.error('Mermaid render error:', error);
+        } else if (mermaidPerfMetrics.totalErrors === 3) {
+            console.error('Mermaid render error:', error);
+            console.warn('[Mermaid] Suppressing further error details. Check status bar for total count.');
+        }
+        mermaidPerfMetrics.recordError();
+        element.classList.add('mermaid-error');
+        element.classList.remove('mermaid-loading');
+        // Update accessibility attributes for error state
+        element.removeAttribute('aria-busy');
+        element.setAttribute('aria-label', 'Diagram failed to render');
+        element.innerHTML = `<details class="mermaid-error-details">
+            <summary>⚠️ Mermaid diagram failed to render</summary>
+            <pre class="mermaid-error-message">${escapeHtml(error.message)}</pre>
+        </details>`;
+        element.dataset.mermaidRendered = 'error';
+    }
+}
+
+/**
+ * Force render all pending mermaid diagrams immediately (bypasses lazy loading)
+ * Exposed globally for testing purposes - allows tests to trigger rendering
+ * without relying on IntersectionObserver which may not work in headless browsers
+ * @returns {Promise<void>}
+ */
+async function forceRenderAllMermaidDiagrams() {
+    const pendingDiagrams = document.querySelectorAll('.mermaid[data-mermaid-rendered="pending"]');
+    const renderPromises = Array.from(pendingDiagrams).map(element => lazyRenderMermaid(element));
+    await Promise.all(renderPromises);
+}
+
+// Expose for testing
+globalThis.forceRenderAllMermaidDiagrams = forceRenderAllMermaidDiagrams;
+
+/**
+ * Set up lazy loading for mermaid diagrams using IntersectionObserver
+ * Diagrams are rendered when they become visible in the viewport (Issue #326)
+ * @param {NodeList} mermaidElements - The mermaid diagram elements
+ */
+function setupMermaidLazyLoading(mermaidElements) {
+    // Disconnect and nullify previous observer if exists (explicit cleanup for GC)
+    if (state.mermaidObserver) {
+        state.mermaidObserver.disconnect();
+        state.mermaidObserver = null;
+    }
+
+    // Reset performance metrics for new render
+    mermaidPerfMetrics.reset();
+    mermaidPerfMetrics.updatePendingCount(mermaidElements.length);
+
+    // Generate unique ID to track this observer instance and prevent race conditions
+    // when renderMarkdown() is called rapidly in succession
+    const observerGeneration = Date.now();
+    state.mermaidObserverGeneration = observerGeneration;
+
+    // Create IntersectionObserver for lazy loading diagrams
+    const observer = new IntersectionObserver(
+        (entries) => {
+            // Early exit if observer was disconnected or superseded by newer generation
+            if (!state.mermaidObserver || state.mermaidObserverGeneration !== observerGeneration) {
+                return;
+            }
+
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    const element = entry.target;
+
+                    // Verify element belongs to this observer generation
+                    if (element.dataset.observerGeneration !== String(observerGeneration)) {
+                        return;
+                    }
+
+                    // Render the diagram
+                    lazyRenderMermaid(element).then(() => {
+                        // Check observer still valid before updating metrics
+                        if (!state.mermaidObserver || state.mermaidObserverGeneration !== observerGeneration) {
+                            return;
+                        }
+
+                        // Update pending count
+                        const pendingCount = document.querySelectorAll('.mermaid[data-mermaid-rendered="pending"]').length;
+                        mermaidPerfMetrics.updatePendingCount(pendingCount);
+
+                        // Log summary when all diagrams are done
+                        if (pendingCount === 0) {
+                            mermaidPerfMetrics.logSummary();
+                            showMermaidRenderStatus();
+                        }
+                    }).catch(err => {
+                        // Defensive error handling - lazyRenderMermaid has internal error handling
+                        // but this catches any unexpected errors that might slip through
+                        console.error('Unexpected error during lazy render:', err);
+                        showStatus('Diagram rendering failed unexpectedly', 'warning');
+                    });
+                    // Stop observing this element
+                    observer.unobserve(element);
+                }
+            });
+        },
+        {
+            rootMargin: MERMAID_PRELOAD_MARGIN,
+            // Trigger when 1% visible - starts render early for smoother UX
+            threshold: 0.01
+        }
+    );
+
+    // Observe all mermaid diagrams
+    mermaidElements.forEach(element => {
+        // Add loading state with visual indicator and accessibility attributes
+        element.dataset.mermaidRendered = 'pending';
+        element.dataset.observerGeneration = observerGeneration;
+        element.classList.add('mermaid-loading');
+        element.setAttribute('aria-busy', 'true');
+        element.setAttribute('aria-label', 'Diagram loading...');
+        observer.observe(element);
+    });
+
+    // Store observer in state for cleanup
+    state.mermaidObserver = observer;
+
+    // Log initial state
+    if (isDebugMermaidPerf()) {
+        console.log(`[Mermaid Perf] Starting lazy load for ${mermaidElements.length} diagrams (gen: ${observerGeneration})`);
+    }
+}
+
+/**
+ * Show status message after all Mermaid diagrams have rendered
+ * Displays error count if any diagrams failed
+ */
+function showMermaidRenderStatus() {
+    const { totalErrors, totalRendered } = mermaidPerfMetrics;
+
+    if (totalErrors > 0) {
+        showStatus(
+            `${totalRendered} diagram${totalRendered === 1 ? '' : 's'} rendered, ${totalErrors} failed`,
+            'warning'
+        );
+    }
+}
+
+/**
+ * Attach event listeners for Mermaid expand functionality
+ * DOMPurify strips inline handlers, so we attach them programmatically
+ * @param {HTMLElement} wrapper - Container element
+ */
+function attachMermaidEventListeners(wrapper) {
+    wrapper.querySelectorAll('.mermaid-expand-btn[data-expand-target]').forEach(btn => {
+        btn.addEventListener('click', () => expandMermaid(btn.dataset.expandTarget));
+    });
+    wrapper.querySelectorAll('.mermaid[id]').forEach(el => {
+        el.addEventListener('dblclick', () => expandMermaid(el.id));
+    });
+}
+
+/**
+ * Attach click handlers for markdown links to enable in-app navigation (Issue #345)
+ * Links marked with data-merview-link="true" open within Merview instead of navigating away.
+ * This allows seamless navigation between related markdown documents.
+ * @param {HTMLElement} wrapper - Container element
+ */
+function attachMarkdownLinkHandlers(wrapper) {
+    wrapper.querySelectorAll('a[data-merview-link="true"]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const url = link.getAttribute('href');
+            if (url) {
+                // Determine the target URL for ?url= parameter
+                let targetUrl = url;
+
+                // For relative URLs (./other.md, ../README.md), resolve against source document
+                // This handles same-origin docs loaded via ?url=docs/guide.md
+                if (state.loadedFromURL && isRelativeUrl(url)) {
+                    try {
+                        // Resolve relative URL against the source document
+                        const resolved = resolveRelativeUrl(url, state.loadedFromURL);
+                        if (resolved) {
+                            // Extract just the path for same-origin URLs
+                            if (isSameOriginUrl(resolved)) {
+                                // Same-origin: use path without origin (e.g., "docs/other.md")
+                                targetUrl = new URL(resolved).pathname.replace(/^\//, '');
+                            } else {
+                                // Remote: use full resolved URL
+                                targetUrl = resolved;
+                            }
+                        }
+                    } catch {
+                        // Resolution failed - use original URL
+                    }
+                }
+
+                // Navigate within Merview by updating the URL parameter
+                // This triggers a page load with the new content
+                const newUrl = new URL(globalThis.location.href);
+                // Intentionally replace the entire query string rather than preserving other params.
+                // Rationale: The ?url= param is the primary content source. Other params like ?style=
+                // are user preferences that should persist in localStorage, not the URL. Keeping the
+                // URL clean also makes sharing links easier. If we need to preserve specific params
+                // in the future (e.g., ?style=), we can use URLSearchParams selectively.
+                newUrl.search = `?url=${encodeURIComponent(targetUrl)}`;
+                globalThis.location.href = newUrl.toString();
+            }
+        });
+    });
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
- * and renders all mermaid diagrams in the content.
+ * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
  * @async
  */
 export async function renderMarkdown() {
@@ -556,34 +1132,19 @@ export async function renderMarkdown() {
         const combinedHTML = frontMatterHTML + markdownHTML;
         wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
 
-        // Render mermaid diagrams
+        // Set up lazy loading for mermaid diagrams (Issue #326)
+        // Instead of rendering all diagrams immediately (which blocks the UI),
+        // we use IntersectionObserver to render them only when they're visible
         const mermaidElements = wrapper.querySelectorAll('.mermaid');
-
-        for (const element of mermaidElements) {
-            try {
-                const { svg } = await mermaid.render(element.id + '-svg', element.textContent);
-                // Sanitize mermaid SVG output for defense-in-depth against XSS
-                // Use SVG profile and allow foreignObject (used by mermaid for text rendering)
-                element.innerHTML = DOMPurify.sanitize(svg, {
-                    USE_PROFILES: { svg: true, svgFilters: true },
-                    ADD_TAGS: ['foreignObject']
-                });
-            } catch (error) {
-                console.error('Mermaid render error:', error);
-                element.innerHTML = `<div style="color: red; padding: 10px; border: 1px solid red; border-radius: 4px;">
-                    <strong>Mermaid Error:</strong><br>${escapeHtml(error.message)}
-                </div>`;
-            }
+        if (mermaidElements.length > 0) {
+            setupMermaidLazyLoading(mermaidElements);
         }
 
-        // Attach event listeners for mermaid expand functionality
-        // (DOMPurify strips inline onclick/ondblclick handlers, so we attach programmatically)
-        wrapper.querySelectorAll('.mermaid-expand-btn[data-expand-target]').forEach(btn => {
-            btn.addEventListener('click', () => expandMermaid(btn.dataset.expandTarget));
-        });
-        wrapper.querySelectorAll('.mermaid[id]').forEach(el => {
-            el.addEventListener('dblclick', () => expandMermaid(el.id));
-        });
+        // Attach mermaid expand/fullscreen event listeners
+        attachMermaidEventListeners(wrapper);
+
+        // Attach click handlers for markdown links to enable in-app navigation (Issue #345)
+        attachMarkdownLinkHandlers(wrapper);
 
         // Save to localStorage (legacy) and update session
         saveMarkdownContent(markdown);
@@ -592,13 +1153,11 @@ export async function renderMarkdown() {
         }
 
         // Trigger validation if lint panel is enabled (debounced)
-        // This ensures the lint panel updates in real-time as content changes
         if (state.lintEnabled) {
             scheduleValidation();
         }
 
         // RESTORE STATE: Restore YAML metadata panel state after re-render (#268 fix)
-        // This preserves the open/closed state automatically for ALL re-renders
         if (yamlPanelWasOpen !== undefined) {
             const details = wrapper?.querySelector('.yaml-front-matter');
             if (details) {
@@ -607,7 +1166,6 @@ export async function renderMarkdown() {
         }
     } catch (error) {
         console.error('Critical error in renderMarkdown:', error);
-        const { showStatus } = await import('./utils.js');
         showStatus('Error rendering: ' + error.message, 'warning');
     }
 }

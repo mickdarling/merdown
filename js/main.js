@@ -39,6 +39,48 @@ function clearEditor() {
 }
 
 /**
+ * Insert a special character at the current cursor position
+ * @param {string} text - The text to insert
+ */
+function insertSpecialCharacter(text) {
+    if (!text) return; // Skip if empty (placeholder option)
+
+    const { cmEditor } = state;
+    if (!cmEditor) return;
+
+    try {
+        // Get current cursor position
+        const cursor = cmEditor.getCursor();
+
+        // Insert the text at cursor position
+        cmEditor.replaceRange(text, cursor);
+
+        // Move cursor after inserted text, handling multi-line insertions
+        const lines = text.split('\n');
+        const lineCount = lines.length;
+        const lastLineLength = lines[lineCount - 1].length;
+
+        const newCursor = {
+            line: cursor.line + lineCount - 1,
+            ch: lineCount === 1 ? cursor.ch + lastLineLength : lastLineLength
+        };
+        cmEditor.setCursor(newCursor);
+
+        // Focus the editor
+        cmEditor.focus();
+    } catch (error) {
+        console.error('Failed to insert Mermaid snippet:', error);
+        showStatus('Error inserting snippet', 'warning');
+    }
+
+    // Reset the dropdown back to placeholder (always, even on error)
+    const selector = document.getElementById('symbolsSelector');
+    if (selector) {
+        selector.value = '';
+    }
+}
+
+/**
  * Expose functions to globalThis for onclick handlers in HTML
  */
 function exposeGlobalFunctions() {
@@ -50,6 +92,7 @@ function exposeGlobalFunctions() {
     globalThis.getEditorContent = getEditorContent;
     globalThis.setEditorContent = setEditorContent;
     globalThis.clearEditor = clearEditor;
+    globalThis.insertSpecialCharacter = insertSpecialCharacter;
 
     // Rendering functions
     globalThis.renderMarkdown = renderMarkdown;
@@ -129,6 +172,45 @@ function setupKeyboardShortcuts() {
             e.preventDefault();
             exportToPDF();
         }
+
+        // Ctrl/Cmd + M to open Mermaid snippet dropdown
+        if ((e.ctrlKey || e.metaKey) && e.key === 'm') {
+            e.preventDefault();
+            const selector = document.getElementById('symbolsSelector');
+            if (selector) {
+                selector.focus();
+                // Programmatically show the dropdown options
+                selector.dispatchEvent(new MouseEvent('mousedown'));
+            }
+        }
+    });
+}
+
+/**
+ * Clean up observers and resources when page is being unloaded
+ * Prevents memory leaks and ensures proper cleanup on navigation
+ */
+function setupPageCleanup() {
+    // Cleanup function to release observer resources
+    const cleanup = () => {
+        // Disconnect Mermaid lazy loading observer
+        if (state.mermaidObserver) {
+            state.mermaidObserver.disconnect();
+            state.mermaidObserver = null;
+        }
+    };
+
+    // Use pagehide event for better support on iOS/Safari
+    // Also cleanup on beforeunload for desktop browsers
+    window.addEventListener('pagehide', cleanup);
+    window.addEventListener('beforeunload', cleanup);
+
+    // Also cleanup when tab becomes hidden to reduce memory on mobile browsers
+    // where pagehide may not fire reliably
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'hidden') {
+            cleanup();
+        }
     });
 }
 
@@ -140,6 +222,7 @@ function setupKeyboardShortcuts() {
  */
 async function handleRemoteURLParam(remoteURL) {
     let resolvedURL = remoteURL;
+    const originalURL = remoteURL; // Preserve original for URL bar
 
     // Resolve relative doc paths (e.g., "docs/about.md") to full URLs
     if (isRelativeDocPath(remoteURL)) {
@@ -160,8 +243,8 @@ async function handleRemoteURLParam(remoteURL) {
         // Show modal for private repo content
         showPrivateUrlModal(resolvedURL);
     } else {
-        // Load normally with shareable URL
-        loadMarkdownFromURL(resolvedURL);
+        // Load normally - pass both resolved URL (for fetching) and original URL (for URL bar)
+        loadMarkdownFromURL(resolvedURL, originalURL);
     }
 }
 
@@ -345,6 +428,9 @@ async function initializeApp() {
 
     // Set up keyboard shortcuts
     setupKeyboardShortcuts();
+
+    // Set up page cleanup handlers for proper resource disposal
+    setupPageCleanup();
 
     // Handle URL parameters (this will trigger initial render if content is loaded)
     // Errors are caught and handled within handleURLParameters and its callees
