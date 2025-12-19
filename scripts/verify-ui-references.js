@@ -43,6 +43,7 @@ class UIReferenceVerifier {
       dropdownOptions: new Map(), // dropdownId -> Set of options
       labels: new Set(),
       titles: new Set(),
+
     };
     this.docReferences = [];
   }
@@ -261,7 +262,8 @@ class UIReferenceVerifier {
         }
 
         // Pattern 4: File references - docs/*.md, README.md, CONTRIBUTING.md, etc.
-        const fileRefRegex = /\(?(?:\.?\/?docs\/[a-z0-9/_-]+\.md|(?:README|CONTRIBUTING|CHANGELOG|LICENSE)\.md)\)?/gi;
+        // Note: Character classes need explicit A-Z even with /i flag
+        const fileRefRegex = /\(?(?:\.?\/?docs\/[a-zA-Z0-9/_-]+\.md|(?:README|CONTRIBUTING|CHANGELOG|LICENSE)\.md)\)?/gi;
         while ((match = fileRefRegex.exec(line)) !== null) {
           const docPath = match[0].replaceAll(/[()]/gu, '');
           this.docReferences.push({
@@ -319,9 +321,9 @@ class UIReferenceVerifier {
    * @example
    * existsInCollection('save', new Set(['Save', 'Cancel'])) // returns true
    */
-  existsInCollection(normalized, collection) {
+  existsInCollection(normalizedReference, collection) {
     for (const item of collection) {
-      if (item.toLowerCase() === normalized) {
+      if (item.toLowerCase() === normalizedReference) {
         return true;
       }
     }
