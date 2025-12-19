@@ -169,6 +169,10 @@ renderer.heading = function(text, level) {
  * When content is loaded from a remote URL (state.loadedFromURL), relative links
  * like "./other.md" or "../folder/file.md" are resolved to absolute URLs.
  * Markdown links get special data attributes for in-app navigation.
+ *
+ * Security Note: The 'text' parameter may contain HTML from markdown inline formatting
+ * (e.g., [**bold**](url) becomes text="<strong>bold</strong>"). We sanitize it here
+ * for defense-in-depth, though DOMPurify also sanitizes the entire output in renderMarkdown().
  */
 renderer.link = function(href, title, text) {
     // Resolve relative URLs if we have a source URL context
@@ -183,14 +187,18 @@ renderer.link = function(href, title, text) {
     // Build attributes
     const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
 
+    // Security: Sanitize link text to prevent XSS from raw HTML in markdown
+    // Uses DOMPurify inline to preserve legitimate formatting while removing dangerous content
+    const safeText = DOMPurify.sanitize(text);
+
     // Check if this is a markdown link that should open in Merview
     if (isMarkdownUrl(resolvedHref)) {
         // Add data attribute for JavaScript click handler to intercept
-        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${text}</a>`;
+        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${safeText}</a>`;
     }
 
     // External or non-markdown links open normally
-    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${text}</a>`;
+    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${safeText}</a>`;
 };
 
 /**
@@ -930,6 +938,11 @@ function attachMarkdownLinkHandlers(wrapper) {
                 // Navigate within Merview by updating the URL parameter
                 // This triggers a page load with the new content
                 const newUrl = new URL(globalThis.location.href);
+                // Intentionally replace the entire query string rather than preserving other params.
+                // Rationale: The ?url= param is the primary content source. Other params like ?style=
+                // are user preferences that should persist in localStorage, not the URL. Keeping the
+                // URL clean also makes sharing links easier. If we need to preserve specific params
+                // in the future (e.g., ?style=), we can use URLSearchParams selectively.
                 newUrl.search = `?url=${encodeURIComponent(url)}`;
                 globalThis.location.href = newUrl.toString();
             }

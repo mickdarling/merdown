@@ -273,7 +273,7 @@ export function getBaseUrl(url) {
  * Handles ./, ../, and simple relative paths
  *
  * @param {string} relativeUrl - Relative URL to resolve (e.g., "./other.md", "../folder/file.md")
- * @param {string} baseUrl - Base URL to resolve against
+ * @param {string} baseUrl - Base URL to resolve against (can be a file URL, directory is inferred)
  * @returns {string|null} Resolved absolute URL or null if resolution fails
  *
  * @example
@@ -293,13 +293,10 @@ export function resolveRelativeUrl(relativeUrl, baseUrl) {
     }
 
     try {
-        // Get the base directory URL
-        const base = getBaseUrl(baseUrl);
-        if (!base) return null;
-
-        // Use URL constructor to resolve relative paths
-        // This handles ./, ../, and simple relative paths correctly
-        const resolved = new URL(relativeUrl, base);
+        // The URL constructor's second parameter handles base URL resolution directly.
+        // It correctly infers the directory from a file URL (e.g., /docs/guide.md → /docs/)
+        // and resolves relative paths (./, ../, simple names) against it.
+        const resolved = new URL(relativeUrl, baseUrl);
         return resolved.href;
     } catch {
         return null;

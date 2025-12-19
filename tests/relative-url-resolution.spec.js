@@ -245,6 +245,33 @@ test.describe('Relative URL Resolution', () => {
             expect(linkHref).toBe('#section-name');
         });
 
+        test('protocol-relative URLs should not be modified', async ({ page }) => {
+            await page.goto('/');
+            await page.waitForLoadState('networkidle');
+
+            await page.evaluate(() => {
+                globalThis.state.loadedFromURL = 'https://example.com/docs/test.md';
+
+                const testContent = `# Test
+[Protocol-relative link](//cdn.example.com/file.md)
+![Protocol-relative image](//cdn.example.com/image.png)
+`;
+                if (globalThis.setEditorContent) {
+                    globalThis.setEditorContent(testContent);
+                }
+            });
+
+            await page.waitForTimeout(500);
+
+            const link = page.locator('#wrapper a').first();
+            const linkHref = await link.getAttribute('href');
+            expect(linkHref).toBe('//cdn.example.com/file.md');
+
+            const img = page.locator('#wrapper img').first();
+            const imgSrc = await img.getAttribute('src');
+            expect(imgSrc).toBe('//cdn.example.com/image.png');
+        });
+
         test('multiple parent directory traversals should work', async ({ page }) => {
             await page.goto('/');
             await page.waitForLoadState('networkidle');
