@@ -258,7 +258,7 @@ class UIReferenceVerifier {
         // Pattern 4: File references - docs/*.md or paths
         const fileRefRegex = /\(?\/?docs\/[a-zA-Z0-9/_-]+\.md\)?/g;
         while ((match = fileRefRegex.exec(line)) !== null) {
-          const docPath = match[0].replace(/[()]/gu, '');
+          const docPath = match[0].replaceAll(/[()]/gu, '');
           this.docReferences.push({
             file: filePath,
             line: lineIndex + 1,
