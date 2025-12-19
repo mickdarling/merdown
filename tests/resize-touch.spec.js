@@ -61,7 +61,7 @@ test.describe('Resize Handle Touch Support', () => {
                 return rule.style.width === '44px';
               }
             }
-          } catch (e) {
+          } catch {
             // Cross-origin stylesheets throw SecurityError - expected and safe to ignore
             continue;
           }
