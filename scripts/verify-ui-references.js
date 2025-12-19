@@ -11,8 +11,8 @@
  * GitHub Issue: #303
  */
 
-const fs = require('fs');
-const path = require('path');
+const fs = require('node:fs');
+const path = require('node:path');
 
 // ANSI color codes for terminal output
 const colors = {
@@ -113,7 +113,7 @@ class UIReferenceVerifier {
     // Extract button text (visible text between button tags)
     const buttonRegex = /<button[^>]*>([^<]+)/gi;
     this.extractMatches(html, buttonRegex, (match) => {
-      const text = match[1].trim().replace(/[🔍💾📄🔗📋🗑️✕]/gu, '').trim();
+      const text = match[1].trim().replaceAll(/[🔍💾📄🔗📋✕]/gu, '').replaceAll('🗑️', '').trim();
       if (text) {
         this.uiElements.buttons.add(text);
       }
@@ -262,21 +262,70 @@ class UIReferenceVerifier {
   }
 
   /**
+   * Check if normalized reference exists in a collection (case-insensitive)
+   */
+  existsInCollection(normalized, collection) {
+    for (const item of collection) {
+      if (item.toLowerCase() === normalized) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if normalized reference exists in any dropdown options
+   */
+  existsInDropdownOptions(normalized) {
+    for (const [, options] of this.uiElements.dropdownOptions) {
+      if (this.existsInCollection(normalized, options)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Check if a reference matches any known UI element
+   */
+  findUIElement(normalized) {
+    return this.existsInCollection(normalized, this.uiElements.buttons) ||
+           this.existsInCollection(normalized, this.uiElements.titles) ||
+           this.existsInCollection(normalized, this.uiElements.labels) ||
+           this.existsInDropdownOptions(normalized);
+  }
+
+  /**
+   * Add error for unmatched UI reference
+   */
+  addUnmatchedError(ref, normalized, projectRoot) {
+    const suggestions = this.findSimilar(normalized);
+    const relativePath = path.relative(projectRoot, ref.file);
+
+    this.errors.push({
+      file: relativePath,
+      line: ref.line,
+      reference: ref.reference,
+      context: ref.context,
+      message: `UI element "${ref.reference}" not found in index.html`,
+      suggestions: suggestions.length > 0 ? suggestions : null,
+    });
+  }
+
+  /**
    * Verify UI element references
    */
   verifyReferences(projectRoot) {
     console.log(`${colors.cyan}Verifying references...${colors.reset}`);
 
-    const uniqueRefs = new Map(); // Track unique references to avoid duplicate reports
+    const uniqueRefs = new Map();
 
     for (const ref of this.docReferences) {
-      // Skip file references for now (handle separately)
       if (ref.pattern === 'file-reference') {
         this.verifyFileReference(ref, projectRoot);
         continue;
       }
 
-      // Create unique key for this reference
       const refKey = `${ref.reference.toLowerCase()}:${ref.file}:${ref.line}`;
       if (uniqueRefs.has(refKey)) {
         continue;
@@ -284,62 +333,8 @@ class UIReferenceVerifier {
       uniqueRefs.set(refKey, true);
 
       const normalized = ref.reference.toLowerCase().trim();
-      let found = false;
-
-      // Check buttons
-      for (const button of this.uiElements.buttons) {
-        if (button.toLowerCase() === normalized) {
-          found = true;
-          break;
-        }
-      }
-
-      // Check titles
-      if (!found) {
-        for (const title of this.uiElements.titles) {
-          if (title.toLowerCase() === normalized) {
-            found = true;
-            break;
-          }
-        }
-      }
-
-      // Check labels
-      if (!found) {
-        for (const label of this.uiElements.labels) {
-          if (label.toLowerCase() === normalized) {
-            found = true;
-            break;
-          }
-        }
-      }
-
-      // Check dropdown options
-      if (!found) {
-        for (const [, options] of this.uiElements.dropdownOptions) {
-          for (const option of options) {
-            if (option.toLowerCase() === normalized) {
-              found = true;
-              break;
-            }
-          }
-          if (found) break;
-        }
-      }
-
-      // Check for fuzzy matches to suggest corrections
-      if (!found) {
-        const suggestions = this.findSimilar(normalized);
-        const relativePath = path.relative(projectRoot, ref.file);
-
-        this.errors.push({
-          file: relativePath,
-          line: ref.line,
-          reference: ref.reference,
-          context: ref.context,
-          message: `UI element "${ref.reference}" not found in index.html`,
-          suggestions: suggestions.length > 0 ? suggestions : null,
-        });
+      if (!this.findUIElement(normalized)) {
+        this.addUnmatchedError(ref, normalized, projectRoot);
       }
     }
   }
