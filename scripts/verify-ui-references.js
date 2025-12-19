@@ -256,7 +256,7 @@ class UIReferenceVerifier {
         }
 
         // Pattern 4: File references - docs/*.md, README.md, CONTRIBUTING.md, etc.
-        const fileRefRegex = /\(?(?:\.?\/?docs\/[a-zA-Z0-9/_-]+\.md|(?:README|CONTRIBUTING|CHANGELOG|LICENSE)\.md)\)?/gi;
+        const fileRefRegex = /\(?(?:\.?\/?docs\/[a-z0-9/_-]+\.md|(?:README|CONTRIBUTING|CHANGELOG|LICENSE)\.md)\)?/gi;
         while ((match = fileRefRegex.exec(line)) !== null) {
           const docPath = match[0].replaceAll(/[()]/gu, '');
           this.docReferences.push({
