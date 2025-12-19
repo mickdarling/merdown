@@ -12,6 +12,7 @@ test.describe('UI Cleanup - Dropdown Optgroups', () => {
 
   const dropdowns = [
     { id: 'documentSelector', label: 'Current' },
+    { id: 'symbolsSelector', label: 'Insert Symbol' },
     { id: 'editorThemeSelector', label: 'Editor Theme' },
     { id: 'styleSelector', label: 'Preview Style' },
     { id: 'syntaxThemeSelector', label: 'Code Block Theme' },
