@@ -9,7 +9,7 @@ import { state } from './state.js';
 import { getElements } from './dom.js';
 import { saveMarkdownContent } from './storage.js';
 import { updateSessionContent, isSessionsInitialized } from './sessions.js';
-import { escapeHtml, slugify, showStatus } from './utils.js';
+import { escapeHtml, slugify, showStatus, isRelativeUrl, resolveRelativeUrl, isMarkdownUrl } from './utils.js';
 import { validateCode } from './validation.js';
 
 // Debug flag for Mermaid theme investigation (#168)
@@ -162,6 +162,57 @@ const renderer = new marked.Renderer();
 renderer.heading = function(text, level) {
     const slug = slugify(text);
     return `<h${level} id="${slug}">${text}</h${level}>\n`;
+};
+
+/**
+ * Custom link renderer to resolve relative URLs against the source document URL (Issue #345)
+ * When content is loaded from a remote URL (state.loadedFromURL), relative links
+ * like "./other.md" or "../folder/file.md" are resolved to absolute URLs.
+ * Markdown links get special data attributes for in-app navigation.
+ */
+renderer.link = function(href, title, text) {
+    // Resolve relative URLs if we have a source URL context
+    let resolvedHref = href;
+    if (state.loadedFromURL && isRelativeUrl(href)) {
+        const resolved = resolveRelativeUrl(href, state.loadedFromURL);
+        if (resolved) {
+            resolvedHref = resolved;
+        }
+    }
+
+    // Build attributes
+    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+
+    // Check if this is a markdown link that should open in Merview
+    if (isMarkdownUrl(resolvedHref)) {
+        // Add data attribute for JavaScript click handler to intercept
+        return `<a href="${escapeHtml(resolvedHref)}"${titleAttr} data-merview-link="true">${text}</a>`;
+    }
+
+    // External or non-markdown links open normally
+    return `<a href="${escapeHtml(resolvedHref)}"${titleAttr}>${text}</a>`;
+};
+
+/**
+ * Custom image renderer to resolve relative image URLs against the source document URL (Issue #345)
+ * When content is loaded from a remote URL (state.loadedFromURL), relative image paths
+ * like "./images/diagram.png" are resolved to absolute URLs so images display correctly.
+ */
+renderer.image = function(href, title, text) {
+    // Resolve relative URLs if we have a source URL context
+    let resolvedHref = href;
+    if (state.loadedFromURL && isRelativeUrl(href)) {
+        const resolved = resolveRelativeUrl(href, state.loadedFromURL);
+        if (resolved) {
+            resolvedHref = resolved;
+        }
+    }
+
+    // Build attributes
+    const titleAttr = title ? ` title="${escapeHtml(title)}"` : '';
+    const altAttr = text ? ` alt="${escapeHtml(text)}"` : ' alt=""';
+
+    return `<img src="${escapeHtml(resolvedHref)}"${altAttr}${titleAttr}>`;
 };
 
 /**
@@ -865,6 +916,28 @@ function attachMermaidEventListeners(wrapper) {
 }
 
 /**
+ * Attach click handlers for markdown links to enable in-app navigation (Issue #345)
+ * Links marked with data-merview-link="true" open within Merview instead of navigating away.
+ * This allows seamless navigation between related markdown documents.
+ * @param {HTMLElement} wrapper - Container element
+ */
+function attachMarkdownLinkHandlers(wrapper) {
+    wrapper.querySelectorAll('a[data-merview-link="true"]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const url = link.getAttribute('href');
+            if (url) {
+                // Navigate within Merview by updating the URL parameter
+                // This triggers a page load with the new content
+                const newUrl = new URL(globalThis.location.href);
+                newUrl.search = `?url=${encodeURIComponent(url)}`;
+                globalThis.location.href = newUrl.toString();
+            }
+        });
+    });
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
@@ -905,6 +978,9 @@ export async function renderMarkdown() {
 
         // Attach mermaid expand/fullscreen event listeners
         attachMermaidEventListeners(wrapper);
+
+        // Attach click handlers for markdown links to enable in-app navigation (Issue #345)
+        attachMarkdownLinkHandlers(wrapper);
 
         // Save to localStorage (legacy) and update session
         saveMarkdownContent(markdown);
