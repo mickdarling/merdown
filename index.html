@@ -1371,6 +1371,19 @@
                             <option value="">Document...</option>
                         </optgroup>
                     </select>
+                    <select class="panel-selector" id="symbolsSelector" onchange="insertSpecialCharacter(this.value)" title="Insert special characters for Mermaid diagrams">
+                        <optgroup label="Insert Symbol">
+                            <option value="">Symbols...</option>
+                            <option value="#quot;">" double quote</option>
+                            <option value="#apos;">' single quote</option>
+                            <option value="#lt;">&lt; less than</option>
+                            <option value="#gt;">&gt; greater than</option>
+                            <option value="#amp;">&amp; ampersand</option>
+                            <option value="-->">&rarr; right arrow</option>
+                            <option value="<--">&larr; left arrow</option>
+                            <option value="<-->">&harr; both arrows</option>
+                        </optgroup>
+                    </select>
                 </div>
                 <select class="panel-selector" id="editorThemeSelector" onchange="changeEditorTheme(this.value)" title="Editor syntax highlighting">
                     <optgroup label="Editor Theme">
