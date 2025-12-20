@@ -321,17 +321,46 @@ export function saveFileAs() {
 /**
  * Strip mermaid code fences from content if present
  * Used when saving pure Mermaid content to .mermaid/.mmd files (#367)
+ * Uses string methods instead of regex to avoid ReDoS vulnerability
  * @param {string} content - The content to process
  * @returns {string} Content with fences stripped
  */
 function stripMermaidFences(content) {
     const trimmed = content.trim();
-    // Check if content is wrapped in a single mermaid fence
-    const fenceMatch = /^```mermaid\s*\n([\s\S]*?)\n```\s*$/.exec(trimmed);
-    if (fenceMatch) {
-        return fenceMatch[1].trim();
+    const OPEN_FENCE = '```mermaid';
+    const CLOSE_FENCE = '```';
+
+    // Check if content starts with ```mermaid
+    if (!trimmed.startsWith(OPEN_FENCE)) {
+        return content;
     }
-    return content;
+
+    // Find the first newline after the opening fence
+    const firstNewline = trimmed.indexOf('\n');
+    if (firstNewline === -1) {
+        return content;
+    }
+
+    // Verify only whitespace between ```mermaid and the newline
+    const afterOpenFence = trimmed.slice(OPEN_FENCE.length, firstNewline);
+    if (afterOpenFence.trim() !== '') {
+        return content; // Has attributes like ```mermaid {theme: 'forest'}
+    }
+
+    // Find the last closing fence
+    const lastFenceIndex = trimmed.lastIndexOf(CLOSE_FENCE);
+    if (lastFenceIndex <= firstNewline) {
+        return content; // No closing fence found after content
+    }
+
+    // Verify only whitespace after the closing fence
+    const afterCloseFence = trimmed.slice(lastFenceIndex + CLOSE_FENCE.length);
+    if (afterCloseFence.trim() !== '') {
+        return content; // Content after closing fence
+    }
+
+    // Extract and return the content between fences
+    return trimmed.slice(firstNewline + 1, lastFenceIndex).trim();
 }
 
 /**

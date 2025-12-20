@@ -79,7 +79,7 @@ From https://mermaid.js.org/ecosystem/integrations-create.html:
 ### Immediate (Next Session)
 1. **Review/merge PR #369** - Mermaid file support
 2. **Create PR for #364** - Submit to Mermaid.js integrations list
-   - Add entry to `packages/mermaid/src/docs/ecosystem/integrations-community.md`
+   - Add entry to mermaid-js/mermaid repo: packages/mermaid/src/docs/ecosystem/integrations-community.md
    - Entry: `- [Merview](https://merview.com) ✅`
    - Goes in "Productivity Tools" section
 

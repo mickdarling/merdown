@@ -180,7 +180,7 @@ And some more text.`;
                 const h1 = wrapper?.querySelector('h1');
                 const mermaidEl = wrapper?.querySelector('.mermaid');
                 return {
-                    hasHeading: !!(h1 && h1.textContent?.includes('My Document')),
+                    hasHeading: h1?.textContent?.includes('My Document') ?? false,
                     hasMermaid: mermaidEl !== null
                 };
             });
