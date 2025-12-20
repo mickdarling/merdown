@@ -9,7 +9,8 @@ const {
   isGlobalFunctionAvailable,
   loadSampleContent,
   setCodeMirrorContent,
-  renderMarkdownAndWait
+  renderMarkdownAndWait,
+  WAIT_TIMES
 } = require('../helpers/test-utils');
 
 /**

@@ -266,19 +266,27 @@ async function loadSampleContent(page, waitTime = WAIT_TIMES.LONG) {
 
 /**
  * Render markdown and wait for completion
+ * Awaits the async renderMarkdown function, then waits for any pending state to clear
  * @param {import('@playwright/test').Page} page - Playwright page object
- * @param {number} [waitTime=500] - Time to wait after rendering
+ * @param {number} [timeout=5000] - Maximum time to wait for render completion (legacy values < 3000 are converted to 5000)
  * @returns {Promise<void>}
  */
-async function renderMarkdownAndWait(page, waitTime = WAIT_TIMES.LONG) {
-  await page.evaluate(() => {
+async function renderMarkdownAndWait(page, timeout = 5000) {
+  // Backwards compatibility: old calls passed WAIT_TIMES.LONG (500ms) as a "wait time"
+  const effectiveTimeout = timeout < 3000 ? 5000 : timeout;
+
+  // Await the async renderMarkdown function
+  await page.evaluate(async () => {
     if (typeof globalThis.renderMarkdown === 'function') {
-      globalThis.renderMarkdown();
+      await globalThis.renderMarkdown();
     }
   });
-  if (waitTime > 0) {
-    await page.waitForTimeout(waitTime);
-  }
+
+  // Wait for wrapper to have content (confirms render completed)
+  await page.waitForFunction(() => {
+    const wrapper = document.getElementById('wrapper');
+    return wrapper && wrapper.children.length > 0;
+  }, { timeout: effectiveTimeout });
 }
 
 /**
