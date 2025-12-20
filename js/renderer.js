@@ -880,6 +880,13 @@ async function lazyRenderMermaid(element) {
             diagramCode = '%%{init: {"flowchart": {"htmlLabels": false}}}%%\n' + diagramCode;
         }
 
+        // Store original mermaid code for potential re-renders (Issue #371)
+        // Used by renderMarkdown() optimization to re-render diagrams on style changes
+        // without replacing the entire DOM (prevents flicker)
+        if (!element.dataset.mermaidSource) {
+            element.dataset.mermaidSource = element.textContent.trim();
+        }
+
         const { svg } = await mermaid.render(element.id + '-svg', diagramCode);
         // Use two-pass sanitization for better security
         const sanitizedSvg = sanitizeMermaidSvg(svg);
@@ -1234,16 +1241,75 @@ async function determinePureMermaidMode(markdown) {
     return isPure;
 }
 
+/** Selector for mermaid diagrams that can be re-rendered without full DOM replacement */
+const RENDERED_DIAGRAMS_SELECTOR = '.mermaid[data-mermaid-rendered="true"][data-mermaid-source]';
+
+/**
+ * Re-render mermaid diagrams in-place for style-only changes (Issue #371)
+ *
+ * This optimization path is triggered when content hasn't changed but a re-render
+ * is requested (e.g., style/theme change). Instead of replacing the entire DOM
+ * (which destroys SVGs and causes flicker), we re-render only the mermaid diagrams.
+ *
+ * @param {HTMLElement} wrapper - The preview wrapper element
+ * @returns {Promise<boolean>} True if optimization was applied, false otherwise
+ */
+async function tryStyleOnlyRender(wrapper) {
+    const diagrams = wrapper.querySelectorAll(RENDERED_DIAGRAMS_SELECTOR);
+    if (diagrams.length === 0) return false;
+
+    // Prevent concurrent style-only renders (race condition guard)
+    if (state.styleOnlyRenderInProgress) {
+        // Debug: console.debug('[Render] Skipping - style-only render already in progress');
+        return true; // Treat as handled to avoid full re-render
+    }
+
+    state.styleOnlyRenderInProgress = true;
+    // Debug: console.debug('[Render] Style-only path - re-rendering', diagrams.length, 'diagrams');
+
+    try {
+        await Promise.all(Array.from(diagrams).map(async (element) => {
+            try {
+                const mermaidSource = element.dataset.mermaidSource;
+                element.dataset.mermaidRendered = 'pending';
+                element.textContent = mermaidSource;
+                await lazyRenderMermaid(element);
+            } catch {
+                // Individual diagram errors are handled in lazyRenderMermaid
+            }
+        }));
+    } finally {
+        state.styleOnlyRenderInProgress = false;
+    }
+    return true;
+}
+
 /**
  * Render markdown with mermaid diagrams
+ *
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
+ *
+ * **Callers:** This function is invoked by:
+ * - `scheduleRender()` - debounced wrapper for editor changes and style/theme updates
+ * - Direct calls from file operations (load, import, drag-drop)
+ * - Direct calls from session management (restore, switch)
+ * - Direct calls from document mode changes
+ *
  * @async
  */
 export async function renderMarkdown() {
     try {
         const { wrapper } = getElements();
         const markdown = state.cmEditor ? state.cmEditor.getValue() : '';
+
+        // STYLE-ONLY OPTIMIZATION (Issue #371): Skip full re-render if content unchanged
+        // See tryStyleOnlyRender() for detailed documentation
+        if (markdown === state.lastRenderedContent && wrapper) {
+            if (await tryStyleOnlyRender(wrapper)) {
+                return;
+            }
+        }
 
         // SAVE STATE: Preserve YAML metadata panel open/closed state before re-render (#268 fix)
         const yamlPanelWasOpen = wrapper?.querySelector('.yaml-front-matter')?.open;
@@ -1293,6 +1359,9 @@ export async function renderMarkdown() {
         if (isSessionsInitialized()) {
             updateSessionContent(markdown);
         }
+
+        // Track rendered content for diff detection (Issue #371 - prevents flicker on style changes)
+        state.lastRenderedContent = markdown;
 
         // Trigger validation if lint panel is enabled (debounced)
         if (state.lintEnabled) {
