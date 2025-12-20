@@ -143,7 +143,12 @@ test.describe('Mermaid Style Change Flicker - Issue #371', () => {
         });
 
         // Wait for re-render to complete
-        await page.waitForTimeout(2000);
+        await page.waitForFunction(() => {
+            const noRenderInProgress = !globalThis.state?.styleOnlyRenderInProgress;
+            const diagram = document.querySelector('.mermaid');
+            const isRendered = diagram?.dataset.mermaidRendered === 'true';
+            return noRenderInProgress && isRendered;
+        }, { timeout: 5000 });
 
         // Collect results
         const renderBehavior = await page.evaluate(() => {
@@ -210,7 +215,12 @@ test.describe('Mermaid Style Change Flicker - Issue #371', () => {
         });
 
         // Wait for re-render to complete
-        await page.waitForTimeout(2000);
+        await page.waitForFunction(() => {
+            const noRenderInProgress = !globalThis.state?.styleOnlyRenderInProgress;
+            const diagrams = document.querySelectorAll('.mermaid');
+            const allRendered = diagrams.length > 0 && Array.from(diagrams).every(d => d.dataset.mermaidRendered === 'true');
+            return noRenderInProgress && allRendered;
+        }, { timeout: 5000 });
 
         // Collect final state
         const finalState = await page.evaluate(() => {
@@ -270,8 +280,10 @@ test.describe('Mermaid Style Change Flicker - Issue #371', () => {
             await page.waitForTimeout(100);
         }
 
-        // Wait for all changes to settle
-        await page.waitForTimeout(1500);
+        // Wait for style-only render to complete
+        await page.waitForFunction(() => {
+            return !globalThis.state?.styleOnlyRenderInProgress;
+        }, { timeout: 5000 });
 
         // Collect results
         const flickerCount = await page.evaluate(() => {
@@ -344,10 +356,13 @@ test.describe('Mermaid Style Change Flicker - Issue #371', () => {
             }
         });
 
-        await page.waitForTimeout(2000);
+        // Wait for style-only render to complete
+        await page.waitForFunction(() => {
+            return !globalThis.state?.styleOnlyRenderInProgress;
+        }, { timeout: 5000 });
 
         // Verify page is still functional - no console errors and diagrams exist
-        const state = await page.evaluate(() => {
+        const diagramState = await page.evaluate(() => {
             const diagrams = document.querySelectorAll('.mermaid');
             return {
                 diagramCount: diagrams.length,
@@ -355,8 +370,8 @@ test.describe('Mermaid Style Change Flicker - Issue #371', () => {
             };
         });
 
-        expect(state.diagramCount).toBeGreaterThanOrEqual(1);
-        expect(state.allHaveSvg).toBe(true);
+        expect(diagramState.diagramCount).toBeGreaterThanOrEqual(1);
+        expect(diagramState.allHaveSvg).toBe(true);
     });
 });
 
@@ -547,8 +562,10 @@ def greet():
             }
         });
 
-        // Wait for any changes to settle
-        await page.waitForTimeout(1500);
+        // Wait for style-only render to complete
+        await page.waitForFunction(() => {
+            return !globalThis.state?.styleOnlyRenderInProgress;
+        }, { timeout: 5000 });
 
         // Collect results
         const codeBlockFlicker = await page.evaluate(() => {
