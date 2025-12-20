@@ -1241,10 +1241,21 @@ async function determinePureMermaidMode(markdown) {
     return isPure;
 }
 
+/** Selector for mermaid diagrams that can be re-rendered without full DOM replacement */
+const RENDERED_DIAGRAMS_SELECTOR = '.mermaid[data-mermaid-rendered="true"][data-mermaid-source]';
+
 /**
  * Render markdown with mermaid diagrams
+ *
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
+ *
+ * **Callers:** This function is invoked by:
+ * - `scheduleRender()` - debounced wrapper for editor changes and style/theme updates
+ * - Direct calls from file operations (load, import, drag-drop)
+ * - Direct calls from session management (restore, switch)
+ * - Direct calls from document mode changes
+ *
  * @async
  */
 export async function renderMarkdown() {
@@ -1252,31 +1263,49 @@ export async function renderMarkdown() {
         const { wrapper } = getElements();
         const markdown = state.cmEditor ? state.cmEditor.getValue() : '';
 
-        // OPTIMIZATION: Skip full re-render if content hasn't changed (Issue #371)
-        // This prevents mermaid diagram flickering on style-only changes
-        // Only target diagrams with stored source (set during first render in lazyRenderMermaid)
-        const selector = '.mermaid[data-mermaid-rendered="true"][data-mermaid-source]';
-        if (markdown === state.lastRenderedContent && wrapper?.querySelector(selector)) {
-            // Content unchanged and diagrams already rendered - just update mermaid themes
-            const diagrams = wrapper.querySelectorAll(selector);
-            if (diagrams.length > 0) {
-                // Re-render mermaid diagrams with current theme
-                await Promise.all(Array.from(diagrams).map(async (element) => {
-                    try {
-                        // Get stored original mermaid source code (guaranteed to exist by selector)
-                        const mermaidSource = element.dataset.mermaidSource;
+        /**
+         * STYLE-ONLY OPTIMIZATION (Issue #371)
+         *
+         * When content hasn't changed, skip the expensive full re-render path that
+         * replaces innerHTML (which destroys SVGs and causes visible flicker).
+         * Instead, re-render only the mermaid diagrams in-place using stored source.
+         *
+         * This path is triggered by:
+         * - Style selector changes (themes.js → scheduleRender)
+         * - Theme changes (updateTheme → scheduleRender)
+         * - Editor focus changes that don't modify content
+         *
+         * Safety: The content comparison ensures we only skip when markdown is identical.
+         * The selector ensures we only process diagrams that have stored source code.
+         *
+         * Performance: Avoids O(n) DOM replacement for O(m) diagram updates where m << n.
+         */
+        if (markdown === state.lastRenderedContent && wrapper?.querySelector(RENDERED_DIAGRAMS_SELECTOR)) {
+            // Prevent concurrent style-only renders (race condition guard)
+            if (state.styleOnlyRenderInProgress) {
+                // Debug: console.debug('[Render] Skipping - style-only render already in progress');
+                return;
+            }
 
-                        // Reset state to allow re-render
-                        element.dataset.mermaidRendered = 'pending';
+            state.styleOnlyRenderInProgress = true;
+            // Debug: console.debug('[Render] Style-only path - re-rendering', diagrams.length, 'diagrams');
 
-                        // Restore original mermaid code for re-parsing
-                        element.textContent = mermaidSource;
-
-                        await lazyRenderMermaid(element);
-                    } catch {
-                        // Individual diagram errors are handled in lazyRenderMermaid
-                    }
-                }));
+            try {
+                const diagrams = wrapper.querySelectorAll(RENDERED_DIAGRAMS_SELECTOR);
+                if (diagrams.length > 0) {
+                    await Promise.all(Array.from(diagrams).map(async (element) => {
+                        try {
+                            const mermaidSource = element.dataset.mermaidSource;
+                            element.dataset.mermaidRendered = 'pending';
+                            element.textContent = mermaidSource;
+                            await lazyRenderMermaid(element);
+                        } catch {
+                            // Individual diagram errors are handled in lazyRenderMermaid
+                        }
+                    }));
+                }
+            } finally {
+                state.styleOnlyRenderInProgress = false;
             }
             return;
         }
