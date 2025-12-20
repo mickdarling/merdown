@@ -819,6 +819,7 @@ async function changeStyle(styleName) {
 
 /**
  * Load syntax highlighting theme
+ * Loads new theme BEFORE removing old to prevent flicker (Issue #376)
  * @param {string} themeName - Name of the theme to load
  */
 async function loadSyntaxTheme(themeName) {
@@ -832,19 +833,18 @@ async function loadSyntaxTheme(themeName) {
         return;
     }
 
-    try {
-        // Remove previous theme
-        if (state.currentSyntaxThemeLink) {
-            state.currentSyntaxThemeLink.remove();
-        }
+    // Store reference to old theme for cleanup after new one loads
+    const oldThemeLink = state.currentSyntaxThemeLink;
 
-        // Load new theme with SRI verification
+    try {
+        // Load new theme FIRST with SRI verification (Issue #376 fix)
+        // Keep old theme in place during load to prevent flicker
         const link = document.createElement('link');
         link.rel = 'stylesheet';
         link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme.file}.min.css`;
         link.integrity = sriHash;
         link.crossOrigin = 'anonymous';
-        link.id = 'syntax-theme';
+        link.id = 'syntax-theme-loading'; // Temporary ID during load
 
         // Wait for CSS to load before continuing
         await new Promise((resolve, reject) => {
@@ -853,11 +853,18 @@ async function loadSyntaxTheme(themeName) {
             document.head.appendChild(link);
         });
 
-        state.currentSyntaxThemeLink = link;
-
         // CRITICAL: Wait a bit for browser to parse the stylesheet
         // The onload event fires when downloaded, but CSSOM might not be ready
         await new Promise(resolve => setTimeout(resolve, 100));
+
+        // NOW remove old theme (after new one is loaded and ready)
+        if (oldThemeLink) {
+            oldThemeLink.remove();
+        }
+
+        // Update ID and store reference
+        link.id = 'syntax-theme';
+        state.currentSyntaxThemeLink = link;
 
         // Save preference
         saveSyntaxTheme(themeName);
@@ -866,6 +873,9 @@ async function loadSyntaxTheme(themeName) {
     } catch (error) {
         console.error('Failed to load syntax theme:', error);
         showStatus(`Error loading syntax theme: ${theme.name}`);
+        // Clean up failed load attempt, keep old theme
+        const failedLink = document.getElementById('syntax-theme-loading');
+        if (failedLink) failedLink.remove();
     }
 }
 
@@ -936,31 +946,40 @@ async function initSyntaxThemeSelector() {
 
 /**
  * Load editor theme (CodeMirror) from local CSS files
+ * Loads new theme BEFORE removing old to prevent flicker (Issue #376)
  * @param {string} themeName - Name of the theme to load
  */
 async function loadEditorTheme(themeName) {
     const theme = editorThemes.find(t => t.name === themeName);
     if (!theme) return;
 
-    try {
-        // Remove previous editor theme
-        if (state.currentEditorThemeLink) {
-            state.currentEditorThemeLink.remove();
-        }
+    // Store reference to old theme for cleanup after new one loads
+    const oldThemeLink = state.currentEditorThemeLink;
 
-        // Load new theme from local styles/editor/ directory
+    try {
+        // Load new theme from local styles/editor/ directory FIRST (Issue #376 fix)
         const response = await fetch(`styles/editor/${theme.file}.css`);
         if (!response.ok) {
             throw new Error(`HTTP ${response.status}`);
         }
         const cssText = await response.text();
 
-        // Create style element
+        // Create style element with temporary ID
         const styleElement = document.createElement('style');
-        styleElement.id = 'editor-theme';
+        styleElement.id = 'editor-theme-loading';
         styleElement.textContent = cssText;
         document.head.appendChild(styleElement);
 
+        // Brief wait for browser to parse the stylesheet
+        await new Promise(resolve => setTimeout(resolve, 50));
+
+        // NOW remove old theme (after new one is loaded and ready)
+        if (oldThemeLink) {
+            oldThemeLink.remove();
+        }
+
+        // Update ID and store reference
+        styleElement.id = 'editor-theme';
         state.currentEditorThemeLink = styleElement;
 
         // Save preference
@@ -970,6 +989,9 @@ async function loadEditorTheme(themeName) {
     } catch (error) {
         console.error('Failed to load editor theme:', error);
         showStatus(`Error loading editor theme: ${theme.name}`);
+        // Clean up failed load attempt, keep old theme
+        const failedStyle = document.getElementById('editor-theme-loading');
+        if (failedStyle) failedStyle.remove();
     }
 }
 
