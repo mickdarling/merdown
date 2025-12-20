@@ -38,6 +38,7 @@ export const state = {
     // Rendering
     mermaidCounter: 0,                   // Counter for generating unique Mermaid diagram IDs
     renderTimeout: null,                 // Debounce timeout handle for render scheduling
+    lastRenderedContent: null,           // Last markdown content that was rendered (for diff detection)
     validationTimeout: null,             // Debounce timeout handle for validation scheduling
     mermaidTheme: 'default',             // Current Mermaid theme ('default' for light, 'dark' for dark backgrounds)
     mermaidThemeMode: 'auto',            // User's theme selection: 'auto' or specific theme name ('default', 'forest', 'dark', 'neutral', 'base')

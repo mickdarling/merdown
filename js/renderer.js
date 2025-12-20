@@ -1245,6 +1245,24 @@ export async function renderMarkdown() {
         const { wrapper } = getElements();
         const markdown = state.cmEditor ? state.cmEditor.getValue() : '';
 
+        // OPTIMIZATION: Skip full re-render if content hasn't changed (Issue #371)
+        // This prevents mermaid diagram flickering on style-only changes
+        if (markdown === state.lastRenderedContent && wrapper?.querySelector('.mermaid[data-mermaid-rendered="true"]')) {
+            // Content unchanged and diagrams already rendered - just update mermaid themes if needed
+            const diagrams = wrapper.querySelectorAll('.mermaid[data-mermaid-rendered="true"]');
+            if (diagrams.length > 0) {
+                // Re-render mermaid diagrams with current theme (preserves SVGs, updates colors)
+                await Promise.all(Array.from(diagrams).map(async (element) => {
+                    try {
+                        await lazyRenderMermaid(element);
+                    } catch {
+                        // Individual diagram errors are handled in lazyRenderMermaid
+                    }
+                }));
+            }
+            return;
+        }
+
         // SAVE STATE: Preserve YAML metadata panel open/closed state before re-render (#268 fix)
         const yamlPanelWasOpen = wrapper?.querySelector('.yaml-front-matter')?.open;
 
@@ -1293,6 +1311,9 @@ export async function renderMarkdown() {
         if (isSessionsInitialized()) {
             updateSessionContent(markdown);
         }
+
+        // Track rendered content for diff detection (Issue #371 - prevents flicker on style changes)
+        state.lastRenderedContent = markdown;
 
         // Trigger validation if lint panel is enabled (debounced)
         if (state.lintEnabled) {
