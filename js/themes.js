@@ -49,6 +49,35 @@ let layoutToggleOption = null; // Cached reference for performance
 let hrPageBreakToggleOption = null; // Cached reference for performance
 let fileInput = null; // Hidden file input for CSS uploads
 
+// Theme loading constants
+const SYNTAX_THEME_LOADING_ID = 'syntax-theme-loading';
+const SYNTAX_THEME_ID = 'syntax-theme';
+const EDITOR_THEME_LOADING_ID = 'editor-theme-loading';
+const EDITOR_THEME_ID = 'editor-theme';
+
+/**
+ * Stylesheet parse delay for syntax themes (CDN-loaded)
+ * CDN resources need more time because:
+ * - External network latency
+ * - Browser security checks for SRI
+ * - Cross-origin resource processing
+ * The onload event fires when downloaded, but CSSOM might not be ready yet
+ */
+const SYNTAX_THEME_PARSE_DELAY = 100;
+
+/**
+ * Stylesheet parse delay for editor themes (local CSS)
+ * Local resources are faster because:
+ * - No network latency
+ * - Same-origin (no CORS checks)
+ * - Smaller file sizes (custom themes vs full highlight.js themes)
+ */
+const EDITOR_THEME_PARSE_DELAY = 50;
+
+// Race condition protection: track if theme loads are in progress
+let syntaxThemeLoading = false;
+let editorThemeLoading = false;
+
 /**
  * Initialize the hidden file input for CSS file uploads
  */
@@ -826,12 +855,21 @@ async function loadSyntaxTheme(themeName) {
     const theme = syntaxThemes.find(t => t.name === themeName);
     if (!theme) return;
 
+    // Race condition protection: ignore new requests while a load is in progress
+    if (syntaxThemeLoading) {
+        console.log('Syntax theme load already in progress, ignoring new request');
+        return;
+    }
+
     // Verify theme has SRI hash for security
     const sriHash = syntaxThemeSRI[theme.file];
     if (!sriHash) {
         console.error(`No SRI hash for theme: ${theme.file}`);
         return;
     }
+
+    // Mark as loading
+    syntaxThemeLoading = true;
 
     // Store reference to old theme for cleanup after new one loads
     const oldThemeLink = state.currentSyntaxThemeLink;
@@ -844,7 +882,7 @@ async function loadSyntaxTheme(themeName) {
         link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme.file}.min.css`;
         link.integrity = sriHash;
         link.crossOrigin = 'anonymous';
-        link.id = 'syntax-theme-loading'; // Temporary ID during load
+        link.id = SYNTAX_THEME_LOADING_ID;
 
         // Wait for CSS to load before continuing
         await new Promise((resolve, reject) => {
@@ -855,7 +893,7 @@ async function loadSyntaxTheme(themeName) {
 
         // CRITICAL: Wait a bit for browser to parse the stylesheet
         // The onload event fires when downloaded, but CSSOM might not be ready
-        await new Promise(resolve => setTimeout(resolve, 100));
+        await new Promise(resolve => setTimeout(resolve, SYNTAX_THEME_PARSE_DELAY));
 
         // NOW remove old theme (after new one is loaded and ready)
         if (oldThemeLink) {
@@ -863,7 +901,7 @@ async function loadSyntaxTheme(themeName) {
         }
 
         // Update ID and store reference
-        link.id = 'syntax-theme';
+        link.id = SYNTAX_THEME_ID;
         state.currentSyntaxThemeLink = link;
 
         // Save preference
@@ -874,8 +912,11 @@ async function loadSyntaxTheme(themeName) {
         console.error('Failed to load syntax theme:', error);
         showStatus(`Error loading syntax theme: ${theme.name}`);
         // Clean up failed load attempt, keep old theme
-        const failedLink = document.getElementById('syntax-theme-loading');
+        const failedLink = document.getElementById(SYNTAX_THEME_LOADING_ID);
         if (failedLink) failedLink.remove();
+    } finally {
+        // Clear loading flag
+        syntaxThemeLoading = false;
     }
 }
 
@@ -953,6 +994,15 @@ async function loadEditorTheme(themeName) {
     const theme = editorThemes.find(t => t.name === themeName);
     if (!theme) return;
 
+    // Race condition protection: ignore new requests while a load is in progress
+    if (editorThemeLoading) {
+        console.log('Editor theme load already in progress, ignoring new request');
+        return;
+    }
+
+    // Mark as loading
+    editorThemeLoading = true;
+
     // Store reference to old theme for cleanup after new one loads
     const oldThemeLink = state.currentEditorThemeLink;
 
@@ -966,12 +1016,12 @@ async function loadEditorTheme(themeName) {
 
         // Create style element with temporary ID
         const styleElement = document.createElement('style');
-        styleElement.id = 'editor-theme-loading';
+        styleElement.id = EDITOR_THEME_LOADING_ID;
         styleElement.textContent = cssText;
         document.head.appendChild(styleElement);
 
         // Brief wait for browser to parse the stylesheet
-        await new Promise(resolve => setTimeout(resolve, 50));
+        await new Promise(resolve => setTimeout(resolve, EDITOR_THEME_PARSE_DELAY));
 
         // NOW remove old theme (after new one is loaded and ready)
         if (oldThemeLink) {
@@ -979,7 +1029,7 @@ async function loadEditorTheme(themeName) {
         }
 
         // Update ID and store reference
-        styleElement.id = 'editor-theme';
+        styleElement.id = EDITOR_THEME_ID;
         state.currentEditorThemeLink = styleElement;
 
         // Save preference
@@ -990,8 +1040,11 @@ async function loadEditorTheme(themeName) {
         console.error('Failed to load editor theme:', error);
         showStatus(`Error loading editor theme: ${theme.name}`);
         // Clean up failed load attempt, keep old theme
-        const failedStyle = document.getElementById('editor-theme-loading');
+        const failedStyle = document.getElementById(EDITOR_THEME_LOADING_ID);
         if (failedStyle) failedStyle.remove();
+    } finally {
+        // Clear loading flag
+        editorThemeLoading = false;
     }
 }
 
