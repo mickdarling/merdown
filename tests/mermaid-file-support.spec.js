@@ -540,22 +540,24 @@ graph TD
         });
 
         test('should handle case-insensitive extensions', async ({ page }) => {
-            const results = await page.evaluate(() => {
-                const testCases = ['DIAGRAM.MERMAID', 'Diagram.Mmd', 'Document.MD', 'file.MARKDOWN'];
-                return testCases.map(filename => {
-                    const lower = filename.toLowerCase();
-                    return {
-                        filename,
-                        isMermaid: lower.endsWith('.mermaid') || lower.endsWith('.mmd'),
-                        isMarkdown: lower.endsWith('.md') || lower.endsWith('.markdown')
-                    };
-                });
-            });
+            // Helper to check extension type - avoids deep nesting
+            const checkExtension = (filename) => page.evaluate((name) => {
+                const lower = name.toLowerCase();
+                return {
+                    isMermaid: lower.endsWith('.mermaid') || lower.endsWith('.mmd'),
+                    isMarkdown: lower.endsWith('.md') || lower.endsWith('.markdown')
+                };
+            }, filename);
 
-            expect(results[0].isMermaid).toBe(true);  // DIAGRAM.MERMAID
-            expect(results[1].isMermaid).toBe(true);  // Diagram.Mmd
-            expect(results[2].isMarkdown).toBe(true); // Document.MD
-            expect(results[3].isMarkdown).toBe(true); // file.MARKDOWN
+            const mermaidUpper = await checkExtension('DIAGRAM.MERMAID');
+            const mermaidMixed = await checkExtension('Diagram.Mmd');
+            const markdownUpper = await checkExtension('Document.MD');
+            const markdownLong = await checkExtension('file.MARKDOWN');
+
+            expect(mermaidUpper.isMermaid).toBe(true);
+            expect(mermaidMixed.isMermaid).toBe(true);
+            expect(markdownUpper.isMarkdown).toBe(true);
+            expect(markdownLong.isMarkdown).toBe(true);
         });
     });
 });
