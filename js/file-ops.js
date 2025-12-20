@@ -325,7 +325,7 @@ export function saveFileAs() {
  * @param {string} content - The content to process
  * @returns {string} Content with fences stripped
  */
-function stripMermaidFences(content) {
+export function stripMermaidFences(content) {
     const trimmed = content.trim();
     const OPEN_FENCE = '```mermaid';
     const CLOSE_FENCE = '```';
@@ -364,6 +364,36 @@ function stripMermaidFences(content) {
 }
 
 /**
+ * Check if content has properly formatted mermaid fences (opening + closing)
+ * Used to determine if content needs to be wrapped when saving (#367)
+ * Uses string methods to avoid ReDoS vulnerability
+ * @param {string} content - The content to check
+ * @returns {boolean} True if content has proper mermaid fences
+ */
+export function hasProperMermaidFences(content) {
+    const trimmed = content.trim();
+    const OPEN_FENCE = '```mermaid';
+    const CLOSE_FENCE = '```';
+
+    // Find opening fence (case-insensitive)
+    const lowerContent = trimmed.toLowerCase();
+    const openIndex = lowerContent.indexOf(OPEN_FENCE.toLowerCase());
+    if (openIndex === -1) {
+        return false;
+    }
+
+    // Find the newline after opening fence
+    const afterOpen = trimmed.indexOf('\n', openIndex + OPEN_FENCE.length);
+    if (afterOpen === -1) {
+        return false;
+    }
+
+    // Find closing fence after the opening
+    const closeIndex = trimmed.indexOf(CLOSE_FENCE, afterOpen);
+    return closeIndex !== -1;
+}
+
+/**
  * Download the markdown content as a file
  * Creates a blob and triggers a download via a temporary anchor element
  * Handles content transformation based on file type (#367):
@@ -376,16 +406,19 @@ function downloadFile(filename) {
     let content = cmEditor ? cmEditor.getValue() : '';
 
     // Handle content transformation based on file type (#367)
-    const isMermaidFile = /\.(mermaid|mmd)$/i.test(filename);
-    const isMarkdownFile = /\.(md|markdown)$/i.test(filename);
+    // Use string methods instead of regex for consistency and ReDoS prevention
+    const lowerFilename = filename.toLowerCase();
+    const isMermaidFile = lowerFilename.endsWith('.mermaid') || lowerFilename.endsWith('.mmd');
+    const isMarkdownFile = lowerFilename.endsWith('.md') || lowerFilename.endsWith('.markdown');
 
     if (isMermaidFile) {
         // Saving as .mermaid/.mmd: strip fences if present
         content = stripMermaidFences(content);
     } else if (isMarkdownFile && state.documentMode === 'mermaid') {
         // Saving pure Mermaid content as Markdown: wrap in fences
-        // Only wrap if content doesn't already have fences
-        if (!/```mermaid/i.test(content)) {
+        // Check if content has properly formatted fences (opening + closing)
+        const hasFences = hasProperMermaidFences(content);
+        if (!hasFences) {
             content = '```mermaid\n' + content.trim() + '\n```\n';
         }
     }

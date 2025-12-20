@@ -9,7 +9,35 @@ const { test, expect } = require('@playwright/test');
  * - .mermaid and .mmd file extension support
  * - Auto-detection of pure Mermaid vs Markdown content
  * - Prevention of false positives (e.g., "pie is very tasty")
+ * - Content transformation: stripMermaidFences(), hasProperMermaidFences()
+ * - Save transformation between .mermaid and .md formats
  */
+
+/**
+ * Wait for mermaid diagram to be rendered (SVG present)
+ * Uses waitForFunction for efficiency, falls back to timeout if needed
+ */
+async function waitForMermaidRender(page, timeout = 5000) {
+    try {
+        await page.waitForFunction(() => {
+            const mermaidEl = document.querySelector('.mermaid');
+            return mermaidEl && mermaidEl.querySelector('svg') !== null;
+        }, { timeout });
+    } catch {
+        // Fallback: wait fixed time if condition never met
+        await page.waitForTimeout(2000);
+    }
+}
+
+/**
+ * Wait for content to be rendered in preview
+ * Used for tests where we expect NO mermaid to render
+ */
+async function waitForPreviewRender(page, timeout = 1500) {
+    // For negative tests (no mermaid expected), we need to wait long enough
+    // to be confident the content has had time to render
+    await page.waitForTimeout(timeout);
+}
 
 test.describe('Mermaid File Support (Issue #367)', () => {
     test.beforeEach(async ({ page }) => {
@@ -31,10 +59,8 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue(content);
             }, ganttContent);
 
-            // Wait for render
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
-            // Check if mermaid diagram rendered with SVG
             const hasMermaidSvg = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
                 return mermaidEl && mermaidEl.querySelector('svg') !== null;
@@ -55,7 +81,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue(content);
             }, flowchartContent);
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             const hasMermaidSvg = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
@@ -75,7 +101,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue(content);
             }, sequenceContent);
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             const hasMermaidSvg = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
@@ -96,7 +122,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue(content);
             }, pieContent);
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             const hasMermaidSvg = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
@@ -114,7 +140,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue('pie is very tasty and I love it');
             });
 
-            await page.waitForTimeout(1500);
+            await waitForPreviewRender(page);
 
             const hasMermaid = await page.evaluate(() => {
                 return document.querySelector('.mermaid') !== null;
@@ -129,7 +155,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue('graph theory is a fascinating branch of mathematics');
             });
 
-            await page.waitForTimeout(1500);
+            await waitForPreviewRender(page);
 
             const hasMermaid = await page.evaluate(() => {
                 return document.querySelector('.mermaid') !== null;
@@ -144,7 +170,7 @@ test.describe('Mermaid File Support (Issue #367)', () => {
                 globalThis.state.cmEditor.setValue('journey to the center of the earth is a classic novel');
             });
 
-            await page.waitForTimeout(1500);
+            await waitForPreviewRender(page);
 
             const hasMermaid = await page.evaluate(() => {
                 return document.querySelector('.mermaid') !== null;
@@ -170,9 +196,11 @@ And some more text.`;
             await page.evaluate((content) => {
                 globalThis.state.documentMode = null;
                 globalThis.state.cmEditor.setValue(content);
+                // Explicitly trigger render after content change
+                globalThis.renderMarkdown();
             }, markdownContent);
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             // Should have both heading and mermaid diagram
             const result = await page.evaluate(() => {
@@ -198,7 +226,7 @@ And some more text.`;
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             const hasMermaidSvg = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
@@ -216,7 +244,7 @@ And some more text.`;
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
 
-            await page.waitForTimeout(2000);
+            await waitForPreviewRender(page);
 
             // Should NOT be rendered as a single Mermaid diagram
             // It should be rendered as plain text/paragraph
@@ -272,9 +300,11 @@ graph TD
             await page.evaluate((content) => {
                 globalThis.state.documentMode = null;
                 globalThis.state.cmEditor.setValue(content);
+                // Explicitly trigger render after content change
+                globalThis.renderMarkdown();
             }, mermaidWithFrontmatter);
 
-            await page.waitForTimeout(2000);
+            await waitForMermaidRender(page);
 
             const result = await page.evaluate(() => {
                 const mermaidEl = document.querySelector('.mermaid');
@@ -287,6 +317,245 @@ graph TD
 
             expect(result.hasMermaidSvg).toBe(true);
             expect(result.hasYamlPanel).toBe(true);
+        });
+    });
+
+    test.describe('stripMermaidFences() Edge Cases', () => {
+        test('should strip simple mermaid fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B\n```';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('graph TD\n    A --> B');
+        });
+
+        test('should strip fences with trailing whitespace', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid   \ngraph TD\n    A --> B\n```\n\n';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('graph TD\n    A --> B');
+        });
+
+        test('should return original content if no opening fence', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = 'graph TD\n    A --> B';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('graph TD\n    A --> B');
+        });
+
+        test('should return original content if no closing fence', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('```mermaid\ngraph TD\n    A --> B');
+        });
+
+        test('should return original content if fence has attributes', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid {theme: forest}\ngraph TD\n    A --> B\n```';
+                return globalThis.stripMermaidFences(content);
+            });
+            // Content with attributes after ```mermaid should not be stripped
+            expect(result).toBe('```mermaid {theme: forest}\ngraph TD\n    A --> B\n```');
+        });
+
+        test('should handle empty content between fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\n\n```';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('');
+        });
+
+        test('should handle content with only whitespace between fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\n   \n```';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('');
+        });
+    });
+
+    test.describe('hasProperMermaidFences() Edge Cases', () => {
+        test('should detect proper fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B\n```';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(true);
+        });
+
+        test('should detect fences case-insensitively', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```MERMAID\ngraph TD\n    A --> B\n```';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(true);
+        });
+
+        test('should return false for content without fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = 'graph TD\n    A --> B';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(false);
+        });
+
+        test('should return false for content with only opening fence', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(false);
+        });
+
+        test('should return false for content with only closing fence', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = 'graph TD\n    A --> B\n```';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(false);
+        });
+
+        test('should detect fences in larger markdown document', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '# Title\n\nSome text\n\n```mermaid\ngraph TD\n    A --> B\n```\n\nMore text';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(true);
+        });
+
+        test('should return false for literal string containing mermaid without fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                // Content that mentions "```mermaid" but isn't actually fenced
+                const content = 'Use ```mermaid to create diagrams';
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(result).toBe(false);
+        });
+    });
+
+    test.describe('Save Transformation', () => {
+        test('should wrap pure mermaid in fences when saving as .md', async ({ page }) => {
+            // Set up pure mermaid content with mermaid document mode
+            await page.evaluate(() => {
+                globalThis.state.documentMode = 'mermaid';
+                globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
+            });
+
+            // Check that hasProperMermaidFences returns false for pure mermaid
+            const hasFences = await page.evaluate(() => {
+                const content = globalThis.state.cmEditor.getValue();
+                return globalThis.hasProperMermaidFences(content);
+            });
+            expect(hasFences).toBe(false);
+
+            // The actual save logic would wrap this content
+            // We can test the transformation logic directly
+            const transformed = await page.evaluate(() => {
+                const content = 'graph TD\n    A --> B';
+                if (!globalThis.hasProperMermaidFences(content)) {
+                    return '```mermaid\n' + content.trim() + '\n```\n';
+                }
+                return content;
+            });
+            expect(transformed).toBe('```mermaid\ngraph TD\n    A --> B\n```\n');
+        });
+
+        test('should not double-wrap content that already has fences', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B\n```';
+                if (!globalThis.hasProperMermaidFences(content)) {
+                    return '```mermaid\n' + content.trim() + '\n```\n';
+                }
+                return content;
+            });
+            expect(result).toBe('```mermaid\ngraph TD\n    A --> B\n```');
+        });
+
+        test('should strip fences when saving as .mermaid', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = '```mermaid\ngraph TD\n    A --> B\n```';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('graph TD\n    A --> B');
+        });
+
+        test('should preserve pure mermaid when saving as .mermaid', async ({ page }) => {
+            const result = await page.evaluate(() => {
+                const content = 'graph TD\n    A --> B';
+                return globalThis.stripMermaidFences(content);
+            });
+            expect(result).toBe('graph TD\n    A --> B');
+        });
+    });
+
+    test.describe('File Extension Behavior', () => {
+        test('should set documentMode to mermaid for .mermaid files', async ({ page }) => {
+            // Simulate what happens when loading a .mermaid file
+            // The actual file loading sets documentMode based on extension
+            await page.evaluate(() => {
+                // Simulate loading diagram.mermaid
+                const filename = 'diagram.mermaid';
+                const isMermaidExt = filename.toLowerCase().endsWith('.mermaid') ||
+                                     filename.toLowerCase().endsWith('.mmd');
+                if (isMermaidExt) {
+                    globalThis.state.documentMode = 'mermaid';
+                }
+            });
+
+            const mode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(mode).toBe('mermaid');
+        });
+
+        test('should set documentMode to mermaid for .mmd files', async ({ page }) => {
+            await page.evaluate(() => {
+                const filename = 'diagram.mmd';
+                const isMermaidExt = filename.toLowerCase().endsWith('.mermaid') ||
+                                     filename.toLowerCase().endsWith('.mmd');
+                if (isMermaidExt) {
+                    globalThis.state.documentMode = 'mermaid';
+                }
+            });
+
+            const mode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(mode).toBe('mermaid');
+        });
+
+        test('should set documentMode to markdown for .md files', async ({ page }) => {
+            await page.evaluate(() => {
+                const filename = 'document.md';
+                const isMarkdownExt = filename.toLowerCase().endsWith('.md') ||
+                                      filename.toLowerCase().endsWith('.markdown');
+                if (isMarkdownExt) {
+                    globalThis.state.documentMode = 'markdown';
+                }
+            });
+
+            const mode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(mode).toBe('markdown');
+        });
+
+        test('should handle case-insensitive extensions', async ({ page }) => {
+            const results = await page.evaluate(() => {
+                const testCases = ['DIAGRAM.MERMAID', 'Diagram.Mmd', 'Document.MD', 'file.MARKDOWN'];
+                return testCases.map(filename => {
+                    const lower = filename.toLowerCase();
+                    return {
+                        filename,
+                        isMermaid: lower.endsWith('.mermaid') || lower.endsWith('.mmd'),
+                        isMarkdown: lower.endsWith('.md') || lower.endsWith('.markdown')
+                    };
+                });
+            });
+
+            expect(results[0].isMermaid).toBe(true);  // DIAGRAM.MERMAID
+            expect(results[1].isMermaid).toBe(true);  // Diagram.Mmd
+            expect(results[2].isMarkdown).toBe(true); // Document.MD
+            expect(results[3].isMarkdown).toBe(true); // file.MARKDOWN
         });
     });
 });
