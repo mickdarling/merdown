@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Native `.mermaid` and `.mmd` file extension support (#367)
+  - Pure Mermaid content detection using `mermaid.parse()` validation
+  - Automatic rendering of pure Mermaid diagrams without markdown fences
+  - Smart save transformation: wraps in fences when saving as `.md`, strips fences for `.mermaid`
+  - Proper `text/vnd.mermaid` MIME type for downloads
+  - Support for YAML frontmatter in pure Mermaid files
+  - 40 comprehensive tests covering edge cases and false positive prevention
+
 ### Fixed
 - Mermaid theme auto mode now properly updates when changing preview styles (#168)
   - Root cause: `state.renderMarkdown` was undefined, preventing diagram re-rendering

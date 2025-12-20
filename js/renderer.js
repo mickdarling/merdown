@@ -1051,6 +1051,48 @@ function attachMermaidEventListeners(wrapper) {
 }
 
 /**
+ * Check if a URL is already a Merview URL with ?url= parameter
+ * Used to avoid double-encoding when clicking links to merview.com
+ * @param {string} url - URL to check
+ * @returns {boolean} True if URL is a Merview URL with url parameter
+ * @private
+ */
+function isMerviewUrl(url) {
+    try {
+        const parsedUrl = new URL(url);
+        return parsedUrl.hostname === 'merview.com' && parsedUrl.searchParams.has('url');
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Resolve a relative URL to the appropriate target for Merview navigation
+ * @param {string} url - The URL to resolve
+ * @returns {string} Resolved URL for use in ?url= parameter
+ * @private
+ */
+function resolveNavigationTarget(url) {
+    if (!state.loadedFromURL || !isRelativeUrl(url)) {
+        return url;
+    }
+
+    try {
+        const resolved = resolveRelativeUrl(url, state.loadedFromURL);
+        if (!resolved) {
+            return url;
+        }
+        // Same-origin: use path without origin (e.g., "docs/other.md")
+        // Remote: use full resolved URL
+        return isSameOriginUrl(resolved)
+            ? new URL(resolved).pathname.replace(/^\//, '')
+            : resolved;
+    } catch {
+        return url;
+    }
+}
+
+/**
  * Attach click handlers for markdown links to enable in-app navigation (Issue #345)
  * Links marked with data-merview-link="true" open within Merview instead of navigating away.
  * This allows seamless navigation between related markdown documents.
@@ -1061,44 +1103,135 @@ function attachMarkdownLinkHandlers(wrapper) {
         link.addEventListener('click', (e) => {
             e.preventDefault();
             const url = link.getAttribute('href');
-            if (url) {
-                // Determine the target URL for ?url= parameter
-                let targetUrl = url;
+            if (!url) return;
 
-                // For relative URLs (./other.md, ../README.md), resolve against source document
-                // This handles same-origin docs loaded via ?url=docs/guide.md
-                if (state.loadedFromURL && isRelativeUrl(url)) {
-                    try {
-                        // Resolve relative URL against the source document
-                        const resolved = resolveRelativeUrl(url, state.loadedFromURL);
-                        if (resolved) {
-                            // Extract just the path for same-origin URLs
-                            if (isSameOriginUrl(resolved)) {
-                                // Same-origin: use path without origin (e.g., "docs/other.md")
-                                targetUrl = new URL(resolved).pathname.replace(/^\//, '');
-                            } else {
-                                // Remote: use full resolved URL
-                                targetUrl = resolved;
-                            }
-                        }
-                    } catch {
-                        // Resolution failed - use original URL
-                    }
-                }
-
-                // Navigate within Merview by updating the URL parameter
-                // This triggers a page load with the new content
-                const newUrl = new URL(globalThis.location.href);
-                // Intentionally replace the entire query string rather than preserving other params.
-                // Rationale: The ?url= param is the primary content source. Other params like ?style=
-                // are user preferences that should persist in localStorage, not the URL. Keeping the
-                // URL clean also makes sharing links easier. If we need to preserve specific params
-                // in the future (e.g., ?style=), we can use URLSearchParams selectively.
-                newUrl.search = `?url=${encodeURIComponent(targetUrl)}`;
-                globalThis.location.href = newUrl.toString();
+            // Already a Merview URL - navigate directly to avoid double-encoding
+            if (isMerviewUrl(url)) {
+                globalThis.location.href = url;
+                return;
             }
+
+            // Resolve relative URLs and navigate within Merview
+            const targetUrl = resolveNavigationTarget(url);
+            const newUrl = new URL(globalThis.location.href);
+            newUrl.search = `?url=${encodeURIComponent(targetUrl)}`;
+            globalThis.location.href = newUrl.toString();
         });
     });
+}
+
+/**
+ * Detect if content is pure Mermaid diagram code (not Markdown with mermaid blocks)
+ *
+ * Detection logic (Issue #367):
+ * 1. If content has ```mermaid fences, it's Markdown mode
+ * 2. Strip frontmatter if present
+ * 3. Try mermaid.parse() - success = pure mermaid, error = markdown
+ *
+ * @param {string} content - The content to analyze
+ * @returns {Promise<boolean>} True if content is pure Mermaid
+ */
+async function isPureMermaidContent(content) {
+    if (!content || typeof content !== 'string') {
+        return false;
+    }
+
+    const trimmed = content.trim();
+
+    // Rule 1: If content has mermaid fences, it's Markdown
+    if (/```mermaid/i.test(trimmed)) {
+        return false;
+    }
+
+    // Rule 2: Strip frontmatter if present
+    let codeToTest = trimmed;
+    if (trimmed.startsWith('---')) {
+        const { remainingMarkdown } = parseYAMLFrontMatter(trimmed);
+        codeToTest = remainingMarkdown.trim();
+    }
+
+    // Rule 3: If empty after stripping, not mermaid
+    if (!codeToTest) {
+        return false;
+    }
+
+    // Rule 4: Try mermaid.parse() for validation
+    // mermaid.parse() throws on invalid syntax, returns true/object on success
+    try {
+        await mermaid.parse(codeToTest);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Render pure Mermaid content as a single diagram
+ * Used when content is detected as pure Mermaid (not Markdown with embedded diagrams)
+ *
+ * @param {HTMLElement} wrapper - The preview wrapper element
+ * @param {string} content - The Mermaid diagram code (may include frontmatter)
+ */
+async function renderPureMermaid(wrapper, content) {
+    // Strip frontmatter if present
+    let diagramCode = content.trim();
+    let frontMatterHTML = '';
+
+    if (diagramCode.startsWith('---')) {
+        const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(diagramCode);
+        frontMatterHTML = renderYAMLFrontMatter(frontMatter);
+        diagramCode = remainingMarkdown.trim();
+    }
+
+    // Create diagram container with expand button
+    const id = `mermaid-${state.mermaidCounter++}`;
+    const html = `${frontMatterHTML}
+        <div class="mermaid-container" data-mermaid-id="${id}">
+            <button class="mermaid-expand-btn" data-expand-target="${id}" title="Expand diagram">⛶</button>
+            <div class="mermaid mermaid-loading" id="${id}" data-mermaid-rendered="pending" aria-busy="true" aria-label="Diagram loading...">${escapeHtml(diagramCode)}</div>
+        </div>`;
+
+    wrapper.innerHTML = DOMPurify.sanitize(html);
+
+    // Set up lazy loading for the diagram
+    const mermaidElements = wrapper.querySelectorAll('.mermaid');
+    if (mermaidElements.length > 0) {
+        setupMermaidLazyLoading(mermaidElements);
+    }
+}
+
+/**
+ * Determine if content should be rendered as pure Mermaid based on document mode
+ * Handles the priority: 1) documentMode set by file extension, 2) auto-detect from content
+ * Updates state.documentMode as a side effect when mode changes are detected.
+ * @param {string} markdown - The markdown content to analyze
+ * @returns {Promise<boolean>} True if content should be rendered as pure Mermaid
+ * @private
+ */
+async function determinePureMermaidMode(markdown) {
+    // documentMode === 'markdown' means always treat as markdown (e.g., loaded .md file)
+    if (state.documentMode === 'markdown') {
+        return false;
+    }
+
+    if (state.documentMode === 'mermaid') {
+        // File was loaded with .mermaid/.mmd extension - re-check if still pure mermaid
+        // This handles the case where user adds markdown text to a .mermaid file
+        const isPure = await isPureMermaidContent(markdown);
+        if (!isPure) {
+            // Content is no longer pure mermaid, switch to auto-detect mode
+            state.documentMode = null;
+        }
+        return isPure;
+    }
+
+    // Auto-detect mode (documentMode === null) for content typed/pasted into editor
+    const isPure = await isPureMermaidContent(markdown);
+    if (isPure) {
+        // Update state so Save correctly wraps content in fences if saving as .md
+        state.documentMode = 'mermaid';
+    }
+    return isPure;
 }
 
 /**
@@ -1118,26 +1251,35 @@ export async function renderMarkdown() {
         // Reset mermaid counter for consistent diagram IDs
         state.mermaidCounter = 0;
 
-        // Parse YAML front matter if present
-        const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(markdown);
+        // Determine if content should be rendered as pure Mermaid (Issue #367)
+        const isPureMermaid = await determinePureMermaidMode(markdown);
 
-        // Render YAML front matter panel
-        const frontMatterHTML = renderYAMLFrontMatter(frontMatter);
+        if (isPureMermaid) {
+            // Render as single Mermaid diagram
+            await renderPureMermaid(wrapper, markdown);
+        } else {
+            // Standard Markdown rendering path
+            // Parse YAML front matter if present
+            const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(markdown);
 
-        // Convert markdown to HTML and sanitize to prevent XSS attacks
-        // DOMPurify removes dangerous elements like <script>, event handlers, and javascript: URLs
-        // Using DOMPurify defaults (intentional) - they provide comprehensive protection while
-        // preserving all safe HTML elements, classes (for syntax highlighting), and IDs (for anchors)
-        const markdownHTML = marked.parse(remainingMarkdown);
-        const combinedHTML = frontMatterHTML + markdownHTML;
-        wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
+            // Render YAML front matter panel
+            const frontMatterHTML = renderYAMLFrontMatter(frontMatter);
 
-        // Set up lazy loading for mermaid diagrams (Issue #326)
-        // Instead of rendering all diagrams immediately (which blocks the UI),
-        // we use IntersectionObserver to render them only when they're visible
-        const mermaidElements = wrapper.querySelectorAll('.mermaid');
-        if (mermaidElements.length > 0) {
-            setupMermaidLazyLoading(mermaidElements);
+            // Convert markdown to HTML and sanitize to prevent XSS attacks
+            // DOMPurify removes dangerous elements like <script>, event handlers, and javascript: URLs
+            // Using DOMPurify defaults (intentional) - they provide comprehensive protection while
+            // preserving all safe HTML elements, classes (for syntax highlighting), and IDs (for anchors)
+            const markdownHTML = marked.parse(remainingMarkdown);
+            const combinedHTML = frontMatterHTML + markdownHTML;
+            wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
+
+            // Set up lazy loading for mermaid diagrams (Issue #326)
+            // Instead of rendering all diagrams immediately (which blocks the UI),
+            // we use IntersectionObserver to render them only when they're visible
+            const mermaidElements = wrapper.querySelectorAll('.mermaid');
+            if (mermaidElements.length > 0) {
+                setupMermaidLazyLoading(mermaidElements);
+            }
         }
 
         // Attach mermaid expand/fullscreen event listeners
@@ -1158,11 +1300,9 @@ export async function renderMarkdown() {
         }
 
         // RESTORE STATE: Restore YAML metadata panel state after re-render (#268 fix)
-        if (yamlPanelWasOpen !== undefined) {
-            const details = wrapper?.querySelector('.yaml-front-matter');
-            if (details) {
-                details.open = yamlPanelWasOpen;
-            }
+        const yamlDetails = yamlPanelWasOpen !== undefined && wrapper?.querySelector('.yaml-front-matter');
+        if (yamlDetails) {
+            yamlDetails.open = yamlPanelWasOpen;
         }
     } catch (error) {
         console.error('Critical error in renderMarkdown:', error);
