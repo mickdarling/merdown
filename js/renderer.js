@@ -1102,6 +1102,86 @@ function attachMarkdownLinkHandlers(wrapper) {
 }
 
 /**
+ * Detect if content is pure Mermaid diagram code (not Markdown with mermaid blocks)
+ *
+ * Detection logic (Issue #367):
+ * 1. If content has ```mermaid fences, it's Markdown mode
+ * 2. Strip frontmatter if present
+ * 3. Try mermaid.parse() - success = pure mermaid, error = markdown
+ *
+ * @param {string} content - The content to analyze
+ * @returns {Promise<boolean>} True if content is pure Mermaid
+ */
+async function isPureMermaidContent(content) {
+    if (!content || typeof content !== 'string') {
+        return false;
+    }
+
+    const trimmed = content.trim();
+
+    // Rule 1: If content has mermaid fences, it's Markdown
+    if (/```mermaid/i.test(trimmed)) {
+        return false;
+    }
+
+    // Rule 2: Strip frontmatter if present
+    let codeToTest = trimmed;
+    if (trimmed.startsWith('---')) {
+        const { remainingMarkdown } = parseYAMLFrontMatter(trimmed);
+        codeToTest = remainingMarkdown.trim();
+    }
+
+    // Rule 3: If empty after stripping, not mermaid
+    if (!codeToTest) {
+        return false;
+    }
+
+    // Rule 4: Try mermaid.parse() for validation
+    // mermaid.parse() throws on invalid syntax, returns true/object on success
+    try {
+        await mermaid.parse(codeToTest);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+/**
+ * Render pure Mermaid content as a single diagram
+ * Used when content is detected as pure Mermaid (not Markdown with embedded diagrams)
+ *
+ * @param {HTMLElement} wrapper - The preview wrapper element
+ * @param {string} content - The Mermaid diagram code (may include frontmatter)
+ */
+async function renderPureMermaid(wrapper, content) {
+    // Strip frontmatter if present
+    let diagramCode = content.trim();
+    let frontMatterHTML = '';
+
+    if (diagramCode.startsWith('---')) {
+        const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(diagramCode);
+        frontMatterHTML = renderYAMLFrontMatter(frontMatter);
+        diagramCode = remainingMarkdown.trim();
+    }
+
+    // Create diagram container with expand button
+    const id = `mermaid-${state.mermaidCounter++}`;
+    const html = `${frontMatterHTML}
+        <div class="mermaid-container" data-mermaid-id="${id}">
+            <button class="mermaid-expand-btn" data-expand-target="${id}" title="Expand diagram">⛶</button>
+            <div class="mermaid mermaid-loading" id="${id}" data-mermaid-rendered="pending" aria-busy="true" aria-label="Diagram loading...">${escapeHtml(diagramCode)}</div>
+        </div>`;
+
+    wrapper.innerHTML = DOMPurify.sanitize(html);
+
+    // Set up lazy loading for the diagram
+    const mermaidElements = wrapper.querySelectorAll('.mermaid');
+    if (mermaidElements.length > 0) {
+        setupMermaidLazyLoading(mermaidElements);
+    }
+}
+
+/**
  * Render markdown with mermaid diagrams
  * Main rendering function that converts markdown to HTML, applies syntax highlighting,
  * and lazily renders mermaid diagrams as they come into view (performance optimization #326).
@@ -1118,26 +1198,44 @@ export async function renderMarkdown() {
         // Reset mermaid counter for consistent diagram IDs
         state.mermaidCounter = 0;
 
-        // Parse YAML front matter if present
-        const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(markdown);
+        // Determine if content should be rendered as pure Mermaid (Issue #367)
+        // Priority: 1) documentMode set by file extension, 2) auto-detect from content
+        let isPureMermaid = false;
+        if (state.documentMode === 'mermaid') {
+            // File was loaded with .mermaid/.mmd extension
+            isPureMermaid = true;
+        } else if (state.documentMode === null) {
+            // Auto-detect mode for content typed/pasted into editor
+            isPureMermaid = await isPureMermaidContent(markdown);
+        }
+        // documentMode === 'markdown' means always treat as markdown
 
-        // Render YAML front matter panel
-        const frontMatterHTML = renderYAMLFrontMatter(frontMatter);
+        if (isPureMermaid) {
+            // Render as single Mermaid diagram
+            await renderPureMermaid(wrapper, markdown);
+        } else {
+            // Standard Markdown rendering path
+            // Parse YAML front matter if present
+            const { frontMatter, remainingMarkdown } = parseYAMLFrontMatter(markdown);
 
-        // Convert markdown to HTML and sanitize to prevent XSS attacks
-        // DOMPurify removes dangerous elements like <script>, event handlers, and javascript: URLs
-        // Using DOMPurify defaults (intentional) - they provide comprehensive protection while
-        // preserving all safe HTML elements, classes (for syntax highlighting), and IDs (for anchors)
-        const markdownHTML = marked.parse(remainingMarkdown);
-        const combinedHTML = frontMatterHTML + markdownHTML;
-        wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
+            // Render YAML front matter panel
+            const frontMatterHTML = renderYAMLFrontMatter(frontMatter);
 
-        // Set up lazy loading for mermaid diagrams (Issue #326)
-        // Instead of rendering all diagrams immediately (which blocks the UI),
-        // we use IntersectionObserver to render them only when they're visible
-        const mermaidElements = wrapper.querySelectorAll('.mermaid');
-        if (mermaidElements.length > 0) {
-            setupMermaidLazyLoading(mermaidElements);
+            // Convert markdown to HTML and sanitize to prevent XSS attacks
+            // DOMPurify removes dangerous elements like <script>, event handlers, and javascript: URLs
+            // Using DOMPurify defaults (intentional) - they provide comprehensive protection while
+            // preserving all safe HTML elements, classes (for syntax highlighting), and IDs (for anchors)
+            const markdownHTML = marked.parse(remainingMarkdown);
+            const combinedHTML = frontMatterHTML + markdownHTML;
+            wrapper.innerHTML = DOMPurify.sanitize(combinedHTML);
+
+            // Set up lazy loading for mermaid diagrams (Issue #326)
+            // Instead of rendering all diagrams immediately (which blocks the UI),
+            // we use IntersectionObserver to render them only when they're visible
+            const mermaidElements = wrapper.querySelectorAll('.mermaid');
+            if (mermaidElements.length > 0) {
+                setupMermaidLazyLoading(mermaidElements);
+            }
         }
 
         // Attach mermaid expand/fullscreen event listeners
