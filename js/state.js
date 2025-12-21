@@ -91,3 +91,17 @@ export const state = {
     editorPanelWidth: null,              // Percentage width of editor panel (null = default 50/50)
     previewPanelWidth: null              // Percentage width of preview panel (null = default 50/50)
 };
+
+/**
+ * Reset editor state for content detection and rendering optimization.
+ * Call this when clearing the editor or starting fresh content to ensure:
+ * - Content-first detection works correctly (documentMode reset)
+ * - Render optimization doesn't skip updates (lastRenderedContent reset)
+ *
+ * @see Issue #380 - Mermaid-only content not rendering after clear
+ * @see Issue #371 - Stale optimization preventing re-renders
+ */
+export function resetEditorState() {
+    state.documentMode = null;
+    state.lastRenderedContent = null;
+}

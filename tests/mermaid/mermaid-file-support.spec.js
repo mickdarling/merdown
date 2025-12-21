@@ -310,6 +310,63 @@ And some more text.`;
             const updatedMode = await page.evaluate(() => globalThis.state.documentMode);
             expect(updatedMode).toBe('mermaid');
         });
+
+        test('documentMode transitions from markdown to mermaid when pure mermaid content is detected', async ({ page }) => {
+            // Test state transition: markdown -> mermaid
+            // This verifies documentMode is updated as derived state
+            await page.evaluate(() => {
+                globalThis.state.documentMode = 'markdown';
+                globalThis.state.renderModeOverride = null;
+            });
+
+            // Verify initial state
+            const initialMode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(initialMode).toBe('markdown');
+
+            // Set pure mermaid content
+            await page.evaluate(() => {
+                globalThis.state.cmEditor.setValue('sequenceDiagram\n    Alice->>Bob: Hello');
+            });
+
+            await waitForPreviewRender(page);
+
+            // Verify documentMode transitioned to mermaid
+            const finalMode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(finalMode).toBe('mermaid');
+
+            // Verify it rendered as a diagram
+            const hasSvg = await page.evaluate(() => {
+                return document.querySelector('#preview #wrapper .mermaid svg') !== null;
+            });
+            expect(hasSvg).toBe(true);
+        });
+
+        test('documentMode resets to null when mixed content replaces pure mermaid', async ({ page }) => {
+            // Test state transition: mermaid -> null (when content becomes mixed)
+            // First set up pure mermaid content
+            await page.evaluate(() => {
+                globalThis.state.documentMode = null;
+                globalThis.state.renderModeOverride = null;
+                globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
+            });
+
+            await waitForPreviewRender(page);
+
+            // Verify it detected as mermaid
+            const mermaidMode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(mermaidMode).toBe('mermaid');
+
+            // Now replace with mixed content (markdown + mermaid in fences)
+            await page.evaluate(() => {
+                globalThis.state.cmEditor.setValue('# My Document\n\nSome text here.\n\n```mermaid\ngraph TD\n    A --> B\n```');
+            });
+
+            await waitForPreviewRender(page);
+
+            // documentMode should reset to null (auto-detect found non-pure content)
+            const mixedMode = await page.evaluate(() => globalThis.state.documentMode);
+            expect(mixedMode).toBeNull();
+        });
     });
 
     test.describe('File Validation', () => {

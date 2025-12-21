@@ -4,7 +4,7 @@
  * Orchestrates all modules and handles initialization
  */
 
-import { state } from './state.js';
+import { state, resetEditorState } from './state.js';
 import { initCodeMirror, getEditorContent, setEditorContent } from './editor.js';
 import { renderMarkdown, scheduleRender } from './renderer.js';
 import { initStyleSelector, initSyntaxThemeSelector, initEditorThemeSelector, initMermaidThemeSelector, initPreviewDragDrop, initURLModalHandlers, changeStyle, changeSyntaxTheme, changeEditorTheme, changeMermaidTheme, applyPreviewBackground, applyCachedBackground } from './themes.js';
@@ -31,8 +31,7 @@ function clearEditor() {
         }
         state.currentFilename = null;
         state.loadedFromURL = null;
-        state.documentMode = null; // Reset to auto-detect mode (#380 fix)
-        state.lastRenderedContent = null; // Clear to prevent stale optimization (#371)
+        resetEditorState();
 
         updateDocumentSelector();
         renderMarkdown();
