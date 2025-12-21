@@ -234,7 +234,7 @@ And some more text.`;
         test('should respect documentMode=mermaid for file extension', async ({ page }) => {
             // Simulate loading a .mermaid file
             await page.evaluate(() => {
-                globalThis.state.documentMode = 'mermaid';
+                globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MERMAID;
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
 
@@ -253,7 +253,7 @@ And some more text.`;
             // This tests the user override mechanism (future toggle support)
             // Pure mermaid without fences will be treated as plain text
             await page.evaluate(() => {
-                globalThis.state.renderModeOverride = 'markdown';
+                globalThis.state.renderModeOverride = globalThis.DOCUMENT_MODE.MARKDOWN;
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
 
@@ -290,7 +290,7 @@ And some more text.`;
             // This fixes the "select-all + delete + paste mermaid" scenario.
             await page.evaluate(() => {
                 // Simulate state after loading a .md file
-                globalThis.state.documentMode = 'markdown';
+                globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MARKDOWN;
                 globalThis.state.renderModeOverride = null; // No user override
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
@@ -315,7 +315,7 @@ And some more text.`;
             // Test state transition: markdown -> mermaid
             // This verifies documentMode is updated as derived state
             await page.evaluate(() => {
-                globalThis.state.documentMode = 'markdown';
+                globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MARKDOWN;
                 globalThis.state.renderModeOverride = null;
             });
 
@@ -545,7 +545,7 @@ graph TD
         test('should wrap pure mermaid in fences when saving as .md', async ({ page }) => {
             // Set up pure mermaid content with mermaid document mode
             await page.evaluate(() => {
-                globalThis.state.documentMode = 'mermaid';
+                globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MERMAID;
                 globalThis.state.cmEditor.setValue('graph TD\n    A --> B');
             });
 
@@ -606,7 +606,7 @@ graph TD
                 const isMermaidExt = filename.toLowerCase().endsWith('.mermaid') ||
                                      filename.toLowerCase().endsWith('.mmd');
                 if (isMermaidExt) {
-                    globalThis.state.documentMode = 'mermaid';
+                    globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MERMAID;
                 }
             });
 
@@ -620,7 +620,7 @@ graph TD
                 const isMermaidExt = filename.toLowerCase().endsWith('.mermaid') ||
                                      filename.toLowerCase().endsWith('.mmd');
                 if (isMermaidExt) {
-                    globalThis.state.documentMode = 'mermaid';
+                    globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MERMAID;
                 }
             });
 
@@ -634,7 +634,7 @@ graph TD
                 const isMarkdownExt = filename.toLowerCase().endsWith('.md') ||
                                       filename.toLowerCase().endsWith('.markdown');
                 if (isMarkdownExt) {
-                    globalThis.state.documentMode = 'markdown';
+                    globalThis.state.documentMode = globalThis.DOCUMENT_MODE.MARKDOWN;
                 }
             });
 

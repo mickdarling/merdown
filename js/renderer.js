@@ -5,7 +5,7 @@
  * Handles converting markdown to HTML with syntax highlighting and mermaid diagrams
  */
 
-import { state } from './state.js';
+import { state, DOCUMENT_MODE } from './state.js';
 import { getElements } from './dom.js';
 import { saveMarkdownContent } from './storage.js';
 import { updateSessionContent, isSessionsInitialized } from './sessions.js';
@@ -1224,10 +1224,10 @@ async function renderPureMermaid(wrapper, content) {
  */
 async function determinePureMermaidMode(markdown) {
     // Priority 1: User explicit override (future toggle support)
-    if (state.renderModeOverride === 'markdown') {
+    if (state.renderModeOverride === DOCUMENT_MODE.MARKDOWN) {
         return false;
     }
-    if (state.renderModeOverride === 'mermaid') {
+    if (state.renderModeOverride === DOCUMENT_MODE.MERMAID) {
         return true;
     }
 
@@ -1237,12 +1237,12 @@ async function determinePureMermaidMode(markdown) {
     // Update documentMode as derived state for save behavior
     // This ensures Save correctly wraps/unwraps mermaid fences
     if (isPure) {
-        state.documentMode = 'mermaid';
-    } else if (state.documentMode === 'mermaid') {
+        state.documentMode = DOCUMENT_MODE.MERMAID;
+    } else if (state.documentMode === DOCUMENT_MODE.MERMAID) {
         // Was detected as mermaid, now isn't - reset to auto
         state.documentMode = null;
     }
-    // Note: We don't set documentMode = 'markdown' from content detection.
+    // Note: We don't set documentMode = DOCUMENT_MODE.MARKDOWN from content detection.
     // That value only comes from loading a .md file extension.
 
     return isPure;

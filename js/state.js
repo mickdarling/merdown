@@ -21,6 +21,16 @@
  * exposed to globalThis.
  */
 
+/**
+ * Document mode constants for type-safe mode comparisons.
+ * Used by documentMode and renderModeOverride state properties.
+ * @constant
+ */
+export const DOCUMENT_MODE = Object.freeze({
+    MARKDOWN: 'markdown',
+    MERMAID: 'mermaid'
+});
+
 export const state = {
     // CodeMirror editor instance
     cmEditor: null,
