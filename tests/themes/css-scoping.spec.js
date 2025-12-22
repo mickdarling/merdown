@@ -31,7 +31,7 @@ async function getComputedStyleProperty(page, selector, property) {
     return page.evaluate(({ sel, prop }) => {
         const element = document.querySelector(sel);
         if (!element) return null;
-        return window.getComputedStyle(element)[prop];
+        return globalThis.getComputedStyle(element)[prop];
     }, { sel: selector, prop: property });
 }
 
@@ -44,6 +44,20 @@ async function styleContainsSelector(page, styleId, selectorText) {
         if (!style) return false;
         return style.textContent.includes(selector);
     }, { id: styleId, selector: selectorText });
+}
+
+/**
+ * Browser-side helper to get UI element styles
+ * Extracted to module scope to reduce function nesting depth (S2004)
+ */
+function getUIStylesInBrowser() {
+    const header = document.querySelector('header.toolbar-brand');
+    const panelHeader = document.querySelector('.panel-header');
+
+    return {
+        headerBg: header ? globalThis.getComputedStyle(header).backgroundColor : null,
+        panelHeaderBg: panelHeader ? globalThis.getComputedStyle(panelHeader).backgroundColor : null
+    };
 }
 
 test.describe('CSS Scoping - Issue #384', () => {
@@ -91,8 +105,8 @@ test.describe('CSS Scoping - Issue #384', () => {
                 const body = document.body;
 
                 // Get initial styles
-                const wrapperInitial = window.getComputedStyle(wrapper);
-                const bodyInitial = window.getComputedStyle(body);
+                const wrapperInitial = globalThis.getComputedStyle(wrapper);
+                const bodyInitial = globalThis.getComputedStyle(body);
 
                 return {
                     wrapperBackground: wrapperInitial.backgroundColor,
@@ -117,7 +131,7 @@ test.describe('CSS Scoping - Issue #384', () => {
                 const testSelector = '#wrapper-container';
 
                 // Check using the regex pattern from isSelectorScoped
-                const wrapperPattern = /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>\[+~])/;
+                const wrapperPattern = /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>[+~])/;
                 return wrapperPattern.test(testSelector);
             });
 
@@ -127,8 +141,8 @@ test.describe('CSS Scoping - Issue #384', () => {
 
         test('should correctly identify already-scoped selectors', async ({ page }) => {
             const results = await page.evaluate(() => {
-                const wrapperPattern = /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>\[+~])/;
-                const previewPattern = /(?:^|[\s,>+~])#preview(?:$|[\s,.:#>\[+~])/;
+                const wrapperPattern = /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>[+~])/;
+                const previewPattern = /(?:^|[\s,>+~])#preview(?:$|[\s,.:#>[+~])/;
 
                 const testCases = [
                     { selector: '#wrapper', expected: true },
@@ -143,10 +157,15 @@ test.describe('CSS Scoping - Issue #384', () => {
                     { selector: ':root', expected: false },
                 ];
 
-                return testCases.map(tc => ({
-                    ...tc,
-                    actual: wrapperPattern.test(tc.selector) || previewPattern.test(tc.selector)
-                }));
+                // Use for loop to avoid deeply nested arrow function
+                const resultsArray = [];
+                for (const tc of testCases) {
+                    resultsArray.push({
+                        ...tc,
+                        actual: wrapperPattern.test(tc.selector) || previewPattern.test(tc.selector)
+                    });
+                }
+                return resultsArray;
             });
 
             for (const tc of results) {
@@ -162,8 +181,8 @@ test.describe('CSS Scoping - Issue #384', () => {
                 const header = document.querySelector('header.toolbar-brand');
                 const editor = document.querySelector('.CodeMirror');
                 return {
-                    headerBg: header ? window.getComputedStyle(header).backgroundColor : null,
-                    editorBg: editor ? window.getComputedStyle(editor).backgroundColor : null
+                    headerBg: header ? globalThis.getComputedStyle(header).backgroundColor : null,
+                    editorBg: editor ? globalThis.getComputedStyle(editor).backgroundColor : null
                 };
             });
 
@@ -176,8 +195,8 @@ test.describe('CSS Scoping - Issue #384', () => {
                 const header = document.querySelector('header.toolbar-brand');
                 const editor = document.querySelector('.CodeMirror');
                 return {
-                    headerBg: header ? window.getComputedStyle(header).backgroundColor : null,
-                    editorBg: editor ? window.getComputedStyle(editor).backgroundColor : null
+                    headerBg: header ? globalThis.getComputedStyle(header).backgroundColor : null,
+                    editorBg: editor ? globalThis.getComputedStyle(editor).backgroundColor : null
                 };
             });
 
@@ -263,7 +282,7 @@ test.describe('CSS Scoping - Issue #384', () => {
             // Verify the syntax theme stylesheet is loaded
             const themeLoaded = await page.evaluate(() => {
                 const link = document.getElementById('syntax-theme');
-                return link !== null && link.href.includes('github-dark');
+                return link?.href.includes('github-dark') ?? false;
             });
 
             expect(themeLoaded).toBe(true);
@@ -287,7 +306,7 @@ test.describe('CSS Scoping - Issue #384', () => {
             const editorHasTheme = await page.evaluate(() => {
                 const cm = document.querySelector('.CodeMirror');
                 // Check if CodeMirror has styling from the theme
-                const style = window.getComputedStyle(cm);
+                const style = globalThis.getComputedStyle(cm);
                 return style.backgroundColor !== '';
             });
             expect(editorHasTheme).toBe(true);
@@ -300,7 +319,7 @@ test.describe('CSS Scoping - Issue #384', () => {
 
             const themeLoaded = await page.evaluate(() => {
                 const style = document.getElementById('editor-theme');
-                return style !== null && style.textContent.includes('.cm-s-custom');
+                return style?.textContent.includes('.cm-s-custom') ?? false;
             });
 
             expect(themeLoaded).toBe(true);
@@ -371,7 +390,7 @@ graph TD
             // Get initial editor theme style
             const initialEditorStyle = await page.evaluate(() => {
                 const cm = document.querySelector('.CodeMirror');
-                return window.getComputedStyle(cm).backgroundColor;
+                return globalThis.getComputedStyle(cm).backgroundColor;
             });
 
             // Change ONLY the syntax theme (use display name)
@@ -381,25 +400,17 @@ graph TD
             // Editor theme should be unchanged
             const afterEditorStyle = await page.evaluate(() => {
                 const cm = document.querySelector('.CodeMirror');
-                return window.getComputedStyle(cm).backgroundColor;
+                return globalThis.getComputedStyle(cm).backgroundColor;
             });
 
             expect(afterEditorStyle).toBe(initialEditorStyle);
         });
 
         test('UI chrome elements should never be affected by any theme', async ({ page }) => {
-            // Record initial UI element styles
-            const getUIStyles = async () => {
-                return page.evaluate(() => {
-                    const header = document.querySelector('header.toolbar-brand');
-                    const panelHeader = document.querySelector('.panel-header');
-
-                    return {
-                        headerBg: header ? window.getComputedStyle(header).backgroundColor : null,
-                        panelHeaderBg: panelHeader ? window.getComputedStyle(panelHeader).backgroundColor : null
-                    };
-                });
-            };
+            // Helper to get UI element styles - defined as a regular function to reduce nesting
+            async function getUIStyles() {
+                return page.evaluate(getUIStylesInBrowser);
+            }
 
             const initialUI = await getUIStyles();
 

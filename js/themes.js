@@ -266,8 +266,8 @@ function stripPrintMediaQueries(css) {
 function isSelectorScoped(selector) {
     // Match #wrapper or #preview as complete selectors (with word boundaries)
     // This prevents false matches like #wrapper-container or #preview-panel
-    return /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>\[+~])/.test(selector) ||
-           /(?:^|[\s,>+~])#preview(?:$|[\s,.:#>\[+~])/.test(selector);
+    return /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>[+~])/.test(selector) ||
+           /(?:^|[\s,>+~])#preview(?:$|[\s,.:#>[+~])/.test(selector);
 }
 
 /**
@@ -296,7 +296,7 @@ function scopeSelector(selector) {
         return '#wrapper *';
     }
     // Handle compound selectors starting with :root, body, html (e.g., "body.dark", ":root[data-theme]")
-    if (/^(:root|body|html)([.#\[:].*)$/.test(trimmed)) {
+    if (/^(:root|body|html)([.#[:].*)$/.test(trimmed)) {
         return trimmed.replace(/^(:root|body|html)/, '#wrapper');
     }
     // Prefix with #wrapper
