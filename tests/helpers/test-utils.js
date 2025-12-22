@@ -272,9 +272,10 @@ async function loadSampleContent(page, waitTime = WAIT_TIMES.LONG) {
  * Awaits the async renderMarkdown function, then waits for any pending state to clear
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {number} [timeout=5000] - Maximum time to wait for render completion (legacy values < 3000 are converted to 5000)
+ * @param {boolean} [allowEmptyWrapper=true] - Whether to allow empty wrapper (true for XSS tests where content is sanitized)
  * @returns {Promise<void>}
  */
-async function renderMarkdownAndWait(page, timeout = 5000) {
+async function renderMarkdownAndWait(page, timeout = 5000, allowEmptyWrapper = true) {
   // Backwards compatibility: old calls passed WAIT_TIMES.LONG (500ms) as a "wait time"
   const effectiveTimeout = timeout < 3000 ? 5000 : timeout;
 
@@ -285,13 +286,15 @@ async function renderMarkdownAndWait(page, timeout = 5000) {
     }
   });
 
-  // Wait for wrapper to exist (it may be empty if content was fully sanitized)
-  // This is especially important for XSS tests where malicious content is stripped
-  await page.waitForFunction(() => {
+  // Wait for wrapper to exist and optionally have content
+  // allowEmptyWrapper=true: XSS tests where malicious content is fully sanitized
+  // allowEmptyWrapper=false: Normal rendering tests where content should appear
+  await page.waitForFunction((allowEmpty) => {
     const wrapper = document.getElementById('wrapper');
-    // Just check that wrapper exists - it's OK to be empty after DOMPurify sanitization
-    return wrapper !== null;
-  }, { timeout: effectiveTimeout });
+    if (wrapper === null) return false;
+    // If empty wrapper is allowed, just check existence; otherwise require children
+    return allowEmpty || wrapper.children.length > 0;
+  }, allowEmptyWrapper, { timeout: effectiveTimeout });
 }
 
 /**

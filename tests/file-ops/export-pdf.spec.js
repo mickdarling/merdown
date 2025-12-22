@@ -303,6 +303,41 @@ test.describe('PDF Page Break Functionality', () => {
       });
       expect(hasRule).toBe(true);
     });
+
+    /**
+     * REGRESSION TEST: Ensure print media queries are preserved in stylesheets.
+     *
+     * This test prevents regression of the stripPrintMediaQueries() bug where
+     * @media print rules were incorrectly stripped from stylesheets, breaking
+     * page break functionality in PDF exports.
+     *
+     * The application MUST preserve @media print rules so that:
+     * - Page breaks work correctly (hr elements, utility classes)
+     * - Print-specific styling is applied during PDF export
+     * - Content is properly formatted for printing
+     */
+    test('REGRESSION: @media print rules must be preserved in stylesheets', async ({ page }) => {
+      // Count total @media print rules across all stylesheets
+      const printRuleCount = await page.evaluate(() => {
+        let count = 0;
+        for (const sheet of document.styleSheets) {
+          try {
+            for (const rule of sheet.cssRules) {
+              if (rule instanceof CSSMediaRule && rule.conditionText === 'print') {
+                count += rule.cssRules.length;
+              }
+            }
+          } catch {
+            // Skip cross-origin stylesheets
+          }
+        }
+        return count;
+      });
+
+      // We expect at least several print rules for page breaks, visibility, etc.
+      // This prevents accidental removal of print media query handling
+      expect(printRuleCount).toBeGreaterThan(5);
+    });
   });
 
   test.describe('Page Break Utility Classes', () => {
