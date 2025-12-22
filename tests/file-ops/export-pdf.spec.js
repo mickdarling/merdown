@@ -237,7 +237,7 @@ function browserFindPrintCssRule({ selectorContains, styleProperty, styleValue }
     if (!styleProperty) return true;
 
     // Convert camelCase to kebab-case for getPropertyValue
-    const kebabProperty = styleProperty.replace(/([A-Z])/g, '-$1').toLowerCase();
+    const kebabProperty = styleProperty.replaceAll(/([A-Z])/g, '-$1').toLowerCase();
     const value = rule.style?.getPropertyValue(kebabProperty);
     // For height: 0, browsers may normalize to "0px" or leave as "0"
     if (styleValue === '0px' && value === '0') return true;
