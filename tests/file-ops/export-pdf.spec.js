@@ -243,7 +243,9 @@ function browserFindPrintCssRule({ selectorContains, styleProperty, styleValue }
       .toLowerCase()
       .replace(/^-/, '');
     const value = rule.style?.getPropertyValue(kebabProperty);
-    // For height: 0, browsers may normalize to "0px" or leave as "0"
+    // Browser normalization handling: Zero values only.
+    // Browsers may return "0" or "0px" interchangeably for zero-length values.
+    // This special case ONLY applies to zero - other values (e.g., "10px") match exactly.
     if (styleValue === '0px' && value === '0') return true;
     if (styleValue === '0' && value === '0px') return true;
     return value === styleValue;

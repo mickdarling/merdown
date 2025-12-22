@@ -270,9 +270,13 @@ async function loadSampleContent(page, waitTime = WAIT_TIMES.LONG) {
 /**
  * Render markdown and wait for completion
  * Awaits the async renderMarkdown function, then waits for any pending state to clear
+ *
  * @param {import('@playwright/test').Page} page - Playwright page object
  * @param {number} [timeout=5000] - Maximum time to wait for render completion (legacy values < 3000 are converted to 5000)
- * @param {boolean} [allowEmptyWrapper=true] - Whether to allow empty wrapper (true for XSS tests where content is sanitized)
+ * @param {boolean} [allowEmptyWrapper=true] - Whether to allow empty wrapper after rendering.
+ *   Defaults to true for backward compatibility and because XSS tests legitimately produce
+ *   empty wrappers when DOMPurify strips all malicious content. Pass false for stricter
+ *   validation in tests where rendered content is always expected.
  * @returns {Promise<void>}
  */
 async function renderMarkdownAndWait(page, timeout = 5000, allowEmptyWrapper = true) {
