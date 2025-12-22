@@ -190,6 +190,154 @@ function applyLayoutConstraints() {
 }
 
 /**
+ * Layout properties that should be stripped from #wrapper rules when
+ * "Respect Style Layout" is OFF. These properties conflict with user
+ * control of the preview pane width via the drag handle.
+ */
+const LAYOUT_PROPERTIES = [
+    'max-width',
+    'min-width',
+    'width',
+    'margin',
+    'margin-left',
+    'margin-right',
+    'margin-top',
+    'margin-bottom',
+    'padding',
+    'padding-left',
+    'padding-right',
+    'padding-top',
+    'padding-bottom'
+];
+
+/**
+ * Strip layout-related properties from CSS rules targeting #wrapper.
+ * Called when "Respect Style Layout" is OFF to allow user width control.
+ *
+ * This handles external CSS with !important rules like:
+ *   #wrapper { max-width: 700px !important; }
+ *
+ * @param {string} css - CSS text to process
+ * @returns {string} CSS with layout properties removed from #wrapper rules
+ */
+function stripWrapperLayoutProperties(css) {
+    // Match #wrapper rules (including those with additional selectors)
+    // We need to find rule blocks where selector targets #wrapper
+    const result = [];
+    let i = 0;
+    const len = css.length;
+
+    while (i < len) {
+        // Skip whitespace
+        const wsStart = i;
+        while (i < len && /\s/.test(css[i])) i++;
+        if (i > wsStart) result.push(css.substring(wsStart, i));
+        if (i >= len) break;
+
+        // Check for comment
+        if (css[i] === '/' && css[i + 1] === '*') {
+            const commentStart = i;
+            i += 2;
+            while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) i++;
+            i += 2;
+            result.push(css.substring(commentStart, i));
+            continue;
+        }
+
+        // Check for @-rule
+        if (css[i] === '@') {
+            const atStart = i;
+            i++;
+            // Get @-rule name
+            let nameEnd = i;
+            while (nameEnd < len && /[a-zA-Z-]/.test(css[nameEnd])) nameEnd++;
+            const atRuleName = css.substring(i, nameEnd);
+            i = nameEnd;
+
+            // Find opening brace or semicolon
+            while (i < len && css[i] !== '{' && css[i] !== ';') i++;
+
+            if (i < len && css[i] === '{') {
+                const bracePos = i;
+                let depth = 1;
+                i++;
+                const contentStart = i;
+                while (i < len && depth > 0) {
+                    if (css[i] === '{') depth++;
+                    else if (css[i] === '}') depth--;
+                    i++;
+                }
+                const contentEnd = i - 1;
+
+                // For @media/@supports, recursively process inner content
+                if (['media', 'supports', 'document', 'layer'].includes(atRuleName.toLowerCase())) {
+                    const prelude = css.substring(atStart, bracePos + 1);
+                    const innerContent = css.substring(contentStart, contentEnd);
+                    const processedInner = stripWrapperLayoutProperties(innerContent);
+                    result.push(prelude, processedInner, '}');
+                } else {
+                    result.push(css.substring(atStart, i));
+                }
+            } else {
+                if (i < len) i++;
+                result.push(css.substring(atStart, i));
+            }
+            continue;
+        }
+
+        // Parse selector and block
+        const selectorStart = i;
+        while (i < len && css[i] !== '{') i++;
+        if (i >= len) {
+            result.push(css.substring(selectorStart));
+            break;
+        }
+
+        const selectorText = css.substring(selectorStart, i).trim();
+        const openBrace = css[i];
+        i++;
+
+        // Collect rule body
+        const bodyStart = i;
+        let depth = 1;
+        while (i < len && depth > 0) {
+            if (css[i] === '{') depth++;
+            else if (css[i] === '}') depth--;
+            i++;
+        }
+        const ruleBody = css.substring(bodyStart, i - 1);
+
+        // Check if selector targets #wrapper directly (not descendant like "#wrapper p")
+        const isWrapperRule = /(?:^|,\s*)#wrapper\s*(?:,|$)/.test(selectorText) ||
+                              selectorText.trim() === '#wrapper';
+
+        if (isWrapperRule) {
+            // Strip layout properties from this rule
+            const filteredBody = ruleBody
+                .split(';')
+                .filter(decl => {
+                    const trimmed = decl.trim();
+                    if (!trimmed) return false;
+                    const propMatch = trimmed.match(/^([a-z-]+)\s*:/i);
+                    if (!propMatch) return true;
+                    const prop = propMatch[1].toLowerCase();
+                    return !LAYOUT_PROPERTIES.includes(prop);
+                })
+                .join(';');
+
+            // Only include rule if there are remaining declarations
+            if (filteredBody.trim()) {
+                result.push(selectorText, openBrace, filteredBody, '}');
+            }
+        } else {
+            result.push(selectorText, openBrace, ruleBody, '}');
+        }
+    }
+
+    return result.join('');
+}
+
+/**
  * Check if a selector is already scoped to #wrapper or #preview
  * Uses word boundary matching to avoid false positives like #wrapper-other
  * @param {string} selector - CSS selector to check
@@ -252,7 +400,19 @@ function skipWhitespace(css, i, result) {
 }
 
 /**
- * Parse an @-rule and add it to result unchanged
+ * Check if an @-rule is a grouping rule that contains style rules
+ * Grouping rules like @media, @supports contain nested selectors that need scoping
+ * @param {string} atRuleName - The @-rule name (e.g., 'media', 'supports')
+ * @returns {boolean} True if it's a grouping rule
+ */
+function isGroupingAtRule(atRuleName) {
+    // Grouping rules contain style rules with selectors that need scoping
+    const groupingRules = ['media', 'supports', 'document', 'layer'];
+    return groupingRules.includes(atRuleName.toLowerCase());
+}
+
+/**
+ * Parse an @-rule and add it to result, scoping selectors inside grouping rules
  * @param {string} css - CSS text
  * @param {number} i - Current index (pointing at '@')
  * @param {Array<string>} result - Result array to append to
@@ -261,16 +421,27 @@ function skipWhitespace(css, i, result) {
 function parseAtRule(css, i, result) {
     const atStart = i;
     const len = css.length;
+    i++; // Skip '@'
+
+    // Extract the @-rule name (e.g., 'media', 'keyframes', 'font-face')
+    let nameEnd = i;
+    while (nameEnd < len && /[a-zA-Z-]/.test(css[nameEnd])) {
+        nameEnd++;
+    }
+    const atRuleName = css.substring(i, nameEnd);
 
     // Find the opening brace or semicolon
+    i = nameEnd;
     while (i < len && css[i] !== '{' && css[i] !== ';') {
         i++;
     }
 
     if (i < len && css[i] === '{') {
+        const bracePos = i;
         // Find matching closing brace (handle nested braces)
         let depth = 1;
         i++;
+        const contentStart = i;
         while (i < len && depth > 0) {
             if (css[i] === '{') {
                 depth++;
@@ -279,11 +450,25 @@ function parseAtRule(css, i, result) {
             }
             i++;
         }
+        const contentEnd = i - 1; // Position of closing brace
+
+        // For grouping rules (@media, @supports), recursively scope the inner content
+        if (isGroupingAtRule(atRuleName)) {
+            const prelude = css.substring(atStart, bracePos + 1); // "@media screen {"
+            const innerContent = css.substring(contentStart, contentEnd);
+            const scopedInner = scopeCSSToPreview(innerContent); // Recursive call
+            result.push(prelude, scopedInner, '}');
+        } else {
+            // Non-grouping rules (@keyframes, @font-face, etc.) pass through unchanged
+            result.push(css.substring(atStart, i));
+        }
     } else if (i < len) {
         i++; // Skip the semicolon
+        result.push(css.substring(atStart, i));
+    } else {
+        result.push(css.substring(atStart, i));
     }
 
-    result.push(css.substring(atStart, i));
     return i;
 }
 
@@ -491,6 +676,12 @@ async function applyStyleToPage(cssText, styleName, style) {
         cssText = scopeCSSToPreview(cssText);
     }
 
+    // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
+    // This allows user control of preview width via drag handle, overriding !important rules
+    if (!state.respectStyleLayout) {
+        cssText = stripWrapperLayoutProperties(cssText);
+    }
+
     // Apply core CSS logic
     await applyCSSCore(cssText);
 
@@ -681,13 +872,23 @@ async function applyCSSDirectly(cssText, sourceName) {
     // The print media queries contain essential rules for hr elements (page breaks),
     // tables (page-break-inside: avoid), and other print-specific formatting
 
-    // Only scope if it doesn't appear to be pre-scoped
-    if (!cssText.includes('#wrapper')) {
-        cssText = scopeCSSToPreview(cssText);
+    // Always scope external CSS to #wrapper - the scopeSelector function handles
+    // already-scoped selectors by passing them through unchanged.
+    // DO NOT skip scoping based on cssText.includes('#wrapper') - this was bug #384
+    // where CSS containing partial #wrapper rules bypassed scoping entirely.
+    cssText = scopeCSSToPreview(cssText);
+
+    // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
+    // This allows user control of preview width via drag handle, overriding !important rules
+    if (!state.respectStyleLayout) {
+        cssText = stripWrapperLayoutProperties(cssText);
     }
 
     // Apply core CSS logic (handles preload, swap, render)
     await applyCSSCore(cssText);
+
+    // Apply layout constraints based on toggle setting
+    applyLayoutConstraints();
 
     // Save preference (if it's a named style)
     if (sourceName && !sourceName.startsWith('http')) {
