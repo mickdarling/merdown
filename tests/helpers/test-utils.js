@@ -282,10 +282,12 @@ async function renderMarkdownAndWait(page, timeout = 5000) {
     }
   });
 
-  // Wait for wrapper to have content (confirms render completed)
+  // Wait for wrapper to exist (it may be empty if content was fully sanitized)
+  // This is especially important for XSS tests where malicious content is stripped
   await page.waitForFunction(() => {
     const wrapper = document.getElementById('wrapper');
-    return wrapper && wrapper.children.length > 0;
+    // Just check that wrapper exists - it's OK to be empty after DOMPurify sanitization
+    return wrapper !== null;
   }, { timeout: effectiveTimeout });
 }
 

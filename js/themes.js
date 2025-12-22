@@ -525,8 +525,9 @@ async function applyCSSCore(cssText) {
  * @param {object} style - Style config object
  */
 async function applyStyleToPage(cssText, styleName, style) {
-    // Remove @media print blocks that might override colors for printing
-    cssText = stripPrintMediaQueries(cssText);
+    // NOTE: We no longer strip @media print blocks as they're needed for PDF page breaks
+    // The print media queries contain essential rules for hr elements (page breaks),
+    // tables (page-break-inside: avoid), and other print-specific formatting
 
     // Scope the CSS to only affect #wrapper (the content area)
     if (style.source !== 'local' && !cssText.includes('#wrapper')) {
@@ -719,8 +720,9 @@ async function promptForRepositoryStyleWithResult(repoConfig) {
  * @param {string} sourceName - Source name for saving preference
  */
 async function applyCSSDirectly(cssText, sourceName) {
-    // Strip print media queries
-    cssText = stripPrintMediaQueries(cssText);
+    // NOTE: We no longer strip @media print blocks as they're needed for PDF page breaks
+    // The print media queries contain essential rules for hr elements (page breaks),
+    // tables (page-break-inside: avoid), and other print-specific formatting
 
     // Only scope if it doesn't appear to be pre-scoped
     if (!cssText.includes('#wrapper')) {

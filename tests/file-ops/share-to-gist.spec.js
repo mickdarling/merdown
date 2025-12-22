@@ -197,9 +197,12 @@ test.describe('Share to Gist', () => {
       // Find the Save button (not "Save as PDF")
       const saveIndex = buttons.findIndex(text => text && text.trim() === '💾 Save');
       const shareIndex = buttons.findIndex(text => text.includes('Share to Gist'));
+      const savePDFIndex = buttons.findIndex(text => text.includes('Save as PDF'));
 
       expect(saveIndex).toBeGreaterThanOrEqual(0);
-      expect(shareIndex).toBe(saveIndex + 1);
+      // Share to Gist comes after both Save and Save as PDF buttons
+      expect(shareIndex).toBe(savePDFIndex + 1);
+      expect(shareIndex).toBeGreaterThan(saveIndex);
     });
 
     test('should show status message when editor is empty', async ({ page }) => {
