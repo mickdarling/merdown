@@ -81,8 +81,11 @@ test.describe('CSS Persistence Across Navigation', () => {
       }
     }, { css: cssContent, name: fileName });
 
-    // Wait for async operations to complete
-    await page.waitForTimeout(WAIT_TIMES.SHORT);
+    // Wait for sessionStorage to be updated (deterministic wait instead of timeout)
+    await page.waitForFunction((key) => {
+      const data = sessionStorage.getItem(key);
+      return data && JSON.parse(data).length > 0;
+    }, 'merview-v1-loaded-styles', { timeout: 5000 });
 
     // Verify sessionStorage was updated with the loaded style
     const sessionData = await page.evaluate(() => {
@@ -142,14 +145,18 @@ test.describe('CSS Persistence Across Navigation', () => {
       }
     }, fileName);
 
-    // Wait for CSS to be applied
-    await page.waitForTimeout(WAIT_TIMES.LONG);
+    // Wait for CSS to be applied (deterministic wait for background color change)
+    await page.waitForFunction((expectedColor) => {
+      const wrapper = document.getElementById('wrapper');
+      if (!wrapper) return false;
+      const computedStyle = globalThis.getComputedStyle(wrapper);
+      return computedStyle.backgroundColor === expectedColor;
+    }, testBackgroundColor, { timeout: 5000 });
 
     // Step 4: Verify the computed style actually reflects the loaded CSS
     const actualBackgroundColor = await page.evaluate(() => {
       const wrapper = document.getElementById('wrapper');
       if (!wrapper) return null;
-
       const computedStyle = globalThis.getComputedStyle(wrapper);
       return computedStyle.backgroundColor;
     });
@@ -187,7 +194,10 @@ test.describe('CSS Persistence Across Navigation', () => {
       }
     });
 
-    await page.waitForTimeout(WAIT_TIMES.LONG);
+    // Wait for sessionStorage to be cleared (deterministic wait)
+    await page.waitForFunction((key) => {
+      return sessionStorage.getItem(key) === null;
+    }, 'merview-v1-loaded-styles', { timeout: 5000 });
 
     // Verify sessionStorage was cleared
     savedData = await page.evaluate(() => {
@@ -252,31 +262,101 @@ test.describe('CSS Persistence Across Navigation', () => {
     expect(restoredCount).toBe(mockStyles.length);
   });
 
-  test('should update sessionStorage when existing style is reloaded', async ({ page }) => {
-    const styleName = 'test.css';
+  test('should update sessionStorage when existing style is reloaded with new content', async ({ page }) => {
+    const styleName = 'test-update.css';
     const originalCss = '#wrapper { background: red; }';
     const updatedCss = '#wrapper { background: blue; }';
 
-    // Load initial style
-    await page.evaluate((data) => {
-      sessionStorage.setItem('merview-v1-loaded-styles', JSON.stringify([data]));
-    }, { name: styleName, source: 'file', css: originalCss });
+    // Load initial style via loadCSSFromFile
+    await page.evaluate(async ({ css, name }) => {
+      const blob = new Blob([css], { type: 'text/css' });
+      const file = new File([blob], name, { type: 'text/css' });
+      if (globalThis.loadCSSFromFile) {
+        await globalThis.loadCSSFromFile(file);
+      }
+    }, { css: originalCss, name: styleName });
 
-    // Reload page
+    // Wait for sessionStorage to be updated
+    await page.waitForFunction((key) => {
+      const data = sessionStorage.getItem(key);
+      return data && JSON.parse(data).length > 0;
+    }, 'merview-v1-loaded-styles', { timeout: 5000 });
+
+    // Verify original CSS is saved
+    let sessionData = await page.evaluate(() => {
+      return JSON.parse(sessionStorage.getItem('merview-v1-loaded-styles'));
+    });
+    expect(sessionData[0].css).toContain('red');
+
+    // Reload the same file with different content (simulates user re-uploading)
+    await page.evaluate(async ({ css, name }) => {
+      const blob = new Blob([css], { type: 'text/css' });
+      const file = new File([blob], name, { type: 'text/css' });
+      if (globalThis.loadCSSFromFile) {
+        await globalThis.loadCSSFromFile(file);
+      }
+    }, { css: updatedCss, name: styleName });
+
+    // Wait for sessionStorage to be updated with new content
+    await page.waitForFunction((expectedCss) => {
+      const data = sessionStorage.getItem('merview-v1-loaded-styles');
+      if (!data) return false;
+      const styles = JSON.parse(data);
+      return styles.some(s => s.css.includes(expectedCss));
+    }, 'blue', { timeout: 5000 });
+
+    // Verify updated CSS replaced the original
+    sessionData = await page.evaluate(() => {
+      return JSON.parse(sessionStorage.getItem('merview-v1-loaded-styles'));
+    });
+    const updatedStyle = sessionData.find(s => s.name === styleName);
+    expect(updatedStyle).toBeDefined();
+    expect(updatedStyle.css).toContain('blue');
+    expect(updatedStyle.css).not.toContain('red');
+  });
+
+  test('should persist URL-loaded CSS across page navigation', async ({ page }) => {
+    // This tests CSS loaded via URL (source: 'url') persists correctly
+    const urlStyleName = 'https://example.com/theme.css';
+    const urlCss = '#wrapper { font-family: serif; color: navy; }';
+
+    // Simulate URL-loaded CSS by directly setting sessionStorage with source: 'url'
+    await page.evaluate(({ name, css }) => {
+      const mockStyle = {
+        name: name,
+        source: 'url',
+        css: css
+      };
+      sessionStorage.setItem('merview-v1-loaded-styles', JSON.stringify([mockStyle]));
+    }, { name: urlStyleName, css: urlCss });
+
+    // Reload the page to test restoration
     await page.reload();
     await waitForPageReady(page);
 
-    // Simulate reloading the same file with different content
-    await page.evaluate(({ name, css }) => {
-      // This would happen through addLoadedStyleToDropdown
-      const event = new CustomEvent('css-updated', { detail: { name, css } });
-      document.dispatchEvent(event);
-    }, { name: styleName, css: updatedCss });
+    // Wait for style selector to be populated
+    await page.waitForFunction(() => {
+      const selector = document.getElementById('styleSelector');
+      return selector && selector.options.length > 0;
+    }, { timeout: 5000 });
 
-    // Note: This test verifies the mechanism exists for updating styles
-    // The actual update logic is in addLoadedStyleToDropdown
-    const selector = await page.$('#styleSelector');
-    expect(selector).not.toBeNull();
+    // Verify URL-loaded style appears in dropdown with (URL) suffix
+    const hasUrlStyle = await page.evaluate((styleName) => {
+      const selector = document.getElementById('styleSelector');
+      const options = Array.from(selector.options);
+      return options.some(opt => opt.value === styleName && opt.textContent.includes('(URL)'));
+    }, urlStyleName);
+
+    expect(hasUrlStyle).toBe(true);
+
+    // Verify CSS content was preserved in sessionStorage
+    const sessionData = await page.evaluate(() => {
+      return JSON.parse(sessionStorage.getItem('merview-v1-loaded-styles'));
+    });
+    const urlStyle = sessionData.find(s => s.name === urlStyleName);
+    expect(urlStyle).toBeDefined();
+    expect(urlStyle.source).toBe('url');
+    expect(urlStyle.css).toContain('serif');
   });
 
   test('should handle sessionStorage quota exceeded gracefully', async ({ page }) => {
@@ -308,7 +388,12 @@ test.describe('CSS Persistence Across Navigation', () => {
       }
     });
 
-    await page.waitForTimeout(WAIT_TIMES.SHORT);
+    // Wait for style to appear in dropdown (proves loadCSSFromFile completed despite storage error)
+    await page.waitForFunction(() => {
+      const selector = document.getElementById('styleSelector');
+      if (!selector) return false;
+      return Array.from(selector.options).some(opt => opt.value === 'quota-test.css');
+    }, { timeout: 5000 });
 
     // The app should not crash even if sessionStorage fails
     const styleSelector = await page.$('#styleSelector');

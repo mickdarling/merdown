@@ -1114,8 +1114,16 @@ async function promptForRepositoryStyleWithResult(repoConfig) {
 /**
  * Apply CSS directly without scope processing (for already-scoped files)
  * Preloads background color before removing old CSS to prevent white flash (#110 fix)
+ *
+ * NOTE: This function is exposed to globalThis for testing purposes.
+ * While it can be called directly, the preferred entry points are:
+ * - loadCSSFromFile() for file uploads
+ * - loadCSSFromURL() for URL imports
+ * These provide proper error handling and sessionStorage persistence.
+ *
  * @param {string} cssText - CSS text to apply
  * @param {string} sourceName - Source name for saving preference
+ * @public Exposed via globalThis.applyCSSDirectly for testing
  */
 async function applyCSSDirectly(cssText, sourceName) {
     // NOTE: We no longer strip @media print blocks as they're needed for PDF page breaks
