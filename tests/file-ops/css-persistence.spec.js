@@ -173,10 +173,10 @@ test.describe('CSS Persistence Across Navigation', () => {
     // Verify all styles were restored
     const restoredCount = await page.evaluate((styleNames) => {
       const selector = document.getElementById('styleSelector');
-      const optionValues = Array.from(selector.options).map(opt => opt.value);
+      const optionValues = new Set(Array.from(selector.options).map(opt => opt.value));
       let count = 0;
       for (const name of styleNames) {
-        if (optionValues.includes(name)) count++;
+        if (optionValues.has(name)) count++;
       }
       return count;
     }, mockStyles.map(s => s.name));
