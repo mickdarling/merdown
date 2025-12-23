@@ -99,13 +99,19 @@
     <script src="js/editor-modes/markdown-yaml.js"></script>
 
     <style>
-        /* CSS Layer order declaration - establishes priority hierarchy */
-        @layer preview-styles, syntax-theme, mermaid-theme;
+        /* CSS Layer order declaration - establishes priority hierarchy
+           base: global reset (lowest priority)
+           preview-styles: loaded markdown themes (can override reset)
+           syntax-theme: code highlighting
+           mermaid-theme: diagram styling */
+        @layer base, preview-styles, syntax-theme, mermaid-theme;
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        @layer base {
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
         }
 
         body {
