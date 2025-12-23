@@ -190,7 +190,10 @@ function applyLayoutConstraints() {
     } else {
         // Apply overrides - user controls width via drag handle
         wrapper.style.maxWidth = 'none';
-        wrapper.style.margin = '0';
+        // Don't override margin completely - preserve horizontal centering (margin: 0 auto)
+        // Only clear vertical margins to prevent unwanted spacing
+        wrapper.style.marginTop = '0';
+        wrapper.style.marginBottom = '0';
         wrapper.style.width = 'auto';
     }
 }
@@ -224,10 +227,22 @@ const LAYOUT_PROPERTIES = new Set([
 function shouldKeepDeclaration(declaration) {
     const trimmed = declaration.trim();
     if (!trimmed) return false;
-    const propRegex = /^([a-z-]+)\s*:/i;
-    const propMatch = propRegex.exec(trimmed);
-    if (!propMatch) return true;
-    const prop = propMatch[1].toLowerCase();
+    // Parse CSS property:value using indexOf to avoid regex ReDoS (S5852)
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) return true;
+    const prop = trimmed.slice(0, colonIndex).trim().toLowerCase();
+    // Validate property name (CSS properties are letters and hyphens only)
+    if (!/^[a-z-]+$/.test(prop)) return true;
+    const value = trimmed.slice(colonIndex + 1).trim();
+
+    // Preserve margin declarations that use 'auto' for centering (#391)
+    // Examples: margin: 0 auto, margin-left: auto, margin-right: auto
+    // Using word boundary to avoid false positives (e.g., "autofill")
+    if ((prop === 'margin' || prop === 'margin-left' || prop === 'margin-right') &&
+        /\bauto\b/.test(value)) {
+        return true;
+    }
+
     return !LAYOUT_PROPERTIES.has(prop);
 }
 
