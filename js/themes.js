@@ -49,6 +49,12 @@ let layoutToggleOption = null; // Cached reference for performance
 let hrPageBreakToggleOption = null; // Cached reference for performance
 let fileInput = null; // Hidden file input for CSS uploads
 
+// Track dynamically loaded styles (file uploads, URLs) for display in dropdown
+const loadedStyles = [];
+
+// Store the current scoped CSS (before layout stripping) for toggle reapplication
+let currentScopedCSS = null;
+
 // Theme loading constants
 const SYNTAX_THEME_LOADING_ID = 'syntax-theme-loading';
 const SYNTAX_THEME_ID = 'syntax-theme';
@@ -351,9 +357,31 @@ function isSelectorScoped(selector) {
 }
 
 /**
+ * Check if a selector targets code block elements
+ * These selectors should be excluded from scoping to prevent preview styles
+ * from overriding syntax highlighting (Issue #387)
+ * @param {string} selector - CSS selector to check
+ * @returns {boolean} True if selector targets code blocks
+ */
+function isCodeBlockSelector(selector) {
+    const trimmed = selector.trim().toLowerCase();
+    // Direct code block element selectors
+    if (trimmed === 'pre' || trimmed === 'code' || trimmed === '.hljs') {
+        return true;
+    }
+    // Selectors that start with code block elements (e.g., "pre code", "code.hljs")
+    if (/^(pre|code|\.hljs)(\s|\.|\[|:|\{|$)/.test(trimmed)) {
+        return true;
+    }
+    // Selectors containing code block descendants (e.g., "div pre", ".content code")
+    // We allow these but they're handled by syntax override CSS
+    return false;
+}
+
+/**
  * Scope a single CSS selector by adding #wrapper prefix
  * @param {string} selector - Single CSS selector to scope
- * @returns {string} Scoped selector
+ * @returns {string} Scoped selector (empty string if should be excluded)
  */
 function scopeSelector(selector) {
     const trimmed = selector.trim();
@@ -362,6 +390,10 @@ function scopeSelector(selector) {
         trimmed.startsWith('@') ||
         trimmed.startsWith('/*')) {
         return trimmed;
+    }
+    // Exclude code block selectors to prevent preview style bleeding (Issue #387)
+    if (isCodeBlockSelector(trimmed)) {
+        return ''; // Will be filtered out by parseSelectorAndBlock
     }
     // Skip if already scoped to #wrapper or #preview
     if (isSelectorScoped(trimmed)) {
@@ -514,10 +546,13 @@ function parseSelectorAndBlock(css, i, result) {
         return i;
     }
 
-    // Extract and scope selectors
+    // Extract and scope selectors, filtering out empty ones (code block selectors)
     const selectorText = css.substring(selectorStart, i);
     const selectors = selectorText.split(',');
-    const scopedSelectors = selectors.map(scopeSelector).join(', ');
+    const scopedSelectors = selectors
+        .map(scopeSelector)
+        .filter(s => s.trim() !== '') // Remove excluded selectors (code blocks)
+        .join(', ');
 
     // Copy the opening brace
     const openBrace = css[i];
@@ -534,6 +569,11 @@ function parseSelectorAndBlock(css, i, result) {
         }
         ruleBodyChars.push(css[i]);
         i++;
+    }
+
+    // Skip entire rule if all selectors were filtered out (code block selectors)
+    if (scopedSelectors.trim() === '') {
+        return i;
     }
 
     // Push all parts at once to avoid multiple push calls
@@ -578,7 +618,15 @@ function scopeCSSToPreview(css) {
 }
 
 /**
- * Apply minimal syntax override - just set structure, let .hljs handle colors naturally
+ * Apply syntax override - isolate code blocks from preview style contamination
+ *
+ * The three styling domains must be completely isolated:
+ * 1. Preview styles → Only affect content (NOT code blocks, NOT mermaid)
+ * 2. Syntax theme → Only affect code blocks (from CDN, not hardcoded)
+ * 3. Mermaid theme → Only affect mermaid diagrams
+ *
+ * Problem: Preview CSS scoped to #wrapper has higher specificity than .hljs rules.
+ * Solution: Read syntax theme colors from the stylesheet and apply with inline styles.
  */
 function applySyntaxOverride() {
     let syntaxOverride = document.getElementById('syntax-override');
@@ -588,12 +636,15 @@ function applySyntaxOverride() {
         document.head.appendChild(syntaxOverride);
     }
 
-    // Minimal override - just structure, NO color overrides
+    // Get the syntax theme colors from the loaded stylesheet
+    const syntaxColors = getSyntaxThemeColors();
+
+    // Basic structure for code blocks
     syntaxOverride.textContent = `
-        /* Let syntax theme .hljs rule handle ALL colors naturally */
         #wrapper pre {
-            padding: 0;
             margin: 1em 0;
+            padding: 0;
+            background: transparent !important;
         }
 
         #wrapper pre code.hljs {
@@ -601,8 +652,67 @@ function applySyntaxOverride() {
             padding: 1em;
             overflow-x: auto;
             border-radius: 4px;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+            font-size: 0.9em;
+            line-height: 1.5;
+            tab-size: 4;
+        }
+
+        /* Inline code (not in pre) */
+        #wrapper code:not(.hljs):not(pre code) {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+            font-size: 0.9em;
+            background: rgba(0,0,0,0.05) !important;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
         }
     `;
+
+    // Apply syntax theme colors via inline styles (beats any CSS specificity)
+    applyInlineSyntaxColors(syntaxColors);
+}
+
+/**
+ * Get the syntax theme colors from the loaded stylesheet
+ * Parses the actual CSS rules from the syntax theme link element
+ */
+function getSyntaxThemeColors() {
+    const defaults = { background: '#f3f3f3', color: '#444' };
+
+    try {
+        // Find the syntax theme stylesheet
+        const syntaxLink = document.getElementById('syntax-theme');
+        if (!syntaxLink || !syntaxLink.sheet) return defaults;
+
+        // Find the .hljs rule
+        const rules = syntaxLink.sheet.cssRules || syntaxLink.sheet.rules;
+        for (const rule of rules) {
+            if (rule.selectorText === '.hljs') {
+                return {
+                    background: rule.style.background || rule.style.backgroundColor || defaults.background,
+                    color: rule.style.color || defaults.color
+                };
+            }
+        }
+    } catch (e) {
+        // CORS might block access to CDN stylesheet
+        console.log('Could not read syntax theme stylesheet (CORS):', e.message);
+    }
+
+    return defaults;
+}
+
+/**
+ * Apply syntax theme colors directly to .hljs elements via inline styles
+ * This beats any CSS specificity from preview styles
+ */
+function applyInlineSyntaxColors(colors) {
+    const hljsElements = document.querySelectorAll('#wrapper pre code.hljs');
+    hljsElements.forEach(el => {
+        el.style.setProperty('background', colors.background, 'important');
+        el.style.setProperty('color', colors.color, 'important');
+    });
 }
 
 /**
@@ -649,12 +759,19 @@ async function applyCSSCore(cssText) {
         }
     }
 
-    // Apply minimal structure override (no color changes)
+    // Apply syntax override structure
     applySyntaxOverride();
 
     // Re-render markdown to update Mermaid diagrams with new CSS
     // Note: YAML panel state preservation is handled automatically in renderMarkdown() (#268 fix)
     scheduleRender();
+
+    // Re-apply syntax colors after render completes (new code blocks won't have inline styles)
+    // Use a delay to ensure render has completed
+    setTimeout(() => {
+        const syntaxColors = getSyntaxThemeColors();
+        applyInlineSyntaxColors(syntaxColors);
+    }, 100);
 }
 
 /**
@@ -675,6 +792,9 @@ async function applyStyleToPage(cssText, styleName, style) {
     if (style.source !== 'local') {
         cssText = scopeCSSToPreview(cssText);
     }
+
+    // Store scoped CSS before layout stripping for toggle reapplication
+    currentScopedCSS = cssText;
 
     // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
     // This allows user control of preview width via drag handle, overriding !important rules
@@ -733,6 +853,15 @@ async function handleSpecialStyleSource(style) {
  * @returns {Promise<boolean>} True if style loaded successfully, false otherwise
  */
 async function loadStyle(styleName) {
+    // First check if this is a dynamically loaded style
+    const loadedStyle = loadedStyles.find(s => s.name === styleName);
+    if (loadedStyle && loadedStyle.css) {
+        showStatus(`Loading style: ${styleName}...`);
+        await applyCSSDirectly(loadedStyle.css, styleName);
+        showStatus(`Style loaded: ${styleName}`);
+        return true;
+    }
+
     const style = availableStyles.find(s => s.name === styleName);
     if (!style || style.source === 'separator') return false;
 
@@ -776,6 +905,8 @@ async function loadCSSFromFile(file) {
         showStatus(`Loading: ${file.name}...`);
         const cssText = await file.text();
         await applyCSSDirectly(cssText, file.name);
+        // Add to dropdown with CSS content for re-selection
+        addLoadedStyleToDropdown(file.name, 'file', cssText);
         showStatus(`Loaded: ${file.name}`);
     } catch (error) {
         showStatus(`Error loading file: ${error.message}`);
@@ -834,6 +965,11 @@ async function loadCSSFromURL(url) {
         }
         const cssText = await response.text();
         await applyCSSDirectly(cssText, normalizedUrl);
+        // Extract filename from URL for dropdown display
+        const urlParts = normalizedUrl.split('/');
+        const displayName = urlParts[urlParts.length - 1] || normalizedUrl;
+        // Add to dropdown with CSS content for re-selection
+        addLoadedStyleToDropdown(displayName, 'url', cssText);
         showStatus(`Loaded from URL`);
     } catch (error) {
         showStatus(`Error loading URL: ${error.message}`);
@@ -877,6 +1013,9 @@ async function applyCSSDirectly(cssText, sourceName) {
     // DO NOT skip scoping based on cssText.includes('#wrapper') - this was bug #384
     // where CSS containing partial #wrapper rules bypassed scoping entirely.
     cssText = scopeCSSToPreview(cssText);
+
+    // Store scoped CSS before layout stripping for toggle reapplication
+    currentScopedCSS = cssText;
 
     // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
     // This allows user control of preview width via drag handle, overriding !important rules
@@ -961,6 +1100,16 @@ async function changeStyle(styleName) {
     if (styleName === 'Respect Style Layout') {
         state.respectStyleLayout = !state.respectStyleLayout;
         saveRespectStyleLayout(state.respectStyleLayout);
+
+        // Reapply CSS with new toggle state if we have stored CSS
+        if (currentScopedCSS) {
+            let cssToApply = currentScopedCSS;
+            if (!state.respectStyleLayout) {
+                cssToApply = stripWrapperLayoutProperties(cssToApply);
+            }
+            await applyCSSCore(cssToApply);
+        }
+
         applyLayoutConstraints();
         // Update just the checkbox without rebuilding the entire dropdown
         updateLayoutToggleCheckbox();
@@ -1462,6 +1611,58 @@ async function initStyleSelector() {
 
     // Apply HR page break style based on saved preference
     applyHRPageBreakStyle();
+}
+
+/**
+ * Add a dynamically loaded style to the dropdown and select it
+ * Creates a "Loaded" optgroup if it doesn't exist
+ * @param {string} styleName - Name of the style (filename or short URL)
+ * @param {string} source - Source type: 'file' or 'url'
+ * @param {string} cssContent - The CSS content (stored for re-selection)
+ */
+function addLoadedStyleToDropdown(styleName, source, cssContent) {
+    const { styleSelector } = getElements();
+    if (!styleSelector) return;
+
+    // Check if style already exists in dropdown
+    const existingOption = Array.from(styleSelector.options).find(opt => opt.value === styleName);
+    if (existingOption) {
+        // Update CSS content in case it changed
+        const existingStyle = loadedStyles.find(s => s.name === styleName);
+        if (existingStyle) {
+            existingStyle.css = cssContent;
+        }
+        styleSelector.value = styleName;
+        return;
+    }
+
+    // Find or create "Loaded" optgroup
+    let loadedOptgroup = styleSelector.querySelector('optgroup[label="Loaded"]');
+    if (!loadedOptgroup) {
+        loadedOptgroup = document.createElement('optgroup');
+        loadedOptgroup.label = 'Loaded';
+        // Insert after "Preview Style" optgroup
+        const importOptgroup = styleSelector.querySelector('optgroup[label="Import"]');
+        if (importOptgroup) {
+            styleSelector.insertBefore(loadedOptgroup, importOptgroup);
+        } else {
+            styleSelector.appendChild(loadedOptgroup);
+        }
+    }
+
+    // Create and add option
+    const option = document.createElement('option');
+    option.value = styleName;
+    option.textContent = styleName + (source === 'url' ? ' (URL)' : '');
+    loadedOptgroup.appendChild(option);
+
+    // Track in loadedStyles array with CSS content for re-selection
+    if (!loadedStyles.find(s => s.name === styleName)) {
+        loadedStyles.push({ name: styleName, source, css: cssContent });
+    }
+
+    // Select the new style
+    styleSelector.value = styleName;
 }
 
 /**
