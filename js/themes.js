@@ -235,11 +235,11 @@ function shouldKeepDeclaration(declaration) {
     if (!/^[a-z-]+$/.test(prop)) return true;
     const value = trimmed.slice(colonIndex + 1).trim();
 
-    // Preserve margin declarations that use 'auto' for centering
+    // Preserve margin declarations that use 'auto' for centering (#391)
     // Examples: margin: 0 auto, margin-left: auto, margin-right: auto
-    // These are for centering and don't interfere with width control
+    // Using word boundary to avoid false positives (e.g., "autofill")
     if ((prop === 'margin' || prop === 'margin-left' || prop === 'margin-right') &&
-        value.includes('auto')) {
+        /\bauto\b/.test(value)) {
         return true;
     }
 
