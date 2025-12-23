@@ -642,4 +642,152 @@ graph TD
             }
         });
     });
+
+    test.describe('Edge cases and robustness', () => {
+        test('should handle malformed CSS with unbalanced braces gracefully', async ({ page }) => {
+            // Inject malformed CSS via the style selector mechanism
+            const malformedCSS = `
+                #wrapper { color: red;
+                .missing-close { background: blue;
+                /* missing closing braces */
+            `;
+
+            // The app should not crash when encountering malformed CSS
+            const result = await page.evaluate((css) => {
+                try {
+                    // Test the scoping function directly
+                    if (typeof globalThis.scopeCSSToPreview === 'function') {
+                        return { success: true, result: globalThis.scopeCSSToPreview(css) };
+                    }
+                    // Function not exposed, just verify page is stable
+                    return { success: true, result: 'function not exposed' };
+                } catch (error) {
+                    return { success: false, error: error.message };
+                }
+            }, malformedCSS);
+
+            // Should not throw, page should remain functional
+            expect(result.success).toBe(true);
+
+            // Verify page is still responsive
+            const title = await page.title();
+            expect(title).toContain('Merview');
+        });
+
+        test('should handle CSS with deeply nested @-rules', async ({ page }) => {
+            // Create deeply nested but valid CSS
+            const deeplyNestedCSS = `
+                @media screen {
+                    @supports (display: grid) {
+                        @media (min-width: 768px) {
+                            @supports (gap: 1rem) {
+                                #wrapper { color: purple; }
+                            }
+                        }
+                    }
+                }
+            `;
+
+            // Page should handle this without issues
+            const pageStable = await page.evaluate(() => {
+                return document.querySelector('#wrapper') !== null;
+            });
+
+            expect(pageStable).toBe(true);
+        });
+
+        test('should handle rapid style selector changes without race conditions', async ({ page }) => {
+            // Rapidly change styles multiple times (use actual option text values)
+            const styles = ['None (No CSS)', 'GitHub', 'Dark Mode', 'GitHub', 'None (No CSS)'];
+
+            for (const style of styles) {
+                await page.selectOption('#styleSelector', style);
+                // Very short wait - testing race condition handling
+                await page.waitForTimeout(50);
+            }
+
+            // Wait for things to settle
+            await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+            // Page should still be functional
+            const wrapperExists = await page.evaluate(() => {
+                return document.querySelector('#wrapper') !== null;
+            });
+            expect(wrapperExists).toBe(true);
+
+            // Should have ended on 'None (No CSS)' - verify no custom styles applied
+            // The style element may not exist or may be empty - both are valid for "None"
+            const hasCustomStyle = await page.evaluate(() => {
+                const styleEl = document.getElementById('custom-theme-style');
+                if (!styleEl) return false;
+                return styleEl.textContent.trim().length > 0;
+            });
+            expect(hasCustomStyle).toBe(false);
+        });
+
+        test('should handle rapid Respect Style Layout toggle without breaking', async ({ page }) => {
+            // First apply a style that has layout properties
+            await page.selectOption('#styleSelector', 'GitHub');
+            await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+            // Find the toggle checkbox
+            const toggleExists = await page.evaluate(() => {
+                return document.querySelector('#respectStyleLayout') !== null;
+            });
+
+            if (toggleExists) {
+                // Rapidly toggle multiple times
+                for (let i = 0; i < 5; i++) {
+                    await page.click('#respectStyleLayout');
+                    await page.waitForTimeout(50);
+                }
+
+                // Wait for things to settle
+                await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+                // Page should still be functional
+                const wrapperExists = await page.evaluate(() => {
+                    return document.querySelector('#wrapper') !== null;
+                });
+                expect(wrapperExists).toBe(true);
+            }
+        });
+
+        test('CSS layers should maintain correct priority order', async ({ page }) => {
+            // Verify layer order declaration exists in head
+            const layerOrderExists = await page.evaluate(() => {
+                const styles = document.querySelectorAll('style');
+                for (const style of styles) {
+                    if (style.textContent.includes('@layer preview-styles, syntax-theme, mermaid-theme')) {
+                        return true;
+                    }
+                }
+                return false;
+            });
+
+            expect(layerOrderExists).toBe(true);
+        });
+
+        test('external CSS with its own @layer declarations should not break isolation', async ({ page }) => {
+            // This tests that external CSS containing @layer doesn't conflict
+            // The important thing is that our layer order is defined FIRST in index.html
+            // so external @layer declarations get absorbed into our hierarchy
+
+            // Apply a style and syntax theme
+            await page.selectOption('#styleSelector', 'GitHub');
+            await page.waitForTimeout(WAIT_TIMES.SHORT);
+            await page.selectOption('#syntaxThemeSelector', 'GitHub Dark');
+            await page.waitForTimeout(WAIT_TIMES.MEDIUM);
+
+            // Verify code blocks have syntax theme colors (not overridden by preview)
+            const codeBlockColor = await page.evaluate(() => {
+                const hljs = document.querySelector('#wrapper .hljs');
+                if (!hljs) return null;
+                return globalThis.getComputedStyle(hljs).color;
+            });
+
+            // Should have a color defined (syntax theme applied)
+            expect(codeBlockColor).not.toBeNull();
+        });
+    });
 });

@@ -293,8 +293,11 @@ function isGroupingAtRuleForStrip(atRuleName) {
  * @returns {string} CSS with layout properties removed from #wrapper rules
  */
 function stripWrapperLayoutProperties(css, depth = 0) {
-    // Prevent infinite recursion
-    if (depth > MAX_CSS_RECURSION_DEPTH) return css;
+    // Prevent infinite recursion on malformed or deeply nested CSS
+    if (depth > MAX_CSS_RECURSION_DEPTH) {
+        console.warn('CSS layout stripping: max recursion depth exceeded, returning unprocessed');
+        return css;
+    }
 
     const result = [];
     let i = 0;
@@ -670,7 +673,20 @@ function parseSelectorAndBlock(css, i, result) {
     return i;
 }
 
-/** Maximum recursion depth for CSS parsing to prevent infinite loops */
+/**
+ * Maximum recursion depth for CSS parsing to prevent infinite loops.
+ *
+ * This limit protects against:
+ * - Malformed CSS with deeply nested @-rules (e.g., @media inside @media inside @supports...)
+ * - Potential DoS from adversarial CSS designed to cause stack overflow
+ * - Infinite recursion bugs in our parsing logic
+ *
+ * Value of 10 is generous - real-world CSS rarely exceeds 3-4 levels of nesting.
+ * If this limit is hit, the CSS is returned unprocessed with a console warning.
+ *
+ * @see stripWrapperLayoutProperties - uses this for layout property stripping
+ * @see scopeCSSToPreview - uses this for selector scoping
+ */
 const MAX_CSS_RECURSION_DEPTH = 10;
 
 /**
