@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: AGPL-3.0-or-later
+// Copyright (C) 2025 Mick Darling
+
 /**
  * Test: Issue #391 - Respect Style Layout Toggle Preserves Centering
  *
@@ -199,8 +202,8 @@ test.describe('Respect Style Layout - Centering Preservation (Issue #391)', () =
       }
     `;
 
-    // Create a data URL for the CSS
-    const cssDataUrl = `data:text/css;base64,${Buffer.from(customCSS).toString('base64')}`;
+    // NOTE: This test uses integration testing via style selector changes
+    // rather than direct file upload which isn't easily testable in Playwright
 
     // We can't easily upload via the file picker in tests, but we can verify
     // that the margin auto pattern is preserved through style changes
