@@ -69,8 +69,8 @@ test.describe('CSS Persistence Across Navigation', () => {
     // Simulate loading CSS via the internal function
     await page.evaluate(({ css, name }) => {
       // Simulate the loadCSSFromFile behavior
-      if (window.applyCSSDirectly) {
-        window.applyCSSDirectly(css, name);
+      if (globalThis.applyCSSDirectly) {
+        globalThis.applyCSSDirectly(css, name);
       }
       // Simulate adding to dropdown (this triggers sessionStorage save)
       const event = new CustomEvent('css-loaded', { detail: { name, css, source: 'file' } });
@@ -173,10 +173,12 @@ test.describe('CSS Persistence Across Navigation', () => {
     // Verify all styles were restored
     const restoredCount = await page.evaluate((styleNames) => {
       const selector = document.getElementById('styleSelector');
-      const options = Array.from(selector.options);
-      return styleNames.filter(name =>
-        options.some(opt => opt.value === name)
-      ).length;
+      const optionValues = Array.from(selector.options).map(opt => opt.value);
+      let count = 0;
+      for (const name of styleNames) {
+        if (optionValues.includes(name)) count++;
+      }
+      return count;
     }, mockStyles.map(s => s.name));
 
     expect(restoredCount).toBe(mockStyles.length);
