@@ -63,18 +63,20 @@ let currentScopedCSS = null;
  * Save loaded styles to sessionStorage for persistence across page navigation
  * Stores the entire loadedStyles array as JSON (Issue #390 fix)
  */
+let saveStylesTimeout;
 function saveLoadedStylesToSession() {
-    try {
-        if (loadedStyles.length === 0) {
-            // Clear sessionStorage if no loaded styles
-            sessionStorage.removeItem(LOADED_STYLES_KEY);
-            return;
+    clearTimeout(saveStylesTimeout);
+    saveStylesTimeout = setTimeout(() => {
+        try {
+            if (loadedStyles.length === 0) {
+                sessionStorage.removeItem(LOADED_STYLES_KEY);
+                return;
+            }
+            sessionStorage.setItem(LOADED_STYLES_KEY, JSON.stringify(loadedStyles));
+        } catch (error) {
+            console.warn('Failed to save loaded styles to sessionStorage:', error);
         }
-        sessionStorage.setItem(LOADED_STYLES_KEY, JSON.stringify(loadedStyles));
-    } catch (error) {
-        // SessionStorage can throw if quota exceeded or disabled
-        console.warn('Failed to save loaded styles to sessionStorage:', error);
-    }
+    }, 100);
 }
 
 /**
@@ -280,14 +282,14 @@ function shouldKeepDeclaration(declaration) {
     if (colonIndex === -1) return true;
     const prop = trimmed.slice(0, colonIndex).trim().toLowerCase();
     // Validate property name (CSS properties are letters and hyphens only)
-    if (!/^[a-z-]+$/.test(prop)) return true;
+    if (!/^-?[a-z][a-z-]*$/i.test(prop)) return true;
     const value = trimmed.slice(colonIndex + 1).trim();
 
     // Preserve margin declarations that use 'auto' for centering (#391)
     // Examples: margin: 0 auto, margin-left: auto, margin-right: auto
     // Using word boundary to avoid false positives (e.g., "autofill")
     if ((prop === 'margin' || prop === 'margin-left' || prop === 'margin-right') &&
-        /\bauto\b/.test(value)) {
+        /(^|\s)auto($|\s)/.test(value)) {
         return true;
     }
 
@@ -492,6 +494,10 @@ function isSelectorScoped(selector) {
  * Check if a selector targets code block elements
  * These selectors should be excluded from scoping to prevent preview styles
  * from overriding syntax highlighting (Issue #387)
+ *
+ * @example
+ * isCodeBlockSelector('pre code') // true - excluded
+ * isCodeBlockSelector('.content pre') // false - allowed
  * @param {string} selector - CSS selector to check
  * @returns {boolean} True if selector targets code blocks
  */
@@ -1696,7 +1702,7 @@ async function initMermaidThemeSelector() {
  * @param {Function} createOption - Function to create option element from item
  */
 function populateSelectorWithOptgroups(selector, items, groupOrder, createOption) {
-    selector.innerHTML = '';
+    selector.replaceChildren();
 
     // Group items by their group property
     const groups = {};
