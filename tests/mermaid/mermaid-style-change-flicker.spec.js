@@ -444,15 +444,14 @@ graph TD
             const diagram = document.querySelector('.mermaid');
             return {
                 hasSvg: true,
-                rendered: diagram?.dataset.mermaidRendered,
-                svgExists: svg !== null
+                // Convert dataset value to boolean for type-safe comparison
+                rendered: diagram?.dataset.mermaidRendered === 'true'
             };
         });
 
         // Critical: SVG must still exist and be marked as rendered
         expect(afterStyles?.hasSvg).toBe(true);
-        expect(afterStyles?.rendered).toBe('true');
-        expect(afterStyles?.svgExists).toBe(true);
+        expect(afterStyles?.rendered).toBe(true);
     });
 
     test('mermaid theme should reflect dark/light mode appropriately', async ({ page }) => {

@@ -49,6 +49,62 @@ let layoutToggleOption = null; // Cached reference for performance
 let hrPageBreakToggleOption = null; // Cached reference for performance
 let fileInput = null; // Hidden file input for CSS uploads
 
+// Track dynamically loaded styles (file uploads, URLs) for display in dropdown
+const loadedStyles = [];
+
+// SessionStorage keys for persisting loaded styles across page navigation (#390)
+// Version prefix allows clean migration if data structure changes in future
+const LOADED_STYLES_KEY = 'merview-v1-loaded-styles';
+
+// Store the current scoped CSS (before layout stripping) for toggle reapplication
+let currentScopedCSS = null;
+
+/**
+ * Save loaded styles to sessionStorage for persistence across page navigation
+ * Stores the entire loadedStyles array as JSON (Issue #390 fix)
+ */
+let saveStylesTimeout;
+function saveLoadedStylesToSession() {
+    clearTimeout(saveStylesTimeout);
+    saveStylesTimeout = setTimeout(() => {
+        try {
+            if (loadedStyles.length === 0) {
+                sessionStorage.removeItem(LOADED_STYLES_KEY);
+                return;
+            }
+            sessionStorage.setItem(LOADED_STYLES_KEY, JSON.stringify(loadedStyles));
+        } catch (error) {
+            console.warn('Failed to save loaded styles to sessionStorage:', error);
+        }
+    }, 100);
+}
+
+/**
+ * Restore loaded styles from sessionStorage on page initialization
+ * Populates loadedStyles array and adds to dropdown (Issue #390 fix)
+ */
+function restoreLoadedStylesFromSession() {
+    try {
+        const saved = sessionStorage.getItem(LOADED_STYLES_KEY);
+        if (!saved) return;
+
+        const restoredStyles = JSON.parse(saved);
+        if (!Array.isArray(restoredStyles)) return;
+
+        // Validate and restore each style
+        restoredStyles.forEach(style => {
+            if (style?.name && style?.css && style?.source) {
+                loadedStyles.push(style);
+            }
+        });
+    } catch (error) {
+        // JSON parse can fail on corrupted data
+        console.warn('Failed to restore loaded styles from sessionStorage:', error);
+        // Clear corrupted data
+        sessionStorage.removeItem(LOADED_STYLES_KEY);
+    }
+}
+
 // Theme loading constants
 const SYNTAX_THEME_LOADING_ID = 'syntax-theme-loading';
 const SYNTAX_THEME_ID = 'syntax-theme';
@@ -184,97 +240,314 @@ function applyLayoutConstraints() {
     } else {
         // Apply overrides - user controls width via drag handle
         wrapper.style.maxWidth = 'none';
-        wrapper.style.margin = '0';
+        // Don't override margin completely - preserve horizontal centering (margin: 0 auto)
+        // Only clear vertical margins to prevent unwanted spacing
+        wrapper.style.marginTop = '0';
+        wrapper.style.marginBottom = '0';
         wrapper.style.width = 'auto';
     }
 }
 
-// Helper: Check if current position starts a print media query
-function isPrintMediaStart(css, i) {
-    const startsWithPrint = css.substring(i, i + 12) === '@media print';
-    const startsWithScreen = css.substring(i, i + 13) === '@media screen';
-    // Handle indexOf returning -1 (not found) by treating as "no print before brace"
-    const printIndex = css.indexOf('print', i);
-    const braceIndex = css.indexOf('{', i);
-    const hasPrintBeforeBrace = printIndex !== -1 && braceIndex !== -1 && printIndex < braceIndex;
-    return startsWithPrint || (startsWithScreen && hasPrintBeforeBrace);
-}
+/**
+ * Layout properties that should be stripped from #wrapper rules when
+ * "Respect Style Layout" is OFF. These properties conflict with user
+ * control of the preview pane width via the drag handle.
+ */
+const LAYOUT_PROPERTIES = new Set([
+    'max-width',
+    'min-width',
+    'width',
+    'margin',
+    'margin-left',
+    'margin-right',
+    'margin-top',
+    'margin-bottom',
+    'padding',
+    'padding-left',
+    'padding-right',
+    'padding-top',
+    'padding-bottom'
+]);
 
-// Helper: Skip to the opening brace of a media query
-function skipToOpeningBrace(css, startIndex) {
-    let i = startIndex;
-    while (i < css.length && css[i] !== '{') {
-        i++;
-    }
-    return i;
-}
+/**
+ * Check if a declaration is a layout property that should be stripped
+ * @param {string} declaration - CSS declaration to check
+ * @returns {boolean} True if the declaration should be kept
+ */
+function shouldKeepDeclaration(declaration) {
+    const trimmed = declaration.trim();
+    if (!trimmed) return false;
+    // Parse CSS property:value using indexOf to avoid regex ReDoS (S5852)
+    const colonIndex = trimmed.indexOf(':');
+    if (colonIndex === -1) return true;
+    const prop = trimmed.slice(0, colonIndex).trim().toLowerCase();
+    // Validate property name (CSS properties are letters and hyphens only)
+    if (!/^-?[a-z][a-z-]*$/i.test(prop)) return true;
+    const value = trimmed.slice(colonIndex + 1).trim();
 
-// Helper: Process a character when inside a print media block
-function processInsidePrintMedia(css, i, depth) {
-    if (css[i] === '{') {
-        return { newDepth: depth + 1, stillInPrintMedia: true };
+    // Preserve margin declarations that use 'auto' for centering (#391)
+    // Examples: margin: 0 auto, margin-left: auto, margin-right: auto
+    // Using word boundary to avoid false positives (e.g., "autofill")
+    if ((prop === 'margin' || prop === 'margin-left' || prop === 'margin-right') &&
+        /(^|\s)auto($|\s)/.test(value)) {
+        return true;
     }
-    if (css[i] === '}') {
-        const newDepth = depth - 1;
-        return { newDepth, stillInPrintMedia: newDepth > 0 };
-    }
-    return { newDepth: depth, stillInPrintMedia: true };
+
+    return !LAYOUT_PROPERTIES.has(prop);
 }
 
 /**
- * Strip @media print blocks from CSS to preserve screen colors in PDF
- * @param {string} css - CSS text to process
- * @returns {string} CSS with print media queries removed
+ * Filter layout properties from a CSS rule body
+ * @param {string} ruleBody - CSS rule body (declarations)
+ * @returns {string} Filtered rule body
  */
-function stripPrintMediaQueries(css) {
-    let depth = 0;
-    let inPrintMedia = false;
-    let result = '';
-    let i = 0;
+function filterLayoutProperties(ruleBody) {
+    return ruleBody
+        .split(';')
+        .filter(shouldKeepDeclaration)
+        .join(';');
+}
 
-    while (i < css.length) {
-        if (!inPrintMedia && isPrintMediaStart(css, i)) {
-            const restOfLine = css.substring(i, css.indexOf('{', i) + 1);
-            if (restOfLine.includes('print')) {
-                inPrintMedia = true;
-                depth = 0;
-                i = skipToOpeningBrace(css, i);
-                continue;
-            }
-        }
+/**
+ * Check if selector targets #wrapper directly
+ * @param {string} selectorText - CSS selector text
+ * @returns {boolean} True if selector targets #wrapper directly
+ */
+function isDirectWrapperSelector(selectorText) {
+    const trimmed = selectorText.trim();
+    if (trimmed === '#wrapper') return true;
+    return /(?:^|,\s*)#wrapper\s*(?:,|$)/.test(selectorText);
+}
 
-        if (inPrintMedia) {
-            const { newDepth, stillInPrintMedia } = processInsidePrintMedia(css, i, depth);
-            depth = newDepth;
-            inPrintMedia = stillInPrintMedia;
-            i++;
-        } else {
-            result += css[i];
-            i++;
-        }
+/**
+ * Find matching closing brace and return position after it
+ * @param {string} css - CSS text
+ * @param {number} start - Position after opening brace
+ * @param {number} len - Length of CSS
+ * @returns {{end: number, contentEnd: number}} Position after closing brace and content end
+ */
+function findMatchingBrace(css, start, len) {
+    let depth = 1;
+    let i = start;
+    while (i < len && depth > 0) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}') depth--;
+        i++;
+    }
+    return { end: i, contentEnd: i - 1 };
+}
+
+/**
+ * Check if @-rule is a grouping rule that needs recursive processing
+ * @param {string} atRuleName - Name of the @-rule
+ * @returns {boolean} True if grouping rule
+ */
+function isGroupingAtRuleForStrip(atRuleName) {
+    return ['media', 'supports', 'document', 'layer'].includes(atRuleName.toLowerCase());
+}
+
+/**
+ * Strip layout-related properties from CSS rules targeting #wrapper.
+ * Called when "Respect Style Layout" is OFF to allow user width control.
+ *
+ * This handles external CSS with !important rules like:
+ *   #wrapper { max-width: 700px !important; }
+ *
+ * @param {string} css - CSS text to process
+ * @param {number} depth - Recursion depth (default 0)
+ * @returns {string} CSS with layout properties removed from #wrapper rules
+ */
+function stripWrapperLayoutProperties(css, depth = 0) {
+    // Prevent infinite recursion on malformed or deeply nested CSS
+    if (depth > MAX_CSS_RECURSION_DEPTH) {
+        console.warn('CSS layout stripping: max recursion depth exceeded, returning unprocessed');
+        return css;
     }
 
-    return result;
+    const result = [];
+    let i = 0;
+    const len = css.length;
+
+    while (i < len) {
+        // Skip and preserve whitespace
+        const wsStart = i;
+        while (i < len && /\s/.test(css[i])) i++;
+        if (i > wsStart) result.push(css.substring(wsStart, i));
+        if (i >= len) break;
+
+        // Handle comments
+        if (css[i] === '/' && css[i + 1] === '*') {
+            i = parseCommentForStrip(css, i, len, result);
+            continue;
+        }
+
+        // Handle @-rules
+        if (css[i] === '@') {
+            i = parseAtRuleForStrip(css, i, len, result, depth);
+            continue;
+        }
+
+        // Handle regular rules
+        i = parseRuleForStrip(css, i, len, result);
+    }
+
+    return result.join('');
+}
+
+/**
+ * Parse a CSS comment for stripWrapperLayoutProperties
+ */
+function parseCommentForStrip(css, i, len, result) {
+    const commentStart = i;
+    i += 2;
+    while (i < len - 1 && !(css[i] === '*' && css[i + 1] === '/')) i++;
+    i += 2;
+    result.push(css.substring(commentStart, i));
+    return i;
+}
+
+/**
+ * Parse an @-rule for stripWrapperLayoutProperties
+ */
+function parseAtRuleForStrip(css, i, len, result, depth) {
+    const atStart = i;
+    i++; // Skip '@'
+
+    // Get @-rule name
+    let nameEnd = i;
+    while (nameEnd < len && /[a-zA-Z-]/.test(css[nameEnd])) nameEnd++;
+    const atRuleName = css.substring(i, nameEnd);
+    i = nameEnd;
+
+    // Find opening brace or semicolon
+    while (i < len && css[i] !== '{' && css[i] !== ';') i++;
+
+    if (i >= len || css[i] === ';') {
+        if (i < len) i++;
+        result.push(css.substring(atStart, i));
+        return i;
+    }
+
+    // Has opening brace
+    const bracePos = i;
+    i++;
+    const { end, contentEnd } = findMatchingBrace(css, i, len);
+    i = end;
+
+    if (isGroupingAtRuleForStrip(atRuleName)) {
+        const prelude = css.substring(atStart, bracePos + 1);
+        const innerContent = css.substring(bracePos + 1, contentEnd);
+        const processedInner = stripWrapperLayoutProperties(innerContent, depth + 1);
+        result.push(prelude, processedInner, '}');
+    } else {
+        result.push(css.substring(atStart, i));
+    }
+
+    return i;
+}
+
+/**
+ * Parse a regular CSS rule for stripWrapperLayoutProperties
+ */
+function parseRuleForStrip(css, i, len, result) {
+    const selectorStart = i;
+    while (i < len && css[i] !== '{') i++;
+    if (i >= len) {
+        result.push(css.substring(selectorStart));
+        return len;
+    }
+
+    const selectorText = css.substring(selectorStart, i).trim();
+    const openBrace = css[i];
+    i++;
+
+    const { end, contentEnd } = findMatchingBrace(css, i, len);
+    const ruleBody = css.substring(i, contentEnd);
+    i = end;
+
+    if (isDirectWrapperSelector(selectorText)) {
+        const filteredBody = filterLayoutProperties(ruleBody);
+        if (filteredBody.trim()) {
+            result.push(selectorText, openBrace, filteredBody, '}');
+        }
+    } else {
+        result.push(selectorText, openBrace, ruleBody, '}');
+    }
+
+    return i;
+}
+
+/**
+ * Check if a selector is already scoped to #wrapper or #preview
+ * Uses word boundary matching to avoid false positives like #wrapper-other
+ * @param {string} selector - CSS selector to check
+ * @returns {boolean} True if already scoped
+ */
+function isSelectorScoped(selector) {
+    // Match #wrapper or #preview as complete selectors (with word boundaries)
+    // This prevents false matches like #wrapper-container or #preview-panel
+    return /(?:^|[\s,>+~])#wrapper(?:$|[\s,.:#>[+~])/.test(selector) ||
+           /(?:^|[\s,>+~])#preview(?:$|[\s,.:#>[+~])/.test(selector);
+}
+
+/**
+ * Check if a selector targets code block elements
+ * These selectors should be excluded from scoping to prevent preview styles
+ * from overriding syntax highlighting (Issue #387)
+ *
+ * @example
+ * isCodeBlockSelector('pre code') // true - excluded
+ * isCodeBlockSelector('.content pre') // false - allowed
+ * @param {string} selector - CSS selector to check
+ * @returns {boolean} True if selector targets code blocks
+ */
+function isCodeBlockSelector(selector) {
+    const trimmed = selector.trim().toLowerCase();
+    // Direct code block element selectors
+    if (trimmed === 'pre' || trimmed === 'code' || trimmed === '.hljs') {
+        return true;
+    }
+    // Selectors that start with code block elements (e.g., "pre code", "code.hljs")
+    if (/^(pre|code|\.hljs)(\s|\.|\[|:|\{|$)/.test(trimmed)) {
+        return true;
+    }
+    // Selectors containing code block descendants (e.g., "div pre", ".content code")
+    // We allow these but they're handled by syntax override CSS
+    return false;
 }
 
 /**
  * Scope a single CSS selector by adding #wrapper prefix
  * @param {string} selector - Single CSS selector to scope
- * @returns {string} Scoped selector
+ * @returns {string} Scoped selector (empty string if should be excluded)
  */
 function scopeSelector(selector) {
     const trimmed = selector.trim();
-    // Skip empty, @-rules, comments, or already scoped
+    // Skip empty, @-rules, or comments
     if (!trimmed ||
         trimmed.startsWith('@') ||
-        trimmed.startsWith('/*') ||
-        trimmed.includes('#wrapper') ||
-        trimmed.includes('#preview')) {
+        trimmed.startsWith('/*')) {
         return trimmed;
     }
-    // Replace body/html with #wrapper
-    if (trimmed === 'body' || trimmed === 'html') {
+    // Exclude code block selectors to prevent preview style bleeding (Issue #387)
+    if (isCodeBlockSelector(trimmed)) {
+        return ''; // Will be filtered out by parseSelectorAndBlock
+    }
+    // Skip if already scoped to #wrapper or #preview
+    if (isSelectorScoped(trimmed)) {
+        return trimmed;
+    }
+    // Replace :root, body, or html with #wrapper (these target the whole document)
+    if (trimmed === ':root' || trimmed === 'body' || trimmed === 'html') {
         return '#wrapper';
+    }
+    // Scope universal selector
+    if (trimmed === '*') {
+        return '#wrapper *';
+    }
+    // Handle compound selectors starting with :root, body, html (e.g., "body.dark", ":root[data-theme]")
+    if (/^(:root|body|html)([.#[:].*)$/.test(trimmed)) {
+        return trimmed.replace(/^(:root|body|html)/, '#wrapper');
     }
     // Prefix with #wrapper
     return '#wrapper ' + trimmed;
@@ -297,39 +570,98 @@ function skipWhitespace(css, i, result) {
 }
 
 /**
- * Parse an @-rule and add it to result unchanged
- * @param {string} css - CSS text
- * @param {number} i - Current index (pointing at '@')
- * @param {Array<string>} result - Result array to append to
- * @returns {number} New index after parsing @-rule
+ * Check if an @-rule is a grouping rule that contains style rules
+ * Grouping rules like @media, @supports contain nested selectors that need scoping
+ * @param {string} atRuleName - The @-rule name (e.g., 'media', 'supports')
+ * @returns {boolean} True if it's a grouping rule
  */
-function parseAtRule(css, i, result) {
-    const atStart = i;
-    const len = css.length;
+function isGroupingAtRule(atRuleName) {
+    // Grouping rules contain style rules with selectors that need scoping
+    const groupingRules = ['media', 'supports', 'document', 'layer'];
+    return groupingRules.includes(atRuleName.toLowerCase());
+}
 
-    // Find the opening brace or semicolon
+/**
+ * Extract @-rule name from CSS starting after '@'
+ * @param {string} css - CSS text
+ * @param {number} start - Position after '@'
+ * @param {number} len - Length of CSS
+ * @returns {{name: string, end: number}} Rule name and position after name
+ */
+function extractAtRuleName(css, start, len) {
+    let end = start;
+    while (end < len && /[a-zA-Z-]/.test(css[end])) {
+        end++;
+    }
+    return { name: css.substring(start, end), end };
+}
+
+/**
+ * Find opening brace or semicolon in @-rule
+ * @param {string} css - CSS text
+ * @param {number} start - Position to start searching
+ * @param {number} len - Length of CSS
+ * @returns {number} Position of brace or semicolon
+ */
+function findAtRuleDelimiter(css, start, len) {
+    let i = start;
     while (i < len && css[i] !== '{' && css[i] !== ';') {
         i++;
     }
+    return i;
+}
 
-    if (i < len && css[i] === '{') {
-        // Find matching closing brace (handle nested braces)
-        let depth = 1;
-        i++;
-        while (i < len && depth > 0) {
-            if (css[i] === '{') {
-                depth++;
-            } else if (css[i] === '}') {
-                depth--;
-            }
-            i++;
-        }
-    } else if (i < len) {
-        i++; // Skip the semicolon
+/**
+ * Handle @-rule with braces (block rule)
+ * @param {string} css - CSS text
+ * @param {number} atStart - Start of @-rule
+ * @param {number} bracePos - Position of opening brace
+ * @param {string} atRuleName - Name of @-rule
+ * @param {Array<string>} result - Result array
+ * @param {number} depth - Recursion depth
+ * @param {number} len - CSS length
+ * @returns {number} Position after closing brace
+ */
+function handleBlockAtRule(css, atStart, bracePos, atRuleName, result, depth, len) {
+    const contentStart = bracePos + 1;
+    const { end, contentEnd } = findMatchingBrace(css, contentStart, len);
+
+    if (isGroupingAtRule(atRuleName)) {
+        const prelude = css.substring(atStart, bracePos + 1);
+        const innerContent = css.substring(contentStart, contentEnd);
+        const scopedInner = scopeCSSToPreview(innerContent, depth + 1);
+        result.push(prelude, scopedInner, '}');
+    } else {
+        result.push(css.substring(atStart, end));
+    }
+    return end;
+}
+
+/**
+ * Parse an @-rule and add it to result, scoping selectors inside grouping rules
+ * @param {string} css - CSS text
+ * @param {number} i - Current index (pointing at '@')
+ * @param {Array<string>} result - Result array to append to
+ * @param {number} depth - Current recursion depth
+ * @returns {number} New index after parsing @-rule
+ */
+function parseAtRule(css, i, result, depth = 0) {
+    const atStart = i;
+    const len = css.length;
+    i++; // Skip '@'
+
+    const { name: atRuleName, end: nameEnd } = extractAtRuleName(css, i, len);
+    const delimPos = findAtRuleDelimiter(css, nameEnd, len);
+
+    // Block rule with braces
+    if (delimPos < len && css[delimPos] === '{') {
+        return handleBlockAtRule(css, atStart, delimPos, atRuleName, result, depth, len);
     }
 
-    result.push(css.substring(atStart, i));
-    return i;
+    // Statement rule ending with semicolon or EOF
+    const ruleEnd = delimPos < len ? delimPos + 1 : delimPos;
+    result.push(css.substring(atStart, ruleEnd));
+    return ruleEnd;
 }
 
 /**
@@ -374,10 +706,13 @@ function parseSelectorAndBlock(css, i, result) {
         return i;
     }
 
-    // Extract and scope selectors
+    // Extract and scope selectors, filtering out empty ones (code block selectors)
     const selectorText = css.substring(selectorStart, i);
     const selectors = selectorText.split(',');
-    const scopedSelectors = selectors.map(scopeSelector).join(', ');
+    const scopedSelectors = selectors
+        .map(scopeSelector)
+        .filter(s => s.trim() !== '') // Remove excluded selectors (code blocks)
+        .join(', ');
 
     // Copy the opening brace
     const openBrace = css[i];
@@ -396,6 +731,11 @@ function parseSelectorAndBlock(css, i, result) {
         i++;
     }
 
+    // Skip entire rule if all selectors were filtered out (code block selectors)
+    if (scopedSelectors.trim() === '') {
+        return i;
+    }
+
     // Push all parts at once to avoid multiple push calls
     result.push(scopedSelectors, openBrace, ruleBodyChars.join(''));
 
@@ -403,12 +743,35 @@ function parseSelectorAndBlock(css, i, result) {
 }
 
 /**
+ * Maximum recursion depth for CSS parsing to prevent infinite loops.
+ *
+ * This limit protects against:
+ * - Malformed CSS with deeply nested @-rules (e.g., @media inside @media inside @supports...)
+ * - Potential DoS from adversarial CSS designed to cause stack overflow
+ * - Infinite recursion bugs in our parsing logic
+ *
+ * Value of 10 is generous - real-world CSS rarely exceeds 3-4 levels of nesting.
+ * If this limit is hit, the CSS is returned unprocessed with a console warning.
+ *
+ * @see stripWrapperLayoutProperties - uses this for layout property stripping
+ * @see scopeCSSToPreview - uses this for selector scoping
+ */
+const MAX_CSS_RECURSION_DEPTH = 10;
+
+/**
  * Scope CSS to only affect #wrapper using a character-by-character parser
  * This avoids regex backtracking vulnerabilities (DoS prevention)
  * @param {string} css - CSS text to scope
+ * @param {number} depth - Current recursion depth (default 0)
  * @returns {string} Scoped CSS
  */
-function scopeCSSToPreview(css) {
+function scopeCSSToPreview(css, depth = 0) {
+    // Prevent infinite recursion on malformed CSS
+    if (depth > MAX_CSS_RECURSION_DEPTH) {
+        console.warn('CSS scoping: max recursion depth exceeded, returning unscoped');
+        return css;
+    }
+
     const result = [];
     let i = 0;
     const len = css.length;
@@ -420,7 +783,7 @@ function scopeCSSToPreview(css) {
 
         // Check for @-rule (pass through unchanged until matching brace)
         if (css[i] === '@') {
-            i = parseAtRule(css, i, result);
+            i = parseAtRule(css, i, result, depth);
             continue;
         }
 
@@ -438,7 +801,15 @@ function scopeCSSToPreview(css) {
 }
 
 /**
- * Apply minimal syntax override - just set structure, let .hljs handle colors naturally
+ * Apply syntax override - isolate code blocks from preview style contamination
+ *
+ * The three styling domains must be completely isolated:
+ * 1. Preview styles → Only affect content (NOT code blocks, NOT mermaid)
+ * 2. Syntax theme → Only affect code blocks (from CDN, not hardcoded)
+ * 3. Mermaid theme → Only affect mermaid diagrams
+ *
+ * With CSS Cascade Layers, the layer order handles isolation automatically.
+ * This function now only provides minimal structural styles for code blocks.
  */
 function applySyntaxOverride() {
     let syntaxOverride = document.getElementById('syntax-override');
@@ -448,12 +819,12 @@ function applySyntaxOverride() {
         document.head.appendChild(syntaxOverride);
     }
 
-    // Minimal override - just structure, NO color overrides
+    // Basic structure for code blocks
     syntaxOverride.textContent = `
-        /* Let syntax theme .hljs rule handle ALL colors naturally */
         #wrapper pre {
-            padding: 0;
             margin: 1em 0;
+            padding: 0;
+            background: transparent !important;
         }
 
         #wrapper pre code.hljs {
@@ -461,6 +832,20 @@ function applySyntaxOverride() {
             padding: 1em;
             overflow-x: auto;
             border-radius: 4px;
+            white-space: pre;
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+            font-size: 0.9em;
+            line-height: 1.5;
+            tab-size: 4;
+        }
+
+        /* Inline code (not in pre) */
+        #wrapper code:not(.hljs):not(pre code) {
+            font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+            font-size: 0.9em;
+            background: rgba(0,0,0,0.05) !important;
+            padding: 0.2em 0.4em;
+            border-radius: 3px;
         }
     `;
 }
@@ -491,10 +876,10 @@ async function applyCSSCore(cssText) {
         state.currentStyleLink.remove();
     }
 
-    // Create style element with scoped CSS
+    // Create style element with scoped CSS wrapped in preview-styles layer
     const styleElement = document.createElement('style');
     styleElement.id = 'marked-custom-style';
-    styleElement.textContent = cssText;
+    styleElement.textContent = `@layer preview-styles { ${cssText} }`;
     document.head.appendChild(styleElement);
 
     state.currentStyleLink = styleElement;
@@ -509,7 +894,7 @@ async function applyCSSCore(cssText) {
         }
     }
 
-    // Apply minimal structure override (no color changes)
+    // Apply syntax override structure
     applySyntaxOverride();
 
     // Re-render markdown to update Mermaid diagrams with new CSS
@@ -525,12 +910,24 @@ async function applyCSSCore(cssText) {
  * @param {object} style - Style config object
  */
 async function applyStyleToPage(cssText, styleName, style) {
-    // Remove @media print blocks that might override colors for printing
-    cssText = stripPrintMediaQueries(cssText);
+    // NOTE: We no longer strip @media print blocks as they're needed for PDF page breaks
+    // The print media queries contain essential rules for hr elements (page breaks),
+    // tables (page-break-inside: avoid), and other print-specific formatting
 
     // Scope the CSS to only affect #wrapper (the content area)
-    if (style.source !== 'local' && !cssText.includes('#wrapper')) {
+    // Always scope non-local CSS - individual already-scoped selectors are handled by scopeSelector()
+    // This fixes #384: CSS with partial #wrapper rules was bypassing scoping entirely
+    if (style.source !== 'local') {
         cssText = scopeCSSToPreview(cssText);
+    }
+
+    // Store scoped CSS before layout stripping for toggle reapplication
+    currentScopedCSS = cssText;
+
+    // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
+    // This allows user control of preview width via drag handle, overriding !important rules
+    if (!state.respectStyleLayout) {
+        cssText = stripWrapperLayoutProperties(cssText);
     }
 
     // Apply core CSS logic
@@ -555,6 +952,9 @@ async function handleSpecialStyleSource(style) {
             state.currentStyleLink.remove();
             state.currentStyleLink = null;
         }
+        // Clear loaded styles from memory and sessionStorage (#390)
+        loadedStyles.length = 0;
+        saveLoadedStylesToSession();
         // Reset Mermaid to default (light) theme
         updateMermaidTheme(false);
         showStatus('CSS removed');
@@ -584,6 +984,15 @@ async function handleSpecialStyleSource(style) {
  * @returns {Promise<boolean>} True if style loaded successfully, false otherwise
  */
 async function loadStyle(styleName) {
+    // First check if this is a dynamically loaded style
+    const loadedStyle = loadedStyles.find(s => s.name === styleName);
+    if (loadedStyle?.css) {
+        showStatus(`Loading style: ${styleName}...`);
+        await applyCSSDirectly(loadedStyle.css, styleName);
+        showStatus(`Style loaded: ${styleName}`);
+        return true;
+    }
+
     const style = availableStyles.find(s => s.name === styleName);
     if (!style || style.source === 'separator') return false;
 
@@ -627,6 +1036,10 @@ async function loadCSSFromFile(file) {
         showStatus(`Loading: ${file.name}...`);
         const cssText = await file.text();
         await applyCSSDirectly(cssText, file.name);
+        // Add to dropdown with CSS content for re-selection
+        addLoadedStyleToDropdown(file.name, 'file', cssText);
+        // Save to sessionStorage for persistence across navigation (#390)
+        saveLoadedStylesToSession();
         showStatus(`Loaded: ${file.name}`);
     } catch (error) {
         showStatus(`Error loading file: ${error.message}`);
@@ -685,6 +1098,13 @@ async function loadCSSFromURL(url) {
         }
         const cssText = await response.text();
         await applyCSSDirectly(cssText, normalizedUrl);
+        // Extract filename from URL for dropdown display
+        const urlParts = normalizedUrl.split('/');
+        const displayName = urlParts.at(-1) || normalizedUrl;
+        // Add to dropdown with CSS content for re-selection
+        addLoadedStyleToDropdown(displayName, 'url', cssText);
+        // Save to sessionStorage for persistence across navigation (#390)
+        saveLoadedStylesToSession();
         showStatus(`Loaded from URL`);
     } catch (error) {
         showStatus(`Error loading URL: ${error.message}`);
@@ -715,20 +1135,42 @@ async function promptForRepositoryStyleWithResult(repoConfig) {
 /**
  * Apply CSS directly without scope processing (for already-scoped files)
  * Preloads background color before removing old CSS to prevent white flash (#110 fix)
+ *
+ * NOTE: This function is exposed to globalThis for testing purposes.
+ * While it can be called directly, the preferred entry points are:
+ * - loadCSSFromFile() for file uploads
+ * - loadCSSFromURL() for URL imports
+ * These provide proper error handling and sessionStorage persistence.
+ *
  * @param {string} cssText - CSS text to apply
  * @param {string} sourceName - Source name for saving preference
+ * @public Exposed via globalThis.applyCSSDirectly for testing
  */
 async function applyCSSDirectly(cssText, sourceName) {
-    // Strip print media queries
-    cssText = stripPrintMediaQueries(cssText);
+    // NOTE: We no longer strip @media print blocks as they're needed for PDF page breaks
+    // The print media queries contain essential rules for hr elements (page breaks),
+    // tables (page-break-inside: avoid), and other print-specific formatting
 
-    // Only scope if it doesn't appear to be pre-scoped
-    if (!cssText.includes('#wrapper')) {
-        cssText = scopeCSSToPreview(cssText);
+    // Always scope external CSS to #wrapper - the scopeSelector function handles
+    // already-scoped selectors by passing them through unchanged.
+    // DO NOT skip scoping based on cssText.includes('#wrapper') - this was bug #384
+    // where CSS containing partial #wrapper rules bypassed scoping entirely.
+    cssText = scopeCSSToPreview(cssText);
+
+    // Store scoped CSS before layout stripping for toggle reapplication
+    currentScopedCSS = cssText;
+
+    // Strip layout properties from #wrapper rules if "Respect Style Layout" is OFF
+    // This allows user control of preview width via drag handle, overriding !important rules
+    if (!state.respectStyleLayout) {
+        cssText = stripWrapperLayoutProperties(cssText);
     }
 
     // Apply core CSS logic (handles preload, swap, render)
     await applyCSSCore(cssText);
+
+    // Apply layout constraints based on toggle setting
+    applyLayoutConstraints();
 
     // Save preference (if it's a named style)
     if (sourceName && !sourceName.startsWith('http')) {
@@ -788,6 +1230,51 @@ function applyHRPageBreakStyle() {
 }
 
 /**
+ * Handle the Respect Style Layout toggle
+ * @param {HTMLElement|null} styleSelector - The style selector element
+ */
+async function handleRespectStyleLayoutToggle(styleSelector) {
+    state.respectStyleLayout = !state.respectStyleLayout;
+    saveRespectStyleLayout(state.respectStyleLayout);
+
+    // Reapply CSS with new toggle state if we have stored CSS
+    if (currentScopedCSS) {
+        const cssToApply = state.respectStyleLayout
+            ? currentScopedCSS
+            : stripWrapperLayoutProperties(currentScopedCSS);
+        await applyCSSCore(cssToApply);
+    }
+
+    applyLayoutConstraints();
+    updateLayoutToggleCheckbox();
+
+    // Restore previous selection
+    const currentStyle = getMarkdownStyle() || 'Clean';
+    if (styleSelector) {
+        styleSelector.value = currentStyle;
+    }
+    showStatus(state.respectStyleLayout ? 'Style layout respected' : 'Style layout overridden');
+}
+
+/**
+ * Handle the HR as Page Break toggle
+ * @param {HTMLElement|null} styleSelector - The style selector element
+ */
+function handleHRPageBreakToggle(styleSelector) {
+    state.hrAsPageBreak = !state.hrAsPageBreak;
+    saveHRAsPageBreak(state.hrAsPageBreak);
+    applyHRPageBreakStyle();
+    updateHRPageBreakToggleCheckbox();
+
+    // Restore previous selection
+    const currentStyle = getMarkdownStyle() || 'Clean';
+    if (styleSelector) {
+        styleSelector.value = currentStyle;
+    }
+    showStatus(state.hrAsPageBreak ? 'HR as page break enabled' : 'HR as visual separator enabled');
+}
+
+/**
  * Change the current style
  * Reverts dropdown selection if style loading fails or is cancelled (#108 fix)
  * @param {string} styleName - Name of the style to change to
@@ -797,35 +1284,14 @@ async function changeStyle(styleName) {
 
     const { styleSelector } = getElements();
 
-    // Handle Respect Style Layout toggle option
+    // Handle toggle options
     if (styleName === 'Respect Style Layout') {
-        state.respectStyleLayout = !state.respectStyleLayout;
-        saveRespectStyleLayout(state.respectStyleLayout);
-        applyLayoutConstraints();
-        // Update just the checkbox without rebuilding the entire dropdown
-        updateLayoutToggleCheckbox();
-        // Restore previous selection
-        const currentStyle = getMarkdownStyle() || 'Clean';
-        if (styleSelector) {
-            styleSelector.value = currentStyle;
-        }
-        showStatus(state.respectStyleLayout ? 'Style layout respected' : 'Style layout overridden');
+        await handleRespectStyleLayoutToggle(styleSelector);
         return;
     }
 
-    // Handle HR as Page Break toggle option
     if (styleName === 'HR as Page Break') {
-        state.hrAsPageBreak = !state.hrAsPageBreak;
-        saveHRAsPageBreak(state.hrAsPageBreak);
-        applyHRPageBreakStyle();
-        // Update just the checkbox without rebuilding the entire dropdown
-        updateHRPageBreakToggleCheckbox();
-        // Restore previous selection
-        const currentStyle = getMarkdownStyle() || 'Clean';
-        if (styleSelector) {
-            styleSelector.value = currentStyle;
-        }
-        showStatus(state.hrAsPageBreak ? 'HR as page break enabled' : 'HR as visual separator enabled');
+        handleHRPageBreakToggle(styleSelector);
         return;
     }
 
@@ -875,24 +1341,29 @@ async function loadSyntaxTheme(themeName) {
     const oldThemeLink = state.currentSyntaxThemeLink;
 
     try {
-        // Load new theme FIRST with SRI verification (Issue #376 fix)
-        // Keep old theme in place during load to prevent flicker
-        const link = document.createElement('link');
-        link.rel = 'stylesheet';
-        link.href = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme.file}.min.css`;
-        link.integrity = sriHash;
-        link.crossOrigin = 'anonymous';
-        link.id = SYNTAX_THEME_LOADING_ID;
+        // Fetch the CSS content first to verify SRI and wrap in layer
+        const cdnUrl = `https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/${theme.file}.min.css`;
 
-        // Wait for CSS to load before continuing
-        await new Promise((resolve, reject) => {
-            link.onload = resolve;
-            link.onerror = reject;
-            document.head.appendChild(link);
+        // Load new theme FIRST (Issue #376 fix)
+        // Keep old theme in place during load to prevent flicker
+        const response = await fetch(cdnUrl, {
+            integrity: sriHash,
+            mode: 'cors'
         });
 
-        // CRITICAL: Wait a bit for browser to parse the stylesheet
-        // The onload event fires when downloaded, but CSSOM might not be ready
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
+
+        const cssText = await response.text();
+
+        // Create style element with @layer wrapper (instead of link element)
+        const styleElement = document.createElement('style');
+        styleElement.id = SYNTAX_THEME_LOADING_ID;
+        styleElement.textContent = `@layer syntax-theme { ${cssText} }`;
+        document.head.appendChild(styleElement);
+
+        // Brief wait for browser to parse the stylesheet
         await new Promise(resolve => setTimeout(resolve, SYNTAX_THEME_PARSE_DELAY));
 
         // NOW remove old theme (after new one is loaded and ready)
@@ -901,8 +1372,8 @@ async function loadSyntaxTheme(themeName) {
         }
 
         // Update ID and store reference
-        link.id = SYNTAX_THEME_ID;
-        state.currentSyntaxThemeLink = link;
+        styleElement.id = SYNTAX_THEME_ID;
+        state.currentSyntaxThemeLink = styleElement;
 
         // Save preference
         saveSyntaxTheme(themeName);
@@ -1231,7 +1702,7 @@ async function initMermaidThemeSelector() {
  * @param {Function} createOption - Function to create option element from item
  */
 function populateSelectorWithOptgroups(selector, items, groupOrder, createOption) {
-    selector.innerHTML = '';
+    selector.replaceChildren();
 
     // Group items by their group property
     const groups = {};
@@ -1268,6 +1739,11 @@ async function initStyleSelector() {
     const { styleSelector } = getElements();
     if (!styleSelector) return;
 
+    // FIRST: Restore loaded styles from sessionStorage (#390 fix)
+    // This must happen BEFORE populating the dropdown so restored styles
+    // can be added to the "Loaded" optgroup
+    restoreLoadedStylesFromSession();
+
     populateSelectorWithOptgroups(
         styleSelector,
         availableStyles,
@@ -1292,6 +1768,18 @@ async function initStyleSelector() {
         }
     );
 
+    // Add restored styles to dropdown (Issue #390 fix)
+    // This populates the "Loaded" optgroup with styles from sessionStorage.
+    // Note: addLoadedStyleToDropdown() has duplicate prevention via
+    // `!loadedStyles.some(s => s.name === styleName)` check, which is necessary
+    // because restoreLoadedStylesFromSession() already populated the loadedStyles
+    // array before this loop runs.
+    if (loadedStyles.length > 0) {
+        loadedStyles.forEach(style => {
+            addLoadedStyleToDropdown(style.name, style.source, style.css);
+        });
+    }
+
     // Load saved style or default
     const savedStyle = getMarkdownStyle();
     const defaultStyle = availableStyles.find(s => s.default)?.name || 'Clean';
@@ -1302,6 +1790,60 @@ async function initStyleSelector() {
 
     // Apply HR page break style based on saved preference
     applyHRPageBreakStyle();
+}
+
+/**
+ * Add a dynamically loaded style to the dropdown and select it
+ * Creates a "Loaded" optgroup if it doesn't exist
+ * @param {string} styleName - Name of the style (filename or short URL)
+ * @param {string} source - Source type: 'file' or 'url'
+ * @param {string} cssContent - The CSS content (stored for re-selection)
+ */
+function addLoadedStyleToDropdown(styleName, source, cssContent) {
+    const { styleSelector } = getElements();
+    if (!styleSelector) return;
+
+    // Check if style already exists in dropdown
+    const existingOption = Array.from(styleSelector.options).find(opt => opt.value === styleName);
+    if (existingOption) {
+        // Update CSS content in case it changed
+        const existingStyle = loadedStyles.find(s => s.name === styleName);
+        if (existingStyle) {
+            existingStyle.css = cssContent;
+            // Update sessionStorage when CSS content changes (#390)
+            saveLoadedStylesToSession();
+        }
+        styleSelector.value = styleName;
+        return;
+    }
+
+    // Find or create "Loaded" optgroup
+    let loadedOptgroup = styleSelector.querySelector('optgroup[label="Loaded"]');
+    if (!loadedOptgroup) {
+        loadedOptgroup = document.createElement('optgroup');
+        loadedOptgroup.label = 'Loaded';
+        // Insert after "Preview Style" optgroup
+        const importOptgroup = styleSelector.querySelector('optgroup[label="Import"]');
+        if (importOptgroup) {
+            importOptgroup.before(loadedOptgroup);
+        } else {
+            styleSelector.appendChild(loadedOptgroup);
+        }
+    }
+
+    // Create and add option
+    const option = document.createElement('option');
+    option.value = styleName;
+    option.textContent = styleName + (source === 'url' ? ' (URL)' : '');
+    loadedOptgroup.appendChild(option);
+
+    // Track in loadedStyles array with CSS content for re-selection
+    if (!loadedStyles.some(s => s.name === styleName)) {
+        loadedStyles.push({ name: styleName, source, css: cssContent });
+    }
+
+    // Select the new style
+    styleSelector.value = styleName;
 }
 
 /**
@@ -1360,5 +1902,7 @@ export {
     changeEditorTheme,
     changeMermaidTheme,
     applyLayoutConstraints,
-    applyPreviewBackground
+    applyPreviewBackground,
+    loadCSSFromFile,
+    applyCSSDirectly
 };
